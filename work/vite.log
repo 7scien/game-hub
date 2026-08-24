@@ -1,0 +1,10 @@
+
+  VITE v7.3.6  ready in 290 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.1.25:5173/
+  ➜  press h + enter to show help
+오후 9:39:19 [vite] (client) page reload index.html
+오후 9:39:21 [vite] (client) page reload js/app.js
+오후 9:39:23 [vite] (client) page reload js/pwa.js
+오후 9:40:03 [vite] (client) hmr update /css/style.css?direct

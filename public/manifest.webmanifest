@@ -1,0 +1,20 @@
+{
+  "id":"./",
+  "name":"Game Hub — Offline Arcade",
+  "short_name":"Game Hub",
+  "description":"한 번 설치하고 여러 로컬 웹게임을 오프라인으로 즐기는 게임 허브",
+  "start_url":"./?source=pwa",
+  "scope":"./",
+  "display":"standalone",
+  "orientation":"any",
+  "background_color":"#101226",
+  "theme_color":"#15182f",
+  "lang":"ko",
+  "prefer_related_applications":false,
+  "categories":["games","entertainment"],
+  "icons":[
+    {"src":"./icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"./icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"./icons/icon-maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ]
+}

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#15182f">
+  <meta name="description" content="한 번 설치하고 여러 로컬 웹게임을 오프라인으로 즐기는 Game Hub">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Game Hub">
+  <title>GAME HUB — Offline Arcade</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/hub.css">
+</head>
+<body>
+  <main class="hub-shell">
+    <header class="topbar">
+      <a class="hub-logo" href="./" aria-label="Game Hub 홈"><span aria-hidden="true">GH</span><strong>GAME HUB</strong></a>
+      <div class="top-actions"><span id="offline-status" class="offline-status" role="status">오프라인 준비 확인 중</span><button id="install-button" class="install-button" type="button">앱 설치</button></div>
+    </header>
+    <section class="hero" aria-labelledby="hub-title">
+      <div class="hero-copy">
+        <p class="eyebrow">ONE APP · MANY GAMES</p>
+        <h1 id="hub-title">한 번 설치하고,<br><em>같이 플레이.</em></h1>
+        <p>한 대의 스마트폰이나 태블릿으로 즐기는 게임을 한곳에 모았습니다. 설치 후에는 인터넷 없이 바로 시작할 수 있어요.</p>
+        <div class="hero-badges" aria-label="Game Hub 특징"><span>오프라인 플레이</span><span>태블릿 최적화</span><span>게임별 독립 실행</span></div>
+      </div>
+      <div class="hero-orbit" aria-hidden="true"><i class="orbit-one">⬡</i><i class="orbit-two">●</i><i class="orbit-three">◆</i><b>PLAY<br>TOGETHER</b></div>
+    </section>
+    <section class="library" aria-labelledby="library-title">
+      <div class="section-heading"><div><p>GAME LIBRARY</p><h2 id="library-title">오늘은 어떤 게임?</h2></div><span id="game-count"></span></div>
+      <div id="game-grid" class="game-grid"></div>
+    </section>
+    <footer><strong>GAME HUB</strong><span>새 게임은 <code>games/게임이름/</code>에 추가할 수 있습니다.</span></footer>
+  </main>
+  <dialog id="install-dialog" class="install-dialog">
+    <form method="dialog"><span class="dialog-icon" aria-hidden="true">↓</span><p class="eyebrow">INSTALL GAME HUB</p><h2 id="install-title">홈 화면에 추가하기</h2><div id="install-steps" class="install-steps"></div><p class="install-note">처음 한 번 온라인에서 열어 오프라인 준비를 완료해야 합니다.</p><button value="close" type="submit">확인</button></form>
+  </dialog>
+  <noscript>Game Hub를 실행하려면 JavaScript를 켜주세요.</noscript>
+  <script type="module" src="./js/hub.js"></script>
+</body>
+</html>

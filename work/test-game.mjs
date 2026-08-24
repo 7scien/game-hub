@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict';
+globalThis.matchMedia=()=>({matches:false});
+Object.defineProperty(globalThis,'navigator',{value:{vibrate(){}}});
+globalThis.window={dispatchEvent(){}};
+globalThis.CustomEvent=class{constructor(type,init){this.type=type;this.detail=init?.detail}};
+const {PushArena}=await import('../games/duo-party/js/games/push-arena.js');
+const canvas={getContext(){return{}},getBoundingClientRect(){return{width:800,height:400}},width:0,height:0};
+const input={get(){return{x:0,y:0,dash:false,item:false}}};
+const audio={tone(){},dash(){},hit(){},score(){},item(){},event(){},hazard(){}};
+let winner=null;
+const game=new PushArena(canvas,input,audio,w=>winner=w);
+game.w=800;game.h=400;game.cx=400;game.cy=192;game.baseRadius=144;game.ringRadius=144;
+game.players=[game.makePlayer(0,-.3),game.makePlayer(1,.3)];game.running=true;
+game.time=.01;game.score=[2,2];game.update(.02);
+assert.equal(game.overtime,true,'tie must enter overtime');
+const oldRadius=game.ringRadius;game.update(1);assert.ok(game.ringRadius<oldRadius,'overtime ring must shrink');
+game.players[0].x=game.cx+game.ringRadius+50;game.players[0].y=game.cy;game.update(.016);
+assert.equal(winner,1,'first overtime ring-out must end game');
+winner=null;game.running=true;game.overtime=false;game.time=10;game.score=[0,0];const p=game.players[0];p.respawn=0;p.knockback=88;game.ringOut(p);game.ringOut(p);
+assert.deepEqual(game.score,[0,1],'ring-out must score only once during respawn');
+assert.equal(p.knockback,0,'ring-out must reset knockback');
+p.respawn=.01;game.update(.02);assert.ok(p.invincible>.9,'respawn must grant invincibility');
+p.cooldown=0;input.get=()=>({x:1,y:0,dash:true});game.update(.016);assert.ok(p.cooldown>1.9&&p.dash>0,'dash must start two-second cooldown');
+
+const target=game.players[1],attacker=game.players[0];target.shield=0;target.knockback=0;target.vx=target.vy=0;
+game.applyDashHit(attacker,target,1,0,1);const lowKnockbackSpeed=target.vx;
+target.knockback=80;target.vx=target.vy=0;game.applyDashHit(attacker,target,1,0,1);
+assert.ok(target.vx>lowKnockbackSpeed*1.5,'high knockback must amplify the same dash');
+target.knockback=0;target.vx=target.vy=0;target.shield=2;game.applyDashHit(attacker,target,1,0,1);
+assert.ok(target.knockback<6,'shield must strongly reduce damage');
+
+p.item=null;p.x=game.cx;p.y=game.cy;game.worldItem={type:'shield',x:p.x,y:p.y,r:15};game.collectItem(p);
+assert.equal(p.item,'shield','player must collect an item');assert.equal(game.worldItem,null,'collected world item must disappear');
+game.worldItem={type:'power',x:p.x,y:p.y,r:15};game.collectItem(p);assert.equal(game.worldItem.type,'power','full inventory must not collect another item');
+game.useItem(p);assert.equal(p.item,null);assert.ok(p.shield>2.5,'shield item must activate');
+game.worldItem=null;game.itemTimer=0;game.updateItem(.01);assert.ok(game.worldItem,'only one new world item must spawn');
+
+game.hitStop=0;game.overtime=false;game.time=45;game.elapsed=14.99;game.eventIndex=0;game.activeEvent={type:'none',time:0};
+game.players.forEach((player,index)=>{player.respawn=0;player.x=game.cx+(index?35:-35);player.y=game.cy;player.vx=player.vy=0});
+input.get=()=>({x:0,y:0,dash:false,item:false});game.update(.02);
+assert.equal(game.eventIndex,1,'an arena event must trigger after 15 seconds');assert.notEqual(game.activeEvent.type,'none');
+console.log('Push Arena state tests passed');
