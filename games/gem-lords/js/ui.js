@@ -539,12 +539,11 @@ export function animateTakenTokens(colors) {
     const occurrence = colorOccurrences.get(color) || 0;
     colorOccurrences.set(color, occurrence + 1);
     const existingCount = Number(destination.dataset.count) || 0;
-    const sourceCapHeight = 7;
-    const startHeight = sourceRect.height + sourceCapHeight;
-    const startLeft = sourceRect.left;
-    const startTop = sourceRect.top - sourceCapHeight;
-    const startCenterX = startLeft + sourceRect.width / 2;
-    const startCenterY = startTop + startHeight / 2;
+    const startSize = sourceRect.width;
+    const startCenterX = sourceRect.left + sourceRect.width / 2;
+    const startCenterY = sourceRect.top - 0.5;
+    const startLeft = startCenterX - startSize / 2;
+    const startTop = startCenterY - startSize / 2;
     const destinationDepth = 10;
     const destinationCapHeight = 4;
     const destinationRise = 2;
@@ -565,18 +564,15 @@ export function animateTakenTokens(colors) {
     const pointOne = curvePoint(0.28);
     const pointTwo = curvePoint(0.58);
     const pointThree = curvePoint(0.82);
-    const finalScale = destinationRect.width / sourceRect.width;
+    const finalScale = destinationRect.width / startSize;
     const meta = RESOURCE_META[color];
 
     const flyingToken = document.createElement('span');
-    flyingToken.className = `physical-token-stack ${meta.className} flying-physical-token`;
+    flyingToken.className = `flying-token ${meta.className}`;
     flyingToken.style.left = `${startLeft}px`;
     flyingToken.style.top = `${startTop}px`;
-    flyingToken.style.width = `${sourceRect.width}px`;
-    flyingToken.style.height = `${startHeight}px`;
-    flyingToken.style.setProperty('--token-size', `${sourceRect.width}px`);
-    flyingToken.style.setProperty('--token-depth', `${sourceRect.height}px`);
-    flyingToken.style.setProperty('--token-cap', `${sourceCapHeight * 2 - 1}px`);
+    flyingToken.style.width = `${startSize}px`;
+    flyingToken.style.height = `${startSize}px`;
     flyingToken.style.setProperty('--token-q1-x', `${pointOne.x}px`);
     flyingToken.style.setProperty('--token-q1-y', `${pointOne.y}px`);
     flyingToken.style.setProperty('--token-q2-x', `${pointTwo.x}px`);
@@ -586,8 +582,8 @@ export function animateTakenTokens(colors) {
     flyingToken.style.setProperty('--token-end-x', `${dx}px`);
     flyingToken.style.setProperty('--token-end-y', `${dy}px`);
     flyingToken.style.setProperty('--token-end-scale', finalScale);
-    flyingToken.style.setProperty('--token-flight-delay', `${animationIndex * 120}ms`);
-    flyingToken.innerHTML = `<span class="token-disc top-disc" style="--stack-offset: 0px"><i>${meta.symbol}</i></span>`;
+    flyingToken.style.setProperty('--token-flight-delay', `${animationIndex * 90}ms`);
+    flyingToken.innerHTML = `<i>${meta.symbol}</i>`;
     layer.append(flyingToken);
     flyingTokens.push(flyingToken);
     touchedSources.add(source);
@@ -610,7 +606,7 @@ export function animateTakenTokens(colors) {
       resolve();
     };
     flyingTokens.at(-1).addEventListener('animationend', finish, { once: true });
-    window.setTimeout(finish, 1450 + flyingTokens.length * 120);
+    window.setTimeout(finish, 1200 + flyingTokens.length * 90);
   });
 }
 

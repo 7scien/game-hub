@@ -1198,7 +1198,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 }
 .token-disc.top-disc { z-index: 2; }
 .token-disc.top-disc::after {
-  content: "";
+  content: none;
   position: absolute;
   z-index: 3;
   left: 50%;
@@ -1220,17 +1220,23 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 .physical-token-stack.gold .token-disc.top-disc::after { border-radius: 50%; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 94%, 50% 72%, 20% 94%, 31% 57%, 1% 35%, 39% 35%); }
 .token-disc i {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   left: 50%;
-  top: -6px;
+  top: -7px;
+  width: 42%;
+  height: var(--token-cap);
+  display: grid;
+  place-items: center;
   transform: translateX(-50%);
-  color: #fffaf0;
-  font-size: 9px;
+  color: color-mix(in srgb, var(--token-color) 82%, #24170e);
+  font-size: 12px;
+  font-weight: 950;
   font-style: normal;
-  line-height: var(--token-cap);
-  opacity: 0;
+  line-height: 1;
+  opacity: 1;
+  text-shadow: none;
 }
-.physical-token-stack.diamond .token-disc i { color: #303035; text-shadow: 0 1px rgba(255,255,255,.7); }
+.physical-token-stack.diamond .token-disc i { color: #7d8990; text-shadow: none; }
 .empty-stack-marker {
   position: absolute;
   left: 50%;
@@ -1268,7 +1274,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 }
 .physical-token-stack.compact .token-disc { bottom: calc(2px + var(--stack-offset)); }
 .physical-token-stack.compact .token-disc::before { top: -4px; border-width: 1px; }
-.physical-token-stack.compact .token-disc i { top: -3px; font-size: 7px; }
+.physical-token-stack.compact .token-disc i { top: -4px; font-size: 7px; }
 .physical-token-stack.compact .token-disc.top-disc::after { top: -6px; }
 .physical-token-stack.compact .empty-stack-marker { bottom: 2px; }
 .vault-token-caption, .bonus-card-caption {
@@ -1384,22 +1390,41 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   inset: 0;
   z-index: 242;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 78%, rgba(255,225,158,.045), transparent 34%);
+  contain: strict;
+  background: transparent;
   pointer-events: auto;
   perspective: 900px;
 }
-.flying-physical-token {
+.flying-token {
+  --flight-token-color: #aaa;
   position: fixed !important;
   z-index: 2;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
   margin: 0 !important;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--flight-token-color) 84%, #21150d);
+  border: 5px solid color-mix(in srgb, var(--flight-token-color) 80%, #5a4023);
+  border-radius: 50%;
+  background: #f8efd9;
+  box-shadow: 0 10px 16px rgba(0,0,0,.38), inset 0 0 0 3px rgba(255,255,255,.58), inset 0 0 0 5px color-mix(in srgb, var(--flight-token-color) 24%, transparent);
   transform-origin: center;
   transform-style: preserve-3d;
+  backface-visibility: visible;
+  contain: layout paint style;
   pointer-events: none;
-  filter: drop-shadow(0 12px 8px rgba(0,0,0,.42));
-  animation: token-parabolic-flight .92s cubic-bezier(.18,.62,.2,1) var(--token-flight-delay) both;
-  will-change: transform, opacity, filter;
+  animation: token-parabolic-flight .82s cubic-bezier(.18,.62,.2,1) var(--token-flight-delay) both;
+  will-change: transform, opacity;
 }
-.flying-physical-token .token-disc { bottom: 0; }
+.flying-token::before { content: ""; position: absolute; inset: 15%; border: 1px solid color-mix(in srgb, var(--flight-token-color) 42%, #c6af82); border-radius: 50%; }
+.flying-token i { position: relative; z-index: 1; font-size: clamp(17px, 2.2vw, 25px); font-style: normal; font-weight: 950; line-height: 1; }
+.flying-token.ruby { --flight-token-color: var(--ruby); }
+.flying-token.sapphire { --flight-token-color: var(--sapphire); }
+.flying-token.emerald { --flight-token-color: var(--emerald); }
+.flying-token.diamond { --flight-token-color: #b9c2c7; }
+.flying-token.onyx { --flight-token-color: #3b3542; }
+.flying-token.gold { --flight-token-color: #d8aa35; }
 .token-stack.giving-token .token-disc.top-disc { opacity: .36; }
 .physical-token-stack.receiving-token { animation: vault-token-receive .48s ease .62s both; }
 
@@ -1422,34 +1447,34 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 }
 @keyframes token-parabolic-flight {
   0% {
-    transform: perspective(700px) translate3d(0, 0, 0) scale(1) rotateX(0) rotateZ(0);
+    transform: translate3d(0, 0, 0) scale(1) rotateX(0) rotateZ(0);
     opacity: 1;
   }
   28% {
-    transform: perspective(700px) translate3d(var(--token-q1-x), var(--token-q1-y), 80px) scale(.97) rotateX(68deg) rotateZ(180deg);
+    transform: translate3d(var(--token-q1-x), var(--token-q1-y), 80px) scale(.97) rotateX(68deg) rotateZ(180deg);
     opacity: 1;
   }
   58% {
-    transform: perspective(700px) translate3d(var(--token-q2-x), var(--token-q2-y), 112px) scale(.9) rotateX(148deg) rotateZ(390deg);
+    transform: translate3d(var(--token-q2-x), var(--token-q2-y), 112px) scale(.9) rotateX(148deg) rotateZ(390deg);
     opacity: 1;
   }
   82% {
-    transform: perspective(700px) translate3d(var(--token-q3-x), var(--token-q3-y), 48px) scale(var(--token-end-scale)) rotateX(42deg) rotateZ(620deg);
+    transform: translate3d(var(--token-q3-x), var(--token-q3-y), 48px) scale(var(--token-end-scale)) rotateX(42deg) rotateZ(620deg);
     opacity: 1;
   }
   94% {
-    transform: perspective(700px) translate3d(var(--token-end-x), calc(var(--token-end-y) - 9px), 8px) scale(var(--token-end-scale)) rotateX(10deg) rotateZ(708deg);
+    transform: translate3d(var(--token-end-x), calc(var(--token-end-y) - 9px), 8px) scale(var(--token-end-scale)) rotateX(10deg) rotateZ(708deg);
     opacity: .96;
   }
   100% {
-    transform: perspective(700px) translate3d(var(--token-end-x), var(--token-end-y), 0) scale(var(--token-end-scale)) rotateX(0) rotateZ(720deg);
+    transform: translate3d(var(--token-end-x), var(--token-end-y), 0) scale(var(--token-end-scale)) rotateX(0) rotateZ(720deg);
     opacity: .14;
   }
 }
 @keyframes vault-token-receive {
-  0% { transform: translateY(0); filter: brightness(1); }
-  52% { transform: translateY(-3px); filter: brightness(1.25) drop-shadow(0 0 7px rgba(255,229,166,.55)); }
-  100% { transform: translateY(0); filter: brightness(1); }
+  0% { transform: translateY(0) scale(1); }
+  52% { transform: translateY(-3px) scale(1.035); }
+  100% { transform: translateY(0) scale(1); }
 }
 
 @media (max-width: 1050px) {
@@ -1472,5 +1497,5 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
   .purchase-flight-card, .purchase-flight-caption, .bonus-card-stack.receiving-card,
-  .flying-physical-token, .physical-token-stack.receiving-token { animation: none; }
+  .flying-token, .physical-token-stack.receiving-token { animation: none; }
 }
