@@ -16,6 +16,7 @@ import {
   takeDouble,
 } from './game.js';
 import { CONFIG, emptyResources } from './rules.js';
+import { PATRONS } from './data/patrons.js';
 import {
   closeModal,
   renderGame,
@@ -66,7 +67,17 @@ function resetCustomTitle() {
 function loadSavedGame() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return isValidSavedGame(parsed) ? parsed : null;
+    if (!isValidSavedGame(parsed)) return null;
+    const latestPatrons = new Map(PATRONS.map((patron) => [patron.id, patron]));
+    const refreshPatron = (patron) => {
+      const latest = latestPatrons.get(patron.id);
+      return latest ? { ...latest, requirements: { ...latest.requirements } } : patron;
+    };
+    parsed.patrons = parsed.patrons.map(refreshPatron);
+    parsed.players.forEach((player) => {
+      player.patrons = player.patrons.map(refreshPatron);
+    });
+    return parsed;
   } catch {
     return null;
   }

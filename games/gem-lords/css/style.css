@@ -225,10 +225,34 @@ h1 em { color: var(--gold); font-weight: 400; font-style: italic; }
 .turn-heading em { color: var(--gold); font-weight: 400; }
 
 .scoreboard { display: flex; justify-content: flex-end; gap: 7px; overflow-x: auto; scrollbar-width: none; }
-.score-card { min-width: 76px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(14, 31, 56, .72); }
-.score-card span { display: block; color: #8390a8; font-size: 8px; letter-spacing: .08em; white-space: nowrap; }
-.score-card strong { font-family: Georgia, serif; font-size: 20px; }
-.score-card small { color: #7f8ba0; font: 8px Inter, sans-serif; }
+.score-card { min-width: 164px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: rgba(14, 31, 56, .72); }
+.score-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.score-card-head > span { display: block; color: #8390a8; font-size: 8px; letter-spacing: .08em; white-space: nowrap; }
+.score-card-head > strong { font-family: Georgia, serif; font-size: 18px; }
+.score-card-head small { color: #7f8ba0; font: 8px Inter, sans-serif; }
+.score-resources { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; margin-top: 3px; }
+.score-resource {
+  --score-color: #aaa;
+  min-width: 0;
+  height: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #fff;
+  border: 1px solid color-mix(in srgb, var(--score-color) 66%, white);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--score-color) 72%, #151515);
+  box-shadow: inset 0 1px rgba(255,255,255,.18);
+}
+.score-resource i { font-size: 7px; font-style: normal; }
+.score-resource b { font-size: 9px; }
+.score-resource.ruby { --score-color: var(--ruby); }
+.score-resource.sapphire { --score-color: var(--sapphire); }
+.score-resource.emerald { --score-color: var(--emerald); }
+.score-resource.diamond { --score-color: var(--diamond); color: #171717; }
+.score-resource.onyx { --score-color: var(--onyx); }
+.score-resource.gold { --score-color: var(--gold); color: #2d210c; }
 .score-card.active { border-color: var(--gold); background: linear-gradient(145deg, rgba(91, 68, 31, .54), rgba(20, 41, 71, .8)); box-shadow: inset 0 0 22px rgba(232,189,97,.07); }
 
 .final-round-banner { padding: 7px 16px; color: #ffdda0; background: rgba(108, 57, 31, .82); text-align: center; font-size: 11px; font-weight: 800; letter-spacing: .09em; }
@@ -471,7 +495,7 @@ h1 em { color: var(--gold); font-weight: 400; font-style: italic; }
 
 @media (max-width: 1050px) {
   .game-header { grid-template-columns: 44px minmax(140px, auto) 1fr 44px; gap: 10px; }
-  .score-card { min-width: 65px; padding-inline: 7px; }
+  .score-card { min-width: 154px; padding-inline: 7px; }
   .section-label { width: 72px; flex-basis: 72px; }
   .tier-row { grid-template-columns: 72px minmax(0, 1fr); }
   .tier-cards { grid-template-columns: 68px repeat(4, minmax(105px, 1fr)); }
@@ -486,7 +510,7 @@ h1 em { color: var(--gold); font-weight: 400; font-style: italic; }
   .game-header { grid-template-columns: 40px minmax(112px, 1fr) 40px; min-height: 62px; }
   .game-header .icon-button { width: 40px; height: 40px; }
   .scoreboard { grid-column: 1 / -1; justify-content: start; padding-bottom: 2px; }
-  .score-card { min-width: 82px; }
+  .score-card { min-width: 154px; }
   .board { padding: 12px 8px 24px; }
   .patron-zone { display: block; }
   .section-label { width: auto; display: flex; gap: 9px; align-items: baseline; margin: 0 4px 7px; }
@@ -752,7 +776,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   border-radius: 7px;
   background: rgba(30,18,14,.52);
 }
-.score-card span { color: #b7a58a; }
+.score-card-head > span { color: #b7a58a; }
 .score-card.active { border-color: #d8ad5b; background: linear-gradient(145deg, #72402c, #3a261d); }
 
 .section-label span, .dock-title span, .action-kicker, .modal-kicker { color: #c5a966; }
@@ -847,12 +871,16 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 .card-top { width: 100%; }
 .card-vp {
   min-width: 31px;
-  color: #281d15;
+  padding: 1px 5px 3px;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 5px;
+  background: rgba(20,13,10,.62);
   font-size: 30px;
   font-weight: 700;
-  text-shadow: 0 1px rgba(255,255,255,.6);
+  text-shadow: 0 2px 4px #000, 0 0 7px rgba(0,0,0,.72);
 }
-.card-vp small { color: #6e5941; font-size: 6px; }
+.card-vp small { color: #fff; font-size: 6px; text-shadow: 0 1px 2px #000; }
 
 .card-art {
   position: absolute;

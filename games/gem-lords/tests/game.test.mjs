@@ -54,6 +54,14 @@ test('개발 카드 90장과 귀족 타일 10장이 지정된 단계·점수 분
   assert.equal(CARDS.length, 90);
   assert.equal(new Set(CARDS.map((card) => card.id)).size, 90);
   assert.equal(PATRONS.length, 10);
+  assert.equal(PATRONS.filter((patron) => {
+    const requirements = Object.values(patron.requirements);
+    return requirements.length === 3 && requirements.every((amount) => amount === 3);
+  }).length, 5);
+  assert.equal(PATRONS.filter((patron) => {
+    const requirements = Object.values(patron.requirements);
+    return requirements.length === 2 && requirements.every((amount) => amount === 4);
+  }).length, 5);
   assert.deepEqual(
     [...COLORS, 'Gold'].map((color) => [RESOURCE_META[color].label, RESOURCE_META[color].tone]),
     [

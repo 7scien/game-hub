@@ -86,8 +86,13 @@ export function renderStart(hasSave, choosingPlayers = !hasSave, gameTitle = '�
 function scoreboard(state) {
   return state.players.map((player, index) => `
     <div class="score-card ${index === state.currentPlayerIndex ? 'active' : ''}">
-      <span>${player.name}</span>
-      <strong>${player.score}<small> VP</small></strong>
+      <div class="score-card-head"><span>${player.name}</span><strong>${player.score}<small> VP</small></strong></div>
+      <div class="score-resources" aria-label="${player.name} 보유 보석">
+        ${ALL_RESOURCES.map((color) => {
+          const meta = RESOURCE_META[color];
+          return `<span class="score-resource ${meta.className}" title="${meta.label} ${player.tokens[color]}개"><i aria-hidden="true">${meta.symbol}</i><b>${player.tokens[color]}</b></span>`;
+        }).join('')}
+      </div>
     </div>`).join('');
 }
 
