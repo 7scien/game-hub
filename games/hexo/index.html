@@ -1,19 +1,2210 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#56396d">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#10131a" />
   <title>HeXO — Game Hub</title>
-  <link rel="stylesheet" href="../../shared/placeholder.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0d12;
+      --panel: #121722;
+      --panel2: #1a2230;
+      --text: #f4f6f8;
+      --muted: #99a4b3;
+      --cell: #202938;
+      --cell-hover: #2a3649;
+      --cell-line: #46546a;
+      --accent: #63c8ff;
+      --black: #ffd84d;
+      --white: #7ed8ff;
+      --last: #ffffff;
+      --win: #45d48a;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width:100%; height:100%; overflow:hidden; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { overscroll-behavior: none; }
+    .app { height:100%; min-height:0; display:grid; grid-template-rows:auto auto minmax(0,1fr) auto; gap:6px; padding:max(4px, env(safe-area-inset-top)) 8px max(4px, env(safe-area-inset-bottom)); }
+    header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .brand { min-width:0; display:flex; align-items:baseline; gap:8px; }
+    .brand h1 { margin:0; font-size:20px; letter-spacing:.03em; }
+    .brand span { color:var(--muted); font-size:11px; white-space:nowrap; }
+    button { appearance:none; border:1px solid #334158; border-radius:12px; background:var(--panel2); color:var(--text); min-height:40px; padding:0 12px; font:inherit; font-weight:750; cursor:pointer; }
+    button:active { transform:translateY(1px); }
+    button:disabled { opacity:.45; cursor:default; transform:none; }
+    button.primary { border-color:#168ec2; background:#0d4e6d; }
+    button.danger { border-color:#79323a; background:#421b20; }
+    button.icon { min-width:44px; padding:0; font-size:18px; }
+    .status { background:var(--panel); border:1px solid #263247; border-radius:15px; padding:8px 10px; display:flex; align-items:center; gap:10px; }
+    .turn-dot { width:30px; height:30px; border-radius:50%; flex:0 0 auto; border:2px solid #697488; box-shadow:0 3px 8px rgba(0,0,0,.3), inset 0 0 0 1px rgba(255,255,255,.08); }
+    .turn-dot.black { background:var(--black); }
+    .turn-dot.white { background:var(--white); }
+    .status-copy { flex:1; min-width:0; }
+    .status-copy strong { display:block; font-size:15px; }
+    .status-copy small { display:block; color:var(--muted); margin-top:2px; font-size:12px; }
+    .left { color:var(--accent); font-weight:800; font-size:13px; text-align:right; }
+    .board-shell { min-height:0; overflow:hidden; position:relative; border:1px solid #263247; border-radius:14px; background:radial-gradient(circle at 50% 42%, #151c27 0, #0e131b 58%, #0a0e14 100%); touch-action:none; }
+    #board { width:100%; height:100%; min-height:0; display:block; user-select:none; -webkit-user-select:none; }
+    .hex-cell { fill:var(--cell); stroke:var(--cell-line); stroke-width:1.3; vector-effect:non-scaling-stroke; cursor:pointer; }
+    .hex-cell.playable:active { fill:var(--cell-hover); }
+    @media (hover:hover) and (pointer:fine) { .hex-cell.playable:hover { fill:var(--cell-hover); stroke:#71819b; } }
+    .stone-black { fill:var(--black); stroke:#a88300; stroke-width:1.2; vector-effect:non-scaling-stroke; pointer-events:none; }
+    .stone-white { fill:var(--white); stroke:#2f86a8; stroke-width:1.2; vector-effect:non-scaling-stroke; pointer-events:none; }
+    .last-ring { fill:none; stroke:var(--last); stroke-width:2.5; vector-effect:non-scaling-stroke; pointer-events:none; }
+    .win-ring { fill:none; stroke:var(--win); stroke-width:3; vector-effect:non-scaling-stroke; pointer-events:none; }
+    .first-guide { fill:none; stroke:var(--accent); stroke-width:2.4; stroke-dasharray:5 4; vector-effect:non-scaling-stroke; pointer-events:none; opacity:.95; }
+    .board-tools { position:absolute; right:10px; bottom:10px; display:grid; grid-template-columns:44px 44px; gap:7px; }
+    .board-tools button { background:rgba(18,23,34,.92); backdrop-filter:blur(8px); }
+        .toast { position:absolute; left:50%; top:12px; transform:translateX(-50%) translateY(-8px); background:rgba(15,20,30,.97); border:1px solid #3b4a61; border-radius:12px; padding:9px 12px; max-width:calc(100% - 24px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; opacity:0; pointer-events:none; transition:.16s ease; z-index:4; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    .actions { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:6px; }
+    dialog { width:min(92vw,430px); border:1px solid #334158; border-radius:18px; background:#121722; color:var(--text); padding:0; box-shadow:0 20px 70px rgba(0,0,0,.55); }
+    dialog::backdrop { background:rgba(0,0,0,.64); }
+    .modal { padding:18px; }
+    .modal h2 { margin:0 0 10px; font-size:20px; }
+    .modal p, .modal li { color:#cbd3dd; line-height:1.55; }
+    .modal ol { padding-left:20px; }
+    .modal .row { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+    .winner { color:#73e0a3 !important; font-size:18px; font-weight:850; }
+
+    .screen { display:none; height:100dvh; min-height:0; padding:max(18px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom)); }
+    .screen.active { display:flex; }
+    .menu-screen { align-items:center; justify-content:center; overflow:auto; scrollbar-width:none; }
+    .menu-screen::-webkit-scrollbar { display:none; }
+    .menu-wrap { width:min(560px,100%); display:grid; gap:18px; }
+    .menu-brand { text-align:center; }
+    .menu-brand h1 { margin:0; font-size:clamp(44px,12vw,72px); letter-spacing:.08em; }
+    .menu-brand p { margin:8px 0 0; color:var(--muted); font-size:14px; line-height:1.55; }
+    .mode-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .mode-card { min-height:148px; padding:18px; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; text-align:left; border-radius:20px; background:linear-gradient(160deg,#17202d,#111722); }
+    .mode-card strong { font-size:20px; margin-bottom:7px; }
+    .mode-card span { color:#b7c1cf; font-size:13px; line-height:1.45; font-weight:600; }
+    .mode-card.ai { border-color:#346d8e; background:linear-gradient(160deg,#153044,#111722); }
+    .difficulty-grid { display:grid; gap:10px; }
+    .timer-mode-grid { display:grid; gap:10px; }
+    .timer-mode-btn { min-height:76px; padding:12px 16px; display:flex; align-items:center; justify-content:center; text-align:center; border-radius:16px; }
+    .timer-mode-btn strong { font-size:18px; }
+    .preset-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .preset-btn { min-height:78px; padding:10px 8px; display:flex; align-items:center; justify-content:center; text-align:center; border-radius:16px; }
+    .preset-btn strong { font-size:17px; }
+    .increment-settings { display:grid; gap:16px; }
+    .time-setting-card { background:var(--panel); border:1px solid #2b3850; border-radius:18px; padding:16px; display:grid; gap:12px; }
+    .time-setting-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .time-setting-head strong { font-size:16px; }
+    .time-value-wrap { display:flex; align-items:center; gap:6px; color:var(--muted); font-weight:750; }
+    .time-number { width:74px; min-height:40px; border:1px solid #40506a; border-radius:10px; background:#0e141e; color:var(--text); padding:0 9px; text-align:center; font:inherit; font-size:16px; font-weight:850; font-variant-numeric:tabular-nums; }
+    .time-number:focus { outline:2px solid var(--accent); outline-offset:1px; }
+    .time-range { width:100%; accent-color:var(--accent); min-height:28px; cursor:pointer; }
+    .time-adjust-row { display:grid; grid-template-columns:44px minmax(0,1fr) 44px; gap:8px; align-items:center; }
+    .time-adjust-row button { min-width:44px; padding:0; font-size:20px; }
+    .start-game-btn { width:100%; min-height:52px; font-size:17px; }
+    .timer-panel { position:absolute; z-index:3; left:50%; top:10px; transform:translateX(-50%); display:flex; align-items:center; justify-content:center; gap:7px; pointer-events:none; }
+    .timer-panel[hidden] { display:none; }
+    .chess-clocks { display:flex; gap:7px; }
+    .chess-clocks[hidden], .turn-clock[hidden] { display:none !important; }
+    .turn-clock, .clock-chip { background:rgba(12,17,25,.92); border:1px solid #415069; border-radius:12px; min-width:92px; padding:7px 10px; text-align:center; font-weight:850; font-variant-numeric:tabular-nums; box-shadow:0 4px 16px rgba(0,0,0,.28); backdrop-filter:blur(8px); }
+    .clock-chip { min-width:104px; display:grid; grid-template-columns:auto auto; align-items:center; gap:7px; }
+    .clock-chip.active { border-color:#e8f1ff; box-shadow:0 0 0 1px rgba(255,255,255,.25),0 4px 16px rgba(0,0,0,.28); }
+    .clock-dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+    .clock-dot.black { background:var(--black); }
+    .clock-dot.white { background:var(--white); }
+    .clock-time { min-width:48px; text-align:right; }
+    .side-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .side-btn { min-height:132px; padding:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; border-radius:18px; background:linear-gradient(160deg,#17202d,#111722); }
+    .side-btn.first { border-color:#8b761d; background:linear-gradient(160deg,#3a3212,#111722); }
+    .side-btn.second { border-color:#346d8e; background:linear-gradient(160deg,#153044,#111722); }
+    .side-btn strong { font-size:20px; margin-bottom:0; }
+    .side-btn span { color:#b7c1cf; font-size:13px; line-height:1.45; font-weight:600; }
+    .difficulty-btn { min-height:70px; padding:12px 16px; display:flex; align-items:center; justify-content:center; text-align:center; border-radius:16px; }
+    .difficulty-btn strong { font-size:17px; }
+    .difficulty-btn span { color:var(--muted); font-size:12px; font-weight:650; }
+    .menu-back { justify-self:start; }
+    .game-screen { padding:0; height:100dvh; min-height:0; overflow:hidden; }
+    .game-screen .app { width:100%; height:100%; min-height:0; }
+    .game-screen .brand { margin-left:54px; }
+    .mode-badge { color:var(--muted); font-size:12px; font-weight:700; white-space:nowrap; }
+    .header-actions { display:flex; gap:6px; align-items:center; }
+    .lab-card { background:var(--panel); border:1px solid #263247; border-radius:18px; padding:16px; display:grid; gap:12px; }
+    .lab-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .lab-stat { background:var(--panel2); border:1px solid #334158; border-radius:14px; padding:12px; text-align:center; }
+    .lab-stat strong { display:block; font-size:24px; }
+    .lab-stat span { color:var(--muted); font-size:12px; }
+    .lab-progress { width:100%; height:10px; accent-color:var(--accent); }
+    .lab-note { color:var(--muted); font-size:12px; line-height:1.5; }
+    .lab-controls { display:grid; gap:10px; }
+    .lab-controls label { display:grid; gap:6px; color:#cbd3dd; font-size:13px; font-weight:700; }
+    .lab-controls select { width:100%; min-height:44px; border-radius:12px; border:1px solid #334158; background:var(--panel2); color:var(--text); padding:0 12px; font:inherit; }
+    @media (max-width:520px) { .mode-grid, .side-grid { grid-template-columns:1fr; } .mode-card { min-height:118px; } .side-btn { min-height:108px; } .preset-grid { grid-template-columns:1fr; } .preset-btn { min-height:62px; } .actions { grid-template-columns:repeat(3, minmax(0,1fr)); } .actions button { min-height:38px; padding:0 6px; font-size:13px; } .header-actions button { min-width:44px; padding:0 10px; } .clock-chip { min-width:96px; padding:6px 8px; font-size:13px; } .turn-clock { min-width:86px; padding:6px 8px; font-size:13px; } }
+    @media (min-width:800px) and (max-height:780px) {
+      .app { gap:4px; padding-top:4px; padding-bottom:4px; }
+      button { min-height:38px; }
+      .brand h1 { font-size:18px; }
+      .status { padding:6px 9px; }
+      .turn-dot { width:28px; height:28px; }
+      .status-copy strong { font-size:14px; }
+      .status-copy small { font-size:11px; }
+      .actions button { min-height:36px; padding:0 8px; font-size:13px; }
+    }
+    @media (min-width:800px) { .app { width:min(1180px,100%); margin:0 auto; } .actions { grid-template-columns:180px 180px 180px; justify-content:center; } }
+  </style>
 </head>
 <body>
-  <main class="placeholder-shell">
-    <div class="placeholder-mark" aria-hidden="true">◆</div>
-    <p>GAME SLOT READY</p><h1>HeXO</h1>
-    <p class="copy">현재 작업 공간에서 HeXO 원본 파일을 찾지 못했습니다. 이 폴더에 게임 파일을 넣고 목록의 상태만 바꾸면 Game Hub와 오프라인 캐시에 자동으로 연결됩니다.</p>
-    <a href="../../">Game Hub로 돌아가기</a>
-  </main>
-  <script type="module" src="../../shared/game-shell.js"></script>
+<section id="homeScreen" class="screen menu-screen active" aria-label="HeXO 홈">
+  <div class="menu-wrap">
+    <div class="menu-brand"><h1 id="homeBrandTitle">HeXO</h1><p>육각 격자에서 즐기는 1-2-2 육목</p></div>
+    <div class="mode-grid">
+      <button id="localModeBtn" type="button" class="mode-card">
+        <strong>사람끼리 대전</strong><span>한 기기에서 두 사람이 번갈아 플레이</span>
+      </button>
+      <button id="aiModeBtn" type="button" class="mode-card ai">
+        <strong>AI 대전</strong><span>난이도를 선택하고 혼자 플레이</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<section id="localTimeScreen" class="screen menu-screen" aria-label="사람끼리 시간 방식 선택">
+  <div class="menu-wrap">
+    <button id="localTimeBackBtn" type="button" class="menu-back">← 뒤로</button>
+    <div class="menu-brand"><h1 style="font-size:36px">시간 설정</h1></div>
+    <div class="timer-mode-grid">
+      <button type="button" class="timer-mode-btn" data-time-mode="unlimited"><strong>무제한</strong></button>
+      <button type="button" class="timer-mode-btn" data-time-mode="turn"><strong>턴 제한</strong></button>
+      <button type="button" class="timer-mode-btn" data-time-mode="increment"><strong>증가 시간</strong></button>
+    </div>
+  </div>
+</section>
+
+<section id="turnTimeScreen" class="screen menu-screen" aria-label="턴 시간 선택">
+  <div class="menu-wrap">
+    <button id="turnTimeBackBtn" type="button" class="menu-back">← 뒤로</button>
+    <div class="menu-brand"><h1 style="font-size:36px">턴 제한</h1></div>
+    <div class="preset-grid">
+      <button type="button" class="preset-btn" data-turn-seconds="15"><strong>15초</strong></button>
+      <button type="button" class="preset-btn" data-turn-seconds="30"><strong>30초</strong></button>
+      <button type="button" class="preset-btn" data-turn-seconds="60"><strong>60초</strong></button>
+    </div>
+  </div>
+</section>
+
+<section id="chessTimeScreen" class="screen menu-screen" aria-label="증가 시간 설정">
+  <div class="menu-wrap">
+    <button id="chessTimeBackBtn" type="button" class="menu-back">← 뒤로</button>
+    <div class="menu-brand"><h1 style="font-size:36px">증가 시간</h1></div>
+    <div class="increment-settings">
+      <section class="time-setting-card" aria-label="총 시간 설정">
+        <div class="time-setting-head">
+          <strong>총 시간</strong>
+          <label class="time-value-wrap"><input id="baseMinutesInput" class="time-number" type="number" min="1" max="60" step="1" inputmode="numeric" value="5" aria-label="총 시간 분"> 분</label>
+        </div>
+        <div class="time-adjust-row">
+          <button id="baseMinus" type="button" aria-label="총 시간 1분 줄이기">−</button>
+          <input id="baseMinutesRange" class="time-range" type="range" min="1" max="60" step="1" value="5" aria-label="총 시간 슬라이더">
+          <button id="basePlus" type="button" aria-label="총 시간 1분 늘리기">＋</button>
+        </div>
+      </section>
+      <section class="time-setting-card" aria-label="증가 시간 설정">
+        <div class="time-setting-head">
+          <strong>수 증가 시간</strong>
+          <label class="time-value-wrap"><input id="incrementSecondsInput" class="time-number" type="number" min="0" max="30" step="1" inputmode="numeric" value="3" aria-label="증가 시간 초"> 초</label>
+        </div>
+        <div class="time-adjust-row">
+          <button id="incrementMinus" type="button" aria-label="증가 시간 1초 줄이기">−</button>
+          <input id="incrementSecondsRange" class="time-range" type="range" min="0" max="30" step="1" value="3" aria-label="증가 시간 슬라이더">
+          <button id="incrementPlus" type="button" aria-label="증가 시간 1초 늘리기">＋</button>
+        </div>
+      </section>
+      <button id="startIncrementGameBtn" type="button" class="primary start-game-btn">게임 시작</button>
+    </div>
+  </div>
+</section>
+
+<section id="difficultyScreen" class="screen menu-screen" aria-label="AI 난이도 선택">
+  <div class="menu-wrap">
+    <button id="difficultyBackBtn" type="button" class="menu-back">← 뒤로</button>
+    <div class="menu-brand"><h1 style="font-size:36px">AI 난이도</h1></div>
+    <div class="difficulty-grid">
+      <button type="button" class="difficulty-btn" data-difficulty="beginner"><strong>초급</strong></button>
+      <button type="button" class="difficulty-btn" data-difficulty="intermediate"><strong>중급</strong></button>
+      <button type="button" class="difficulty-btn" data-difficulty="advanced"><strong>고급</strong></button>
+    </div>
+  </div>
+</section>
+
+<section id="sideScreen" class="screen menu-screen" aria-label="AI 선공 후공 선택">
+  <div class="menu-wrap">
+    <button id="sideBackBtn" type="button" class="menu-back">← 뒤로</button>
+    <div class="menu-brand"><h1 style="font-size:36px">순서 선택</h1></div>
+    <div class="side-grid">
+      <button type="button" class="side-btn first" data-side="first"><strong>선공</strong></button>
+      <button type="button" class="side-btn second" data-side="second"><strong>후공</strong></button>
+    </div>
+  </div>
+</section>
+
+
+<section id="labScreen" class="screen menu-screen" aria-label="AI 실험실">
+  <div class="menu-wrap">
+    <button id="labBackBtn" type="button" class="menu-back">← 뒤로</button>
+    <div class="menu-brand"><h1 style="font-size:36px">AI 실험실</h1><p>우리 고급 AI vs 공식 hexo_bot2 자동 대전</p></div>
+    <div class="lab-card">
+      <div class="lab-controls">
+        <label>대국 수
+          <select id="labGames"><option value="1">1판</option><option value="3">3판</option><option value="5" selected>5판</option><option value="10">10판</option><option value="20">20판</option><option value="50">50판</option></select>
+        </label>
+        <label>한 턴 생각 시간
+          <select id="labBudget"><option value="0.2">0.2초 · 빠른 테스트</option><option value="0.4">0.4초</option><option value="0.7" selected>0.7초 · 연구 봇 기본</option></select>
+        </label>
+        <label>색 배정
+          <select id="labSide"><option value="alternate" selected>선공/후공 교대</option><option value="ours-black">우리 AI 선공</option><option value="ours-white">우리 AI 후공</option></select>
+        </label>
+      </div>
+      <button id="labStartBtn" type="button" class="primary">자동 대전 시작</button>
+      <button id="labStopBtn" type="button" disabled>중지</button>
+      <progress id="labProgress" class="lab-progress" max="1" value="0"></progress>
+      <div id="labStatus" class="lab-note" aria-live="polite">처음 실행할 때 Python 엔진을 불러오느라 시간이 조금 걸릴 수 있습니다.</div>
+      <div class="lab-grid">
+        <div class="lab-stat"><strong id="labOurWins">0</strong><span>우리 AI 승</span></div>
+        <div class="lab-stat"><strong id="labHbWins">0</strong><span>hexo_bot2 승</span></div>
+        <div class="lab-stat"><strong id="labDraws">0</strong><span>무승부</span></div>
+        <div class="lab-stat"><strong id="labScore">-</strong><span>우리 승률</span></div>
+      </div>
+      <div id="labBreakdown" class="lab-note">선공/후공별 결과는 대전 시작 후 표시됩니다.</div>
+      <div class="lab-note">홈 화면의 HeXO 제목을 약 1초간 누르면 이 실험실이 열립니다. 실험실은 온라인 전용이며, 공개 저장소의 고정 버전 hexo_bot2를 실행합니다.</div>
+    </div>
+  </div>
+</section>
+
+<section id="gameScreen" class="screen game-screen" aria-label="HeXO 게임">
+<main class="app">
+  <header>
+    <div class="brand"><h1>HeXO</h1><span id="modeBadge" class="mode-badge">사람끼리 대전</span></div>
+    <div class="header-actions"><button id="homeBtn" type="button">홈</button></div>
+  </header>
+
+  <section class="status" aria-live="polite">
+    <div id="turnDot" class="turn-dot black" aria-hidden="true"></div>
+    <div class="status-copy"><strong id="statusText">흑 차례</strong><small id="moveText">첫 수는 정중앙에 놓아주세요.</small></div>
+    <div id="stonesLeft" class="left">1개 남음</div>
+  </section>
+
+  <section id="boardShell" class="board-shell" aria-label="HeXO 게임판">
+    <div id="timerPanel" class="timer-panel" hidden aria-live="polite">
+      <div id="turnClock" class="turn-clock" hidden>00:30</div>
+      <div id="chessClocks" class="chess-clocks" hidden>
+        <div id="blackClock" class="clock-chip"><span class="clock-dot black"></span><span class="clock-time">05:00</span></div>
+        <div id="whiteClock" class="clock-chip"><span class="clock-dot white"></span><span class="clock-time">05:00</span></div>
+      </div>
+    </div>
+    <svg id="board" role="img" aria-label="육각형 칸으로 이루어진 HeXO 보드" viewBox="0 0 900 760"></svg>
+    <div class="board-tools" aria-label="보드 조작">
+      <button id="zoomIn" type="button" class="icon" aria-label="확대">＋</button>
+      <button id="zoomOut" type="button" class="icon" aria-label="축소">−</button>
+      <button id="centerBtn" type="button" class="icon" aria-label="가운데로">◎</button>
+      <button id="helpBtn" type="button" class="icon" aria-label="도움말">?</button>
+    </div>
+    <div id="toast" class="toast" role="status"></div>
+  </section>
+
+  <nav class="actions" aria-label="게임 조작">
+    <button id="undoBtn" type="button">실행 취소</button>
+    <button id="newBtn" type="button" class="danger">새 게임</button>
+    <button id="gameHomeBtn" type="button">홈 화면</button>
+  </nav>
+</main>
+</section>
+
+<dialog id="helpDialog"><div class="modal">
+  <h2>HeXO 규칙</h2>
+  <ol><li>게임은 빈 보드에서 시작하며, 흑이 첫 수를 직접 둡니다.</li><li>흑의 첫 수는 반드시 정중앙 칸에 놓아야 합니다.</li><li>그 다음부터 백과 흑이 번갈아 한 턴에 2개씩 둡니다.</li><li>육각 격자의 세 축 중 한 방향으로 6개를 연속해서 만들면 승리합니다.</li></ol>
+  <p>육각형 칸을 짧게 탭하면 돌이 놓입니다. 게임은 중앙 1칸만 활성화된 상태에서 시작합니다. 돌을 놓을 때마다 그 돌을 중심으로 한 변이 9칸인 큰 육각형 영역이 추가로 활성화됩니다. 마우스나 한 손가락으로 판을 드래그할 수 있고, PC에서는 마우스 휠로, 휴대폰·태블릿에서는 두 손가락 핀치로 확대·축소할 수 있습니다.</p>
+  <p><b>사람끼리 시간 설정:</b> 무제한, 턴 제한, 증가 시간을 선택할 수 있습니다. 턴 제한은 한 차례 전체에 주어진 시간이며, 증가 시간은 각자의 남은 시간이 흐르고 차례를 끝낼 때 설정된 초가 추가됩니다. 시간이 0이 되면 상대가 승리합니다.</p>
+  <p><b>AI 대전 순서:</b> 난이도를 고른 뒤 선공/후공을 선택할 수 있습니다. 선공은 노란색(흑), 후공은 하늘색(백)이며, 후공을 고르면 AI가 중앙에 첫 수를 둡니다.</p>
+  <p><b>초급 AI 대전:</b> AI는 즉시 승리와 방어를 먼저 확인하고, 그 외에는 주변 연결을 강화하는 수를 빠르게 선택합니다.</p>
+  <p><b>중급 AI 대전:</b> 이전 고급 AI 엔진을 사용합니다. 두 돌을 한 쌍으로 평가하고 상대의 최선 응수와 다음 공격까지 제한적으로 읽습니다.</p>
+  <p><b>고급 AI 대전:</b> 강제승리와 정확한 방어 조합을 먼저 계산하고, 반복 깊이 탐색·알파베타 가지치기·전술 연장·같은 판 재사용을 이용해 제한 시간 안에서 가능한 만큼 깊게 읽습니다.</p>
+  <div class="row"><button id="closeHelp" type="button" class="primary">확인</button></div>
+</div></dialog>
+
+<dialog id="winDialog"><div class="modal">
+  <h2>게임 종료</h2><p id="winnerText" class="winner"></p><p id="winDetail">초록색 테두리로 승리한 6개의 돌을 표시했습니다.</p>
+  <div class="row"><button id="closeWin" type="button">판 보기</button><button id="restartWin" type="button" class="primary">새 게임</button></div>
+</div></dialog>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const svg = $('board');
+  const statusText = $('statusText');
+  const moveText = $('moveText');
+  const stonesLeft = $('stonesLeft');
+  const turnDot = $('turnDot');
+  const undoBtn = $('undoBtn');
+  const newBtn = $('newBtn');
+  const helpDialog = $('helpDialog');
+  const winDialog = $('winDialog');
+  const winnerText = $('winnerText');
+  const winDetail = $('winDetail');
+  const toast = $('toast');
+  const homeScreen = $('homeScreen');
+  const difficultyScreen = $('difficultyScreen');
+  const sideScreen = $('sideScreen');
+  const localTimeScreen = $('localTimeScreen');
+  const turnTimeScreen = $('turnTimeScreen');
+  const chessTimeScreen = $('chessTimeScreen');
+  const gameScreen = $('gameScreen');
+  const labScreen = $('labScreen');
+  const timerPanel = $('timerPanel');
+  const turnClock = $('turnClock');
+  const chessClocks = $('chessClocks');
+  const blackClock = $('blackClock');
+  const whiteClock = $('whiteClock');
+  const modeBadge = $('modeBadge');
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const HEX = 17;
+  const STONE_R = 11.2;
+  const BASE_W = 900;
+  const BASE_H = 760;
+  const CX = BASE_W / 2;
+  const CY = BASE_H / 2;
+  const WIN_DIRS = [[1,0],[0,1],[1,-1]];
+  const CENTER_KEY = '0,0';
+  const ACTIVE_RADIUS = 8; // 한 변 9칸짜리 큰 육각형
+
+  let board = new Map();
+  let activeCells = new Set([CENTER_KEY]);
+  let history = [];
+  let current = 'black';
+  let stonesThisTurn = 0;
+  let turnLimit = 1;
+  let gameOver = false;
+  let winningKeys = [];
+  let lastKey = null;
+  let view = {x:0,y:0,w:BASE_W,h:BASE_H};
+  let gesture = null;
+  let suppressClickUntil = 0;
+  let renderedWorld = null;
+  const activePointers = new Map();
+  let pinch = null;
+  let gameMode = 'local';
+  let aiDifficulty = null;
+  let pendingDifficulty = null;
+  let sideOrigin = 'difficulty';
+  let humanColor = 'black';
+  let aiColor = 'white';
+  let aiTimer = null;
+  let aiThinking = false;
+  let aiPlannedMoves = [];
+  let labPyodide=null;
+  let labHbChoose=null;
+  let labRunning=false;
+  let labStopRequested=false;
+  let labAdvancedBudgetMs=null;
+  let localTimeConfig = {type:'unlimited'};
+  let turnRemainingMs = 0;
+  let chessRemainingMs = {black:0, white:0};
+  let gameClockTimer = null;
+  let lastClockTick = 0;
+
+  function showScreen(which){
+    [homeScreen,difficultyScreen,sideScreen,localTimeScreen,turnTimeScreen,chessTimeScreen,labScreen,gameScreen].forEach(s=>s.classList.remove('active'));
+    which.classList.add('active');
+  }
+
+  function difficultyLabel(value){
+    return value==='beginner'?'초급':value==='intermediate'?'중급':value==='advanced'?'고급':'';
+  }
+
+  function colorLabel(color){ return color==='black'?'노란색':'하늘색'; }
+  function opponentColor(color){ return color==='black'?'white':'black'; }
+
+  function openSideSelection(difficulty,origin='difficulty'){
+    cancelAI();
+    pendingDifficulty=difficulty;
+    sideOrigin=origin;
+    showScreen(sideScreen);
+  }
+
+  function localTimeLabel(config=localTimeConfig){
+    if(config.type==='turn') return `${config.seconds}초/턴`;
+    if(config.type==='increment') return `${Math.round(config.baseSeconds/60)}분+${config.incrementSeconds}초`;
+    return '무제한';
+  }
+
+  function enterGame(mode,difficulty=null,side='first',timeConfig=null){
+    gameMode=mode;
+    aiDifficulty=difficulty;
+    if(mode==='ai'){
+      localTimeConfig={type:'unlimited'};
+      humanColor=side==='first'?'black':'white';
+      aiColor=opponentColor(humanColor);
+      modeBadge.textContent=`AI 대전 · ${difficultyLabel(difficulty)} · ${side==='first'?'선공':'후공'}`;
+    } else {
+      localTimeConfig=timeConfig || {type:'unlimited'};
+      humanColor='black';
+      aiColor='white';
+      modeBadge.textContent=`사람끼리 · ${localTimeLabel(localTimeConfig)}`;
+    }
+    showScreen(gameScreen);
+    reset();
+  }
+
+  function cancelAI(){
+    if(aiTimer){ clearTimeout(aiTimer); aiTimer=null; }
+    aiThinking=false;
+    aiPlannedMoves=[];
+  }
+
+  function goHome(){
+    cancelAI();
+    stopGameClock();
+    if(winDialog.open) winDialog.close();
+    if(helpDialog.open) helpDialog.close();
+    showScreen(homeScreen);
+  }
+
+  const key = (q,r) => `${q},${r}`;
+  function center(q,r){ return { x: CX + Math.sqrt(3)*HEX*(q+r/2), y: CY + 1.5*HEX*r }; }
+  function polygonPoints(x,y,radius=HEX){
+    const pts=[];
+    for(let i=0;i<6;i++){
+      const a=(Math.PI/180)*(30+60*i);
+      pts.push(`${(x+radius*Math.cos(a)).toFixed(2)},${(y+radius*Math.sin(a)).toFixed(2)}`);
+    }
+    return pts.join(' ');
+  }
+  function el(name,attrs={}){ const n=document.createElementNS(NS,name); for(const [k,v] of Object.entries(attrs)) n.setAttribute(k,v); return n; }
+
+  function pixelToAxial(x,y){
+    const px=x-CX, py=y-CY;
+    return {
+      q:(Math.sqrt(3)/3*px - py/3)/HEX,
+      r:(2/3*py)/HEX
+    };
+  }
+
+  function expandedRenderRect(){
+    const mx=Math.max(180,view.w*0.55);
+    const my=Math.max(180,view.h*0.55);
+    return {x:view.x-mx,y:view.y-my,w:view.w+mx*2,h:view.h+my*2};
+  }
+
+  function rectContainsView(rect){
+    return rect && view.x>=rect.x && view.y>=rect.y &&
+      view.x+view.w<=rect.x+rect.w && view.y+view.h<=rect.y+rect.h;
+  }
+
+  function axialBoundsForRect(rect){
+    const corners=[
+      pixelToAxial(rect.x,rect.y),
+      pixelToAxial(rect.x+rect.w,rect.y),
+      pixelToAxial(rect.x,rect.y+rect.h),
+      pixelToAxial(rect.x+rect.w,rect.y+rect.h)
+    ];
+    const pad=4;
+    return {
+      qMin:Math.floor(Math.min(...corners.map(c=>c.q)))-pad,
+      qMax:Math.ceil(Math.max(...corners.map(c=>c.q)))+pad,
+      rMin:Math.floor(Math.min(...corners.map(c=>c.r)))-pad,
+      rMax:Math.ceil(Math.max(...corners.map(c=>c.r)))+pad
+    };
+  }
+
+  function renderVisibleCells(force=false){
+    const layer=$('cellLayer');
+    if(!layer) return;
+    if(!force && rectContainsView(renderedWorld)) return;
+    renderedWorld=expandedRenderRect();
+    const frag=document.createDocumentFragment();
+    for(const k of activeCells){
+      const [q,r]=k.split(',').map(Number);
+      const p=center(q,r);
+      if(p.x+HEX<renderedWorld.x || p.x-HEX>renderedWorld.x+renderedWorld.w ||
+         p.y+HEX<renderedWorld.y || p.y-HEX>renderedWorld.y+renderedWorld.h) continue;
+      const poly=el('polygon',{points:polygonPoints(p.x,p.y),class:'hex-cell playable','data-q':q,'data-r':r,'aria-label':`칸 ${q}, ${r}`});
+      frag.appendChild(poly);
+    }
+    layer.replaceChildren(frag);
+  }
+
+  function expandActiveArea(q,r){
+    const R=ACTIVE_RADIUS;
+    for(let dq=-R;dq<=R;dq++){
+      const drMin=Math.max(-R,-dq-R);
+      const drMax=Math.min(R,-dq+R);
+      for(let dr=drMin;dr<=drMax;dr++){
+        activeCells.add(key(q+dq,r+dr));
+      }
+    }
+  }
+
+  function rebuildActiveArea(){
+    activeCells=new Set([CENTER_KEY]);
+    for(const m of history){
+      const [q,r]=m.key.split(',').map(Number);
+      expandActiveArea(q,r);
+    }
+    renderedWorld=null;
+    renderVisibleCells(true);
+  }
+
+  function drawBoard(){
+    svg.replaceChildren();
+    svg.append(el('g',{id:'cellLayer'}),el('g',{id:'stoneLayer'}));
+    renderedWorld=null;
+    renderVisibleCells(true);
+    renderStones();
+    applyView(false);
+  }
+
+  function recentTurnKeys(){
+    if(!history.length) return [];
+    const last=history[history.length-1];
+    // stonesBefore===1 means this was the second placement of a normal 2-stone turn.
+    // In that case highlight both stones from that turn; otherwise highlight only the
+    // currently placed first stone (or the opening single stone).
+    if(last.stonesBefore===1 && history.length>=2){
+      const prev=history[history.length-2];
+      if(prev.color===last.color && prev.stonesBefore===0) return [prev.key,last.key];
+    }
+    return [last.key];
+  }
+
+  function renderStones(){
+    const layer=$('stoneLayer');
+    if(!layer) return;
+    layer.replaceChildren();
+    const stoneRadius=HEX*0.84;
+    const ringRadius=HEX*0.72;
+    const guideRadius=HEX*0.80;
+    const recent=new Set(recentTurnKeys());
+    if(board.size===0 && current==='black'){
+      const p=center(0,0);
+      layer.appendChild(el('polygon',{points:polygonPoints(p.x,p.y,guideRadius),class:'first-guide'}));
+    }
+    for(const [k,color] of board.entries()){
+      const [q,r]=k.split(',').map(Number);
+      const p=center(q,r);
+      layer.appendChild(el('polygon',{points:polygonPoints(p.x,p.y,stoneRadius),class:color==='black'?'stone-black':'stone-white'}));
+      if(winningKeys.includes(k)) layer.appendChild(el('polygon',{points:polygonPoints(p.x,p.y,ringRadius),class:'win-ring'}));
+      else if(recent.has(k)) layer.appendChild(el('polygon',{points:polygonPoints(p.x,p.y,ringRadius),class:'last-ring'}));
+    }
+  }
+
+  function hexDistance(q1,r1,q2,r2){
+    const dq=q1-q2, dr=r1-r2;
+    return Math.max(Math.abs(dq),Math.abs(dr),Math.abs(dq+dr));
+  }
+
+  function wouldWin(q,r,color){
+    const k=key(q,r);
+    if(board.has(k)) return false;
+    board.set(k,color);
+    const won=Boolean(getWinningLine(q,r,color));
+    board.delete(k);
+    return won;
+  }
+
+  function beginnerCandidates(){
+    const out=new Set();
+    const occupied=[...board.keys()].map(k=>k.split(',').map(Number));
+    if(!occupied.length) return [{q:0,r:0}];
+
+    // 초급 AI는 이미 놓인 돌 주변만 살펴서 계산량을 작게 유지한다.
+    for(const [oq,or] of occupied){
+      for(let dq=-2;dq<=2;dq++){
+        const drMin=Math.max(-2,-dq-2);
+        const drMax=Math.min(2,-dq+2);
+        for(let dr=drMin;dr<=drMax;dr++){
+          const q=oq+dq, r=or+dr, k=key(q,r);
+          if(activeCells.has(k) && !board.has(k)) out.add(k);
+        }
+      }
+    }
+
+    // 매우 드문 경우를 위한 안전장치.
+    if(!out.size){
+      for(const k of activeCells){
+        if(!board.has(k)){ out.add(k); if(out.size>=40) break; }
+      }
+    }
+    return [...out].map(k=>{ const [q,r]=k.split(',').map(Number); return {q,r}; });
+  }
+
+  function beginnerPlacementScore(q,r,color='white',randomize=true){
+    const opponent=color==='white'?'black':'white';
+    const ownWeight=[0,5,18,75,360,3200,1000000];
+    const blockWeight=[0,3,14,65,420,5000,0];
+    let score=0;
+
+    for(const [dq,dr] of WIN_DIRS){
+      for(let start=-5;start<=0;start++){
+        let own=0, opp=0;
+        for(let i=0;i<6;i++){
+          const cq=q+(start+i)*dq, cr=r+(start+i)*dr;
+          if(cq===q && cr===r){ own++; continue; }
+          const v=board.get(key(cq,cr));
+          if(v===color) own++;
+          else if(v===opponent) opp++;
+        }
+        if(opp===0) score+=ownWeight[own];
+
+        // 이 칸을 두기 직전 상대가 이 6칸 창을 얼마나 채웠는지 본다.
+        let enemyBefore=0, ownBefore=0;
+        for(let i=0;i<6;i++){
+          const cq=q+(start+i)*dq, cr=r+(start+i)*dr;
+          const v=board.get(key(cq,cr));
+          if(v===opponent) enemyBefore++;
+          else if(v===color) ownBefore++;
+        }
+        if(ownBefore===0) score+=blockWeight[enemyBefore];
+      }
+    }
+
+    // 가까운 돌과 연결되는 자리를 조금 더 선호한다.
+    const neighbors=[[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
+    let ownAdj=0, oppAdj=0;
+    for(const [dq,dr] of neighbors){
+      const v=board.get(key(q+dq,r+dr));
+      if(v===color) ownAdj++;
+      else if(v===opponent) oppAdj++;
+    }
+    score+=ownAdj*22+oppAdj*9;
+
+    // 초급은 항상 똑같이 두지 않도록 약간의 변동을 준다.
+    if(randomize) score+=Math.random()*10;
+    return score;
+  }
+
+  function chooseBeginnerMove(color=aiColor){
+    const candidates=beginnerCandidates();
+    if(!candidates.length) return null;
+
+    // 1. 지금 바로 이길 수 있으면 이긴다.
+    const opponent=opponentColor(color);
+    const wins=candidates.filter(c=>wouldWin(c.q,c.r,color));
+    if(wins.length){
+      wins.sort((a,b)=>beginnerPlacementScore(b.q,b.r,color)-beginnerPlacementScore(a.q,a.r,color));
+      return wins[0];
+    }
+
+    // 2. 상대가 한 수로 끝낼 수 있는 곳은 먼저 막는다.
+    const blocks=candidates.filter(c=>wouldWin(c.q,c.r,opponent));
+    if(blocks.length){
+      blocks.sort((a,b)=>beginnerPlacementScore(b.q,b.r,color)-beginnerPlacementScore(a.q,a.r,color));
+      return blocks[0];
+    }
+
+    // 3. 그 외에는 연결 강화 + 상대 위협 견제 점수가 가장 높은 칸을 고른다.
+    let best=candidates[0], bestScore=-Infinity;
+    for(const c of candidates){
+      const score=beginnerPlacementScore(c.q,c.r,color);
+      if(score>bestScore){ bestScore=score; best=c; }
+    }
+    return best;
+  }
+
+
+  function collectWindows(color,minimumOwn=1){
+    const opponent=color==='white'?'black':'white';
+    const seen=new Set();
+    const windows=[];
+    const ownStones=[];
+    for(const [k,v] of board.entries()){
+      if(v===color) ownStones.push(k.split(',').map(Number));
+    }
+    for(const [q,r] of ownStones){
+      for(let d=0;d<WIN_DIRS.length;d++){
+        const [dq,dr]=WIN_DIRS[d];
+        for(let offset=-5;offset<=0;offset++){
+          const sq=q+offset*dq, sr=r+offset*dr;
+          const id=`${d}:${sq},${sr}`;
+          if(seen.has(id)) continue;
+          seen.add(id);
+          let own=0,opp=0;
+          const empties=[];
+          for(let i=0;i<6;i++){
+            const cq=sq+i*dq, cr=sr+i*dr;
+            const v=board.get(key(cq,cr));
+            if(v===color) own++;
+            else if(v===opponent) opp++;
+            else empties.push(key(cq,cr));
+          }
+          if(own>=minimumOwn) windows.push({own,opp,empties,dir:d});
+        }
+      }
+    }
+    return windows;
+  }
+
+  function collectImmediateThreats(color){
+    return collectWindows(color,4).filter(w=>w.opp===0 && w.own>=4 && w.empties.length<=2);
+  }
+
+  // 각 위협의 빈칸 중 하나만 막아도 그 6칸 창은 깨진다.
+  // 1~2개의 돌로 모든 위협을 동시에 막을 수 있는지 확인한다.
+  function defenseRequirement(threats){
+    if(!threats.length) return 0;
+    const cells=[...new Set(threats.flatMap(t=>t.empties))];
+    for(const a of cells){
+      if(threats.every(t=>t.empties.includes(a))) return 1;
+    }
+    for(let i=0;i<cells.length;i++){
+      for(let j=i+1;j<cells.length;j++){
+        const a=cells[i],b=cells[j];
+        if(threats.every(t=>t.empties.includes(a)||t.empties.includes(b))) return 2;
+      }
+    }
+    return 3;
+  }
+
+  function boardPotentialScore(color){
+    const weights=[0,1,8,48,360,4200,250000];
+    let score=0;
+    for(const w of collectWindows(color,2)){
+      if(w.opp===0) score+=weights[w.own];
+    }
+    return score;
+  }
+
+  function tacticalThreatScore(color){
+    const threats=collectImmediateThreats(color);
+    const need=defenseRequirement(threats);
+    let score=0;
+    for(const t of threats) score += t.own===5 ? 52000 : 10500;
+    if(need===1) score+=12000;
+    else if(need===2) score+=95000;
+    else if(need>=3) score+=2600000;
+    const directions=new Set(threats.map(t=>t.dir)).size;
+    score+=directions*3500;
+    return {score,need,count:threats.length};
+  }
+
+  function intermediateCandidates(color='white',limit=12){
+    const base=beginnerCandidates();
+    if(!base.length) return [];
+    const opponent=color==='white'?'black':'white';
+    const must=[];
+    const mustKeys=new Set();
+    for(const c of base){
+      if(wouldWin(c.q,c.r,color) || wouldWin(c.q,c.r,opponent)){
+        must.push(c); mustKeys.add(key(c.q,c.r));
+      }
+    }
+    const ranked=base
+      .filter(c=>!mustKeys.has(key(c.q,c.r)))
+      .map(c=>({c,score:beginnerPlacementScore(c.q,c.r,color,false)}))
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,Math.max(0,limit-must.length))
+      .map(x=>x.c);
+    return [...must,...ranked].slice(0,Math.max(limit,must.length));
+  }
+
+  function simulatePair(a,b,color,fn){
+    const ak=key(a.q,a.r),bk=key(b.q,b.r);
+    if(ak===bk || board.has(ak) || board.has(bk)) return -Infinity;
+    board.set(ak,color);
+    board.set(bk,color);
+    let value;
+    try{ value=fn(); }
+    finally{ board.delete(ak); board.delete(bk); }
+    return value;
+  }
+
+  function intermediatePairPreScore(a,b,color='white'){
+    const opponent=color==='white'?'black':'white';
+    return simulatePair(a,b,color,()=>{
+      const winA=getWinningLine(a.q,a.r,color);
+      const winB=getWinningLine(b.q,b.r,color);
+      if(winA||winB) return 100000000;
+
+      // 상대에게 4+2 또는 5+1 즉시 승리 창이 남으면 매우 나쁜 수다.
+      const enemyImmediate=collectImmediateThreats(opponent);
+      if(enemyImmediate.length) return -7000000 - enemyImmediate.length*100000;
+
+      const own=tacticalThreatScore(color);
+      const ownPotential=boardPotentialScore(color);
+      const enemyPotential=boardPotentialScore(opponent);
+      const baseA=beginnerPlacementScore(a.q,a.r,color,false);
+      const baseB=beginnerPlacementScore(b.q,b.r,color,false);
+      const distance=hexDistance(a.q,a.r,b.q,b.r);
+      const pairShape=distance<=2 ? 260 : distance<=4 ? 100 : -40;
+      return own.score + ownPotential*1.05 - enemyPotential*.72 + baseA+baseB + pairShape;
+    });
+  }
+
+  function opponentReplyValue(color,maxCandidates=7){
+    const opponent=opponentColor(color);
+    const candidates=intermediateCandidates(color,maxCandidates);
+    if(!candidates.length) return 0;
+    let best=0;
+    for(let i=0;i<candidates.length;i++){
+      for(let j=i+1;j<candidates.length;j++){
+        const a=candidates[i],b=candidates[j];
+        const value=simulatePair(a,b,color,()=>{
+          if(getWinningLine(a.q,a.r,color)||getWinningLine(b.q,b.r,color)) return 5000000;
+          const own=tacticalThreatScore(color);
+          return own.score + boardPotentialScore(color)*.7 - boardPotentialScore(opponent)*.25;
+        });
+        if(value>best) best=value;
+      }
+    }
+    return best;
+  }
+
+  function chooseIntermediateTurn(color=aiColor){
+    const opponent=opponentColor(color);
+    const candidates=intermediateCandidates(color,12);
+    if(!candidates.length) return [];
+
+    const singleWin=candidates.find(c=>wouldWin(c.q,c.r,color));
+    if(singleWin) return [singleWin];
+
+    if(candidates.length===1) return [candidates[0]];
+    const pairs=[];
+    for(let i=0;i<candidates.length;i++){
+      for(let j=i+1;j<candidates.length;j++){
+        const a=candidates[i],b=candidates[j];
+        pairs.push({a,b,score:intermediatePairPreScore(a,b,color)});
+      }
+    }
+    pairs.sort((x,y)=>y.score-x.score);
+
+    const finalists=pairs.slice(0,7);
+    let best=null,bestScore=-Infinity;
+    for(const pair of finalists){
+      const finalScore=simulatePair(pair.a,pair.b,color,()=>{
+        const reply=opponentReplyValue(opponent,7);
+        return pair.score - reply*.58;
+      });
+      if(finalScore>bestScore){ bestScore=finalScore; best=pair; }
+    }
+    if(!best) return [candidates[0],candidates[1]].filter(Boolean);
+    return [best.a,best.b];
+  }
+
+  function advancedCandidates(color='white',limit=14){
+    const opponent=color==='white'?'black':'white';
+    const selected=new Map();
+    const add=(q,r,bonus=0)=>{
+      const k=key(q,r);
+      if(board.has(k) || !activeCells.has(k)) return;
+      const old=selected.get(k);
+      if(!old || bonus>old.bonus) selected.set(k,{q,r,bonus});
+    };
+
+    // 당장 이기거나 막아야 하는 칸은 무조건 후보에 포함한다.
+    const nearby=beginnerCandidates();
+    for(const c of nearby){
+      let bonus=0;
+      if(wouldWin(c.q,c.r,color)) bonus+=50000000;
+      if(wouldWin(c.q,c.r,opponent)) bonus+=42000000;
+      if(bonus) add(c.q,c.r,bonus);
+    }
+
+    // 3개 이상 연결된 열린 6칸 창의 빈칸을 전술 후보로 추가한다.
+    for(const side of [color,opponent]){
+      for(const w of collectWindows(side,3)){
+        if(w.opp!==0) continue;
+        const baseBonus=(side===color?18000:11000) + w.own*w.own*5200;
+        for(const ek of w.empties){
+          const [q,r]=ek.split(',').map(Number);
+          add(q,r,baseBonus);
+        }
+      }
+    }
+
+    // 나머지는 기본 연결/차단 점수로 순위를 매긴다.
+    for(const c of nearby) add(c.q,c.r,0);
+    const ranked=[...selected.values()].map(x=>({
+      q:x.q,r:x.r,
+      score:x.bonus + beginnerPlacementScore(x.q,x.r,color,false)*1.45
+        + beginnerPlacementScore(x.q,x.r,opponent,false)*0.35
+    })).sort((a,b)=>b.score-a.score);
+
+    // 즉시 승리/방어 후보가 많으면 제한보다 조금 더 허용한다.
+    const forced=ranked.filter(x=>x.score>10000000);
+    const rest=ranked.filter(x=>x.score<=10000000);
+    const out=[...forced,...rest.slice(0,Math.max(0,limit-forced.length))];
+    return out.slice(0,Math.max(limit,Math.min(18,forced.length)));
+  }
+
+  function advancedPositionScore(color='white'){
+    const opponent=color==='white'?'black':'white';
+    const ownT=tacticalThreatScore(color);
+    const oppT=tacticalThreatScore(opponent);
+    if(ownT.need>=3 && oppT.count===0) return 18000000 + ownT.count*160000;
+    if(oppT.need>=3) return -20000000 - oppT.count*180000;
+    return ownT.score*1.35 - oppT.score*1.55
+      + boardPotentialScore(color)*1.18 - boardPotentialScore(opponent)*1.12;
+  }
+
+  function advancedPairStaticScore(a,b,color='white'){
+    const opponent=color==='white'?'black':'white';
+    return simulatePair(a,b,color,()=>{
+      if(getWinningLine(a.q,a.r,color)||getWinningLine(b.q,b.r,color)) return 1000000000;
+
+      // 상대에게 즉시 육목 가능한 창을 남기면 거의 패배 수로 본다.
+      const enemyImmediate=collectImmediateThreats(opponent);
+      if(enemyImmediate.length){
+        const enemyNeed=defenseRequirement(enemyImmediate);
+        return -750000000 - enemyNeed*1000000 - enemyImmediate.length*100000;
+      }
+
+      const ownT=tacticalThreatScore(color);
+      if(ownT.need>=3) return 650000000 + ownT.count*1000000;
+
+      const distance=hexDistance(a.q,a.r,b.q,b.r);
+      const shape=distance<=2?850:distance<=4?240:-120;
+      return advancedPositionScore(color)
+        + beginnerPlacementScore(a.q,a.r,color,false)
+        + beginnerPlacementScore(b.q,b.r,color,false)
+        + shape;
+    });
+  }
+
+  function rankedAdvancedPairs(color='white',candidateLimit=12,pairLimit=8){
+    const candidates=advancedCandidates(color,candidateLimit);
+    if(!candidates.length) return [];
+    if(candidates.length===1){
+      return [{a:candidates[0],b:null,score:beginnerPlacementScore(candidates[0].q,candidates[0].r,color,false)}];
+    }
+    const pairs=[];
+    for(let i=0;i<candidates.length;i++){
+      for(let j=i+1;j<candidates.length;j++){
+        const a=candidates[i],b=candidates[j];
+        pairs.push({a,b,score:advancedPairStaticScore(a,b,color)});
+      }
+    }
+    pairs.sort((x,y)=>y.score-x.score);
+    return pairs.slice(0,pairLimit);
+  }
+
+  function simulateOptionalPair(pair,color,fn){
+    if(!pair) return -Infinity;
+    if(!pair.b){
+      const k=key(pair.a.q,pair.a.r);
+      if(board.has(k)) return -Infinity;
+      board.set(k,color);
+      let value;
+      try{ value=fn(); } finally{ board.delete(k); }
+      return value;
+    }
+    return simulatePair(pair.a,pair.b,color,fn);
+  }
+
+  // 고급: AI 두 수 → 사람 최선의 두 수 → AI 다음 두 수까지 제한적 minimax.
+  // 강제승리 구조가 보이면 깊은 탐색을 생략하여 반응 속도를 유지한다.
+  function chooseLegacyAdvancedTurn(color=aiColor){
+    const opponent=opponentColor(color);
+    const immediate=advancedCandidates(color,16).find(c=>wouldWin(c.q,c.r,color));
+    if(immediate) return [immediate];
+
+    const rootPairs=rankedAdvancedPairs(color,14,7);
+    if(!rootPairs.length) return [];
+
+    for(const root of rootPairs){
+      if(root.score>=600000000) return [root.a,root.b].filter(Boolean);
+    }
+
+    let bestRoot=rootPairs[0];
+    let bestRootScore=-Infinity;
+
+    for(const root of rootPairs){
+      const rootValue=simulateOptionalPair(root,color,()=>{
+        if(getWinningLine(root.a.q,root.a.r,color) || (root.b&&getWinningLine(root.b.q,root.b.r,color))) return 1000000000;
+        const forced=tacticalThreatScore(color);
+        if(forced.need>=3 && collectImmediateThreats(opponent).length===0) return 650000000;
+
+        const replies=rankedAdvancedPairs(opponent,10,4);
+        if(!replies.length) return advancedPositionScore(color);
+        let worstForAI=Infinity;
+
+        for(const reply of replies){
+          const replyValue=simulateOptionalPair(reply,opponent,()=>{
+            if(getWinningLine(reply.a.q,reply.a.r,opponent) || (reply.b&&getWinningLine(reply.b.q,reply.b.r,opponent))) return -1000000000;
+            const opponentForced=tacticalThreatScore(opponent);
+            if(opponentForced.need>=3) return -680000000;
+
+            const followups=rankedAdvancedPairs(color,9,5);
+            if(!followups.length) return advancedPositionScore(color);
+            let bestFollow=-Infinity;
+            for(const follow of followups){
+              const val=simulateOptionalPair(follow,color,()=>{
+                if(getWinningLine(follow.a.q,follow.a.r,color) || (follow.b&&getWinningLine(follow.b.q,follow.b.r,color))) return 900000000;
+                const ft=tacticalThreatScore(color);
+                if(ft.need>=3 && collectImmediateThreats(opponent).length===0) return 520000000 + ft.count*500000;
+                return advancedPositionScore(color);
+              });
+              if(val>bestFollow) bestFollow=val;
+              if(bestFollow>=520000000) break;
+            }
+            return bestFollow;
+          });
+          if(replyValue<worstForAI) worstForAI=replyValue;
+          if(worstForAI<=bestRootScore) break;
+        }
+        return worstForAI;
+      });
+
+      if(rootValue>bestRootScore){ bestRootScore=rootValue; bestRoot=root; }
+      if(bestRootScore>=650000000) break;
+    }
+    return [bestRoot.a,bestRoot.b].filter(Boolean);
+  }
+
+
+  // ---------- 토너먼트 고급 AI 엔진 ----------
+  // 공개 HeXO 연구의 강한 봇 구조를 브라우저용으로 다시 구현한 엔진.
+  // 핵심: 18개 관련 6칸 창만 증분 갱신, 정확한 brink hitting-set,
+  // 두 돌을 한 수로 보는 iterative-deepening alpha-beta, brink quiescence.
+  const TB_V = [0,1,7,55,4000,200000,10000000];
+  const TB_DEF_W = 1.1;
+  const TB_WIN = 1e12;
+  const TB_TOP = 11;
+  const TB_ROOT_TOP = 15;
+  const TB_ROOT_MAX = 46;
+  const TB_QDEPTH = 4;
+  const TB_TSS_DEPTH = 4;
+  const TB_RING = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]];
+  const TB_CAND_OFFS = [...TB_RING, ...TB_RING.map(([q,r])=>[q*2,r*2])];
+
+  function tbOther(p){ return p===1?2:1; }
+  function tbColorToPlayer(c){ return c==='black'?1:2; }
+  function tbCell(q,r){ return `${q},${r}`; }
+  function tbParse(k){ const [q,r]=k.split(',').map(Number); return [q,r]; }
+  function tbGain(nq,nother){
+    if(nq+nother>=6) return 0;
+    if(nother===0) return 10*(TB_V[nq+1]-TB_V[nq]);
+    if(nq===0) return 11*TB_V[nother];
+    return 0;
+  }
+  function tbContribution(cnt,pi){ return cnt[1-pi]===0 ? TB_V[cnt[pi]] : 0; }
+
+  class TournamentBoard {
+    constructor(source){
+      this.stones=new Map();
+      this.wc=new Map();
+      this.wcells=new Map();
+      this.hot=[new Set(),new Set()];
+      this.warm=[new Set(),new Set()];
+      this.score=[0,0];
+      this.delta=[new Map(),new Map()];
+      this.cand=new Set();
+      this.winner=0;
+      this.undoStack=[];
+      for(const [k,p] of source) this.place(k,p);
+      this.undoStack.length=0;
+      this.winner=0;
+    }
+    windowKey(d,sq,sr){ return `${d}|${sq}|${sr}`; }
+    ensureWindow(d,sq,sr){
+      const wk=this.windowKey(d,sq,sr);
+      if(!this.wc.has(wk)){
+        this.wc.set(wk,[0,0]);
+        const [dq,dr]=WIN_DIRS[d];
+        const cells=[];
+        for(let i=0;i<6;i++) cells.push(tbCell(sq+i*dq,sr+i*dr));
+        this.wcells.set(wk,cells);
+      }
+      return wk;
+    }
+    refreshWindow(wk){
+      const cnt=this.wc.get(wk);
+      for(let pi=0;pi<2;pi++){
+        this.hot[pi].delete(wk);
+        this.warm[pi].delete(wk);
+        if(cnt[1-pi]===0){
+          if(cnt[pi]>=2) this.warm[pi].add(wk);
+          if(cnt[pi]>=4) this.hot[pi].add(wk);
+        }
+      }
+    }
+    addDelta(pi,k,v){
+      if(!v) return;
+      const m=this.delta[pi];
+      const nv=(m.get(k)||0)+v;
+      if(nv===0) m.delete(k); else m.set(k,nv);
+    }
+    adjustWindow(wk,pi,step){
+      const cnt=this.wc.get(wk);
+      const before=[cnt[0],cnt[1]];
+      const beforeC=[tbContribution(before,0),tbContribution(before,1)];
+      const beforeG=[tbGain(before[0],before[1]),tbGain(before[1],before[0])];
+      cnt[pi]+=step;
+      const after=[cnt[0],cnt[1]];
+      const afterC=[tbContribution(after,0),tbContribution(after,1)];
+      const afterG=[tbGain(after[0],after[1]),tbGain(after[1],after[0])];
+      this.score[0]+=afterC[0]-beforeC[0];
+      this.score[1]+=afterC[1]-beforeC[1];
+      const dg0=afterG[0]-beforeG[0], dg1=afterG[1]-beforeG[1];
+      if(dg0||dg1){
+        for(const ck of this.wcells.get(wk)){
+          this.addDelta(0,ck,dg0);
+          this.addDelta(1,ck,dg1);
+        }
+      }
+      this.refreshWindow(wk);
+    }
+    place(cell,p){
+      if(this.stones.has(cell)) throw new Error('occupied');
+      const [q,r]=tbParse(cell), pi=p-1;
+      const prevWinner=this.winner;
+      for(let d=0;d<3;d++){
+        const [dq,dr]=WIN_DIRS[d];
+        for(let j=0;j<6;j++){
+          const wk=this.ensureWindow(d,q-j*dq,r-j*dr);
+          this.adjustWindow(wk,pi,1);
+          if(this.wc.get(wk)[pi]>=6) this.winner=p;
+        }
+      }
+      this.stones.set(cell,p);
+      const wasCand=this.cand.delete(cell);
+      const added=[];
+      for(const [dq,dr] of TB_CAND_OFFS){
+        const c=tbCell(q+dq,r+dr);
+        if(!this.stones.has(c)&&!this.cand.has(c)){
+          this.cand.add(c); added.push(c);
+        }
+      }
+      this.undoStack.push({cell,p,prevWinner,wasCand,added});
+    }
+    unplace(){
+      const rec=this.undoStack.pop();
+      if(!rec) return;
+      const {cell,p,prevWinner,wasCand,added}=rec;
+      const [q,r]=tbParse(cell), pi=p-1;
+      this.stones.delete(cell);
+      for(const c of added) this.cand.delete(c);
+      if(wasCand) this.cand.add(cell);
+      for(let d=0;d<3;d++){
+        const [dq,dr]=WIN_DIRS[d];
+        for(let j=0;j<6;j++){
+          const wk=this.windowKey(d,q-j*dq,r-j*dr);
+          this.adjustWindow(wk,pi,-1);
+        }
+      }
+      this.winner=prevWinner;
+    }
+    windowEmpties(wk){
+      const out=[];
+      for(const c of this.wcells.get(wk)||[]) if(!this.stones.has(c)) out.push(c);
+      return out;
+    }
+    brinkEmpties(p){
+      const out=[];
+      for(const wk of this.hot[p-1]) out.push(this.windowEmpties(wk));
+      return out;
+    }
+    instantWinCells(p,remaining){
+      const pi=p-1;
+      for(const wk of this.hot[pi]){
+        const cnt=this.wc.get(wk);
+        if(cnt[pi]>=6-remaining){
+          const e=this.windowEmpties(wk);
+          if(e.length<=remaining) return e;
+        }
+      }
+      return null;
+    }
+    evalFor(me){
+      const pi=me-1, oi=1-pi;
+      return this.score[pi]-TB_DEF_W*this.score[oi];
+    }
+  }
+
+  function tbCoveringPlacements(winEmps,maxStones){
+    if(!winEmps.length) return [[]];
+    const sets=winEmps.map(w=>new Set(w));
+    const universe=[]; const seen=new Set();
+    for(const w of winEmps) for(const c of w) if(!seen.has(c)){seen.add(c);universe.push(c);}
+    const out=[];
+    for(const c of universe) if(sets.every(s=>s.has(c))) out.push([c]);
+    if(maxStones>=2){
+      const got=new Set();
+      for(const c1 of universe){
+        const rest=sets.filter(s=>!s.has(c1));
+        if(!rest.length) continue;
+        let inter=null;
+        for(const s of rest){
+          inter = inter===null ? new Set(s) : new Set([...inter].filter(x=>s.has(x)));
+          if(!inter.size) break;
+        }
+        if(!inter) continue;
+        for(const c2 of inter){
+          if(c1===c2) continue;
+          const pair=[c1,c2].sort();
+          const id=pair.join('|');
+          if(!got.has(id)){got.add(id);out.push(pair);}
+        }
+      }
+    }
+    return out;
+  }
+
+  class TournamentSearcher {
+    constructor(b,me,deadline){ this.b=b; this.me=me; this.deadline=deadline; this.nodes=0; }
+    tick(){
+      this.nodes++;
+      if((this.nodes&31)===0 && performance.now()>this.deadline) throw new Error('TB_TIMEOUT');
+    }
+    makeTurn(cells,p){
+      let n=0;
+      for(const c of cells){
+        if(this.b.stones.has(c)) continue;
+        this.b.place(c,p); n++;
+        if(this.b.winner) break;
+      }
+      return n;
+    }
+    undoTurn(n){ for(let i=0;i<n;i++) this.b.unplace(); }
+    topCells(p,k){
+      const d=this.b.delta[p-1];
+      const arr=[...this.b.cand];
+      arr.sort((a,b)=>(d.get(b)||0)-(d.get(a)||0));
+      return arr.slice(0,k);
+    }
+    companion(p,first){
+      for(const c of this.topCells(p,4)) if(c!==first) return c;
+      for(const c of this.b.cand) if(c!==first) return c;
+      const [q,r]=tbParse(first); return tbCell(q+1,r);
+    }
+    genTurns(p,remaining){
+      const win=this.b.instantWinCells(p,remaining);
+      if(win!==null) return [win];
+      const oppBrinks=this.b.brinkEmpties(tbOther(p));
+      if(oppBrinks.length){
+        const covers=tbCoveringPlacements(oppBrinks,remaining);
+        if(!covers.length) return [];
+        const turns=[]; const tops=this.topCells(p,6); const seen=new Set();
+        const add=t=>{ const id=[...t].sort().join('|'); if(!seen.has(id)){seen.add(id);turns.push(t);} };
+        for(const cv of covers){
+          if(cv.length===remaining) add(cv);
+          else if(cv.length===1){
+            for(const t of tops) if(t!==cv[0]) add([cv[0],t]);
+          }
+          if(turns.length>=24) break;
+        }
+        return turns.slice(0,24);
+      }
+      if(remaining===1) return this.topCells(p,TB_TOP).map(c=>[c]);
+      const tops=this.topCells(p,TB_TOP), turns=[];
+      const n=tops.length;
+      for(let i=0;i<Math.min(4,n);i++) for(let j=i+1;j<n;j++) turns.push([tops[i],tops[j]]);
+      return turns;
+    }
+    threatPairs(p,maxPairs=40,returnLimit=16){
+      const b=this.b, pi=p-1, cells3=new Set(), twoWindows=[];
+      for(const wk of b.warm[pi]){
+        const cnt=b.wc.get(wk), n=cnt[pi];
+        if(n>=3){ for(const c of b.windowEmpties(wk)) cells3.add(c); }
+        else if(n===2) twoWindows.push(b.windowEmpties(wk));
+      }
+      const dd=b.delta[pi];
+      const c3=[...cells3].sort((a,b2)=>(dd.get(b2)||0)-(dd.get(a)||0)).slice(0,12);
+      const pairMap=new Map();
+      const put=(a,c)=>{ if(a===c||b.stones.has(a)||b.stones.has(c)) return; const t=[a,c].sort(); pairMap.set(t.join('|'),t); };
+      for(let i=0;i<c3.length;i++) for(let j=i+1;j<c3.length;j++) put(c3[i],c3[j]);
+      for(const emp of twoWindows.slice(0,20)) for(let i=0;i<emp.length;i++) for(let j=i+1;j<emp.length;j++) put(emp[i],emp[j]);
+      for(const c of c3.slice(0,4)) for(const emp of twoWindows.slice(0,4)) for(const e of emp.slice(0,2)) put(c,e);
+      const out=[], opp=tbOther(p);
+      for(const pair of [...pairMap.values()].slice(0,maxPairs)){
+        this.tick();
+        const n=this.makeTurn(pair,p);
+        if(b.winner===p){ this.undoTurn(n); return [{pair,cost:99}]; }
+        const myBrinks=b.brinkEmpties(p);
+        let cost=-1;
+        if(myBrinks.length && b.hot[opp-1].size===0){
+          const covers=tbCoveringPlacements(myBrinks,2);
+          if(!covers.length) cost=3;
+          else if(covers.some(c=>c.length===1)) cost=1;
+          else cost=2;
+        }
+        this.undoTurn(n);
+        if(cost>=1) out.push({pair,cost});
+      }
+      out.sort((a,b2)=>b2.cost-a.cost);
+      return out.slice(0,returnLimit);
+    }
+
+    // Exact one-turn pre-fork detector. A returned cost >=3 means that p has
+    // a pair which creates brink windows that the opponent cannot hit with two
+    // stones on the next turn (unless p has already allowed an immediate counterwin,
+    // which threatPairs deliberately rejects). This is used as a root safety screen,
+    // not as a global passive-defense rule.
+    dangerCost(p,maxPairs=26){
+      const plans=this.threatPairs(p,maxPairs,10);
+      let best=0;
+      for(const x of plans){
+        if(x.cost===99 || x.cost>=3) return 3;
+        if(x.cost>best) best=x.cost;
+      }
+      return best;
+    }
+
+    // Wider root generator: normal tactical turns + cells that directly disrupt
+    // the opponent's strongest next-turn threat pairs. This gives White/second
+    // player more proactive defence without forcing every node into a passive line.
+    genRootTurns(p,remaining){
+      const base=this.genTurns(p,remaining);
+      if(remaining!==2 || this.b.brinkEmpties(tbOther(p)).length) return base;
+      const seen=new Set();
+      const out=[];
+      const add=t=>{
+        if(!t || t.length!==2 || t[0]===t[1] || t.some(c=>this.b.stones.has(c))) return;
+        const z=[...t].sort(); const id=z.join('|');
+        if(!seen.has(id)){ seen.add(id); out.push(t); }
+      };
+      for(const t of base) add(t);
+
+      const opp=tbOther(p);
+      let oppPlans=[];
+      try{ oppPlans=this.threatPairs(opp,30,12); }catch(e){ if(!e||e.message!=='TB_TIMEOUT') throw e; }
+      const blockers=[]; const blockSeen=new Set();
+      for(const x of oppPlans){
+        if(x.cost<2) continue;
+        for(const c of x.pair){ if(!blockSeen.has(c)){blockSeen.add(c);blockers.push(c);} }
+      }
+      // Also include empties from opponent live-3+ windows, i.e. the cells that can
+      // turn into brinks with one placement next turn.
+      const opi=opp-1, od=this.b.delta[opi];
+      const warmCells=new Set();
+      for(const wk of this.b.warm[opi]){
+        const cnt=this.b.wc.get(wk);
+        if(cnt[opi]>=3) for(const c of this.b.windowEmpties(wk)) warmCells.add(c);
+      }
+      const warmRank=[...warmCells].sort((a,b)=>(od.get(b)||0)-(od.get(a)||0));
+      for(const c of warmRank.slice(0,8)) if(!blockSeen.has(c)){blockSeen.add(c);blockers.push(c);}
+
+      const tops=this.topCells(p,TB_ROOT_TOP);
+      for(const b of blockers.slice(0,10)){
+        for(const t of tops.slice(0,8)){ if(t!==b) add([b,t]); }
+      }
+      for(let i=0;i<Math.min(7,blockers.length);i++) for(let j=i+1;j<Math.min(9,blockers.length);j++) add([blockers[i],blockers[j]]);
+      for(let i=0;i<Math.min(6,tops.length);i++) for(let j=i+1;j<tops.length;j++) add([tops[i],tops[j]]);
+      return out.slice(0,TB_ROOT_MAX);
+    }
+
+    tss(p,depth){
+      this.tick();
+      const b=this.b;
+      const win=b.instantWinCells(p,2);
+      if(win!==null) return win.length===2?win:[win[0],this.companion(p,win[0])];
+      if(depth<=0) return null;
+      const opp=tbOther(p), oppBrinks=b.brinkEmpties(opp);
+      for(const {pair,cost} of this.threatPairs(p)){
+        if(cost<2 && cost!==99) continue;
+        if(oppBrinks.length && !oppBrinks.every(w=>pair.some(c=>w.includes(c)))) continue;
+        const n=this.makeTurn(pair,p);
+        if(b.winner===p){ this.undoTurn(n); return pair; }
+        const myBrinks=b.brinkEmpties(p);
+        const covers=tbCoveringPlacements(myBrinks,2);
+        if(!covers.length && b.hot[opp-1].size===0){ this.undoTurn(n); return pair; }
+        let refuted=false;
+        for(const cv of covers){
+          if(cv.length<2){refuted=true;break;}
+          const m=this.makeTurn(cv,opp);
+          if(b.winner===opp){ this.undoTurn(m); refuted=true; break; }
+          const ok=this.tss(p,depth-1);
+          this.undoTurn(m);
+          if(ok===null){refuted=true;break;}
+        }
+        this.undoTurn(n);
+        if(!refuted && covers.length) return pair;
+      }
+      return null;
+    }
+    quiesce(p,alpha,beta,qdepth,ply){
+      this.tick();
+      const b=this.b, me=this.me;
+      const win=b.instantWinCells(p,2);
+      if(win!==null) return p===me?TB_WIN-ply:-TB_WIN+ply;
+      const opp=tbOther(p), oppBrinks=b.brinkEmpties(opp), stand=b.evalFor(me);
+      if(!oppBrinks.length||qdepth<=0) return stand;
+      const maximizing=p===me;
+      const covers=tbCoveringPlacements(oppBrinks,2);
+      if(!covers.length) return maximizing?-TB_WIN+ply:TB_WIN-ply;
+      const turns=[];
+      for(const cv of covers.slice(0,8)){
+        if(cv.length===2) turns.push(cv);
+        else if(cv.length===1){
+          for(const t of this.topCells(p,3)) if(t!==cv[0]) turns.push([cv[0],t]);
+        }
+        if(turns.length>=10) break;
+      }
+      let best=maximizing?-TB_WIN:TB_WIN;
+      for(const t of turns.slice(0,10)){
+        const n=this.makeTurn(t,p);
+        const val=b.winner===p ? (maximizing?TB_WIN-ply:-TB_WIN+ply) : this.quiesce(opp,alpha,beta,qdepth-1,ply+1);
+        this.undoTurn(n);
+        if(maximizing){ if(val>best) best=val; if(val>alpha) alpha=val; }
+        else { if(val<best) best=val; if(val<beta) beta=val; }
+        if(beta<=alpha) break;
+      }
+      return best;
+    }
+    ab(p,depth,alpha,beta,ply){
+      this.tick();
+      if(depth===0) return this.quiesce(p,alpha,beta,TB_QDEPTH,ply);
+      const turns=this.genTurns(p,2);
+      if(!turns.length) return p===this.me?-TB_WIN+ply:TB_WIN-ply;
+      const maximizing=p===this.me, opp=tbOther(p), b=this.b;
+      let best=maximizing?-TB_WIN:TB_WIN;
+      for(const t of turns){
+        const n=this.makeTurn(t,p);
+        const val=b.winner===p ? (maximizing?TB_WIN-ply:-TB_WIN+ply) : this.ab(opp,depth-1,alpha,beta,ply+1);
+        this.undoTurn(n);
+        if(maximizing){ if(val>best) best=val; if(val>alpha) alpha=val; }
+        else { if(val<best) best=val; if(val<beta) beta=val; }
+        if(beta<=alpha) break;
+      }
+      return best;
+    }
+  }
+
+  function chooseAdvancedTurn(color=aiColor){
+    const me=tbColorToPlayer(color);
+    const remaining=Math.max(1,turnLimit-stonesThisTurn);
+    if(board.size===0) return [{q:0,r:0}];
+    const source=new Map([...board.entries()].map(([k,c])=>[k,tbColorToPlayer(c)]));
+    const t0=performance.now();
+    const coarse=typeof matchMedia==='function'&&matchMedia('(pointer: coarse)').matches;
+    const playingSecond=(me===2); // Black owns the single opening stone.
+    const early=board.size<=24;
+    // The five SealBot tests exposed a very specific weakness: defence from the
+    // second-player seat. Spend extra time there, especially in the opening where
+    // one missed fork determines the whole game. Later turns stay shorter.
+    const budget = labAdvancedBudgetMs!=null ? labAdvancedBudgetMs : (playingSecond && early
+      ? (coarse?3000:3600)
+      : (coarse?2050:2550));
+    const b=new TournamentBoard(source);
+    const s=new TournamentSearcher(b,me,t0+budget);
+
+    // 1) exact win now.
+    const win=b.instantWinCells(me,remaining);
+    if(win!==null){
+      const cells=[...win];
+      if(cells.length<remaining) cells.push(s.companion(me,cells[0]));
+      return cells.slice(0,remaining).map(k=>{const [q,r]=tbParse(k);return {q,r};});
+    }
+
+    // 2) Sound TSS remains useful offensively, but the second-player opening needs
+    // most of its budget for defensive minimax. Give TSS a smaller slice there.
+    if(remaining===2 && board.size>=4){
+      const frac=playingSecond&&early ? 0.08 : 0.14;
+      s.deadline=t0+budget*frac;
+      try{
+        for(let d=1;d<=TB_TSS_DEPTH;d++){
+          const t=s.tss(me,d);
+          if(t){ return t.slice(0,remaining).map(k=>{const [q,r]=tbParse(k);return {q,r};}); }
+          if(performance.now()>s.deadline) break;
+        }
+      }catch(e){ if(!e||e.message!=='TB_TIMEOUT') throw e; }
+    }
+
+    // 3) Wide root generation. Unlike the old engine, this explicitly includes
+    // cells that break the opponent's live-3 / double-threat construction.
+    s.deadline=t0+budget;
+    let rootTurns;
+    try{ rootTurns=s.genRootTurns(me,remaining); }
+    catch(e){
+      if(!e||e.message!=='TB_TIMEOUT') throw e;
+      rootTurns=s.genTurns(me,remaining);
+    }
+    if(!rootTurns.length){
+      const oppBrinks=b.brinkEmpties(tbOther(me));
+      const seen=[];
+      for(const w of oppBrinks) for(const c of w) if(!seen.includes(c)) seen.push(c);
+      let out=seen.slice(0,remaining);
+      if(out.length===1&&remaining===2) out.push(s.companion(me,out[0]));
+      if(!out.length) out=s.topCells(me,remaining);
+      return out.map(k=>{const [q,r]=tbParse(k);return {q,r};});
+    }
+
+    // 4) Root safety pass: reject a move if it gives the opponent an EXACT
+    // one-turn pair that creates >2 independent brink obligations. This is the
+    // failure mode visible in the SealBot losses. It is only a safety screen for
+    // proven one-turn forks, not the broad defensive-TSS restriction that made the
+    // research bot passive in ablation tests.
+    const safe=[], risky=[];
+    const safetyDeadline=t0+budget*(playingSecond&&early?0.34:0.24);
+    s.deadline=safetyDeadline;
+    for(const t of rootTurns){
+      if(performance.now()>s.deadline) { risky.push({t,danger:0}); continue; }
+      let danger=0, n=0;
+      try{
+        n=s.makeTurn(t,me);
+        if(b.winner!==me) danger=s.dangerCost(tbOther(me),playingSecond&&early?30:22);
+      }catch(e){ if(!e||e.message!=='TB_TIMEOUT') throw e; }
+      finally{ if(n) s.undoTurn(n); }
+      (danger>=3?risky:safe).push({t,danger});
+    }
+    if(safe.length) rootTurns=safe.map(x=>x.t);
+    else if(risky.length) rootTurns=risky.sort((a,c)=>a.danger-c.danger).map(x=>x.t);
+    rootTurns=rootTurns.slice(0,playingSecond&&early?34:30);
+
+    // 5) Iterative-deepening alpha-beta over complete two-stone turns. Depth 2
+    // completion is mandatory; the extra opening budget is intended to reach a
+    // useful depth 3 on the second-player seat instead of spending the whole turn
+    // on a shallow offensive line.
+    s.deadline=t0+budget;
+    let best=rootTurns[0], depth=1;
+    while(depth<=7){
+      try{
+        let curBest=null, curVal=-TB_WIN*2, alpha=-TB_WIN*2, beta=TB_WIN*2;
+        for(const t of rootTurns){
+          const n=s.makeTurn(t,me);
+          let val;
+          if(b.winner===me) val=TB_WIN;
+          else val=s.ab(tbOther(me),depth-1,alpha,beta,1);
+          s.undoTurn(n);
+          if(val>curVal){curVal=val;curBest=t;}
+          if(val>alpha) alpha=val;
+        }
+        if(curBest){
+          best=curBest;
+          const id=[...best].sort().join('|');
+          rootTurns.sort((a,c)=>{const ai=[...a].sort().join('|'),ci=[...c].sort().join('|');return ai===id?-1:ci===id?1:0;});
+        }
+      }catch(e){
+        if(e&&e.message==='TB_TIMEOUT') break;
+        throw e;
+      }
+      if(performance.now()>s.deadline) break;
+      depth++;
+    }
+    return best.slice(0,remaining).map(k=>{const [q,r]=tbParse(k);return {q,r};});
+  }
+
+  async function loadHexoBot2(){
+    if(labHbChoose) return;
+    $('labStatus').textContent='Python 실행 환경을 불러오는 중…';
+    if(!window.loadPyodide){
+      await new Promise((resolve,reject)=>{
+        const sc=document.createElement('script');
+        sc.src='https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js';
+        sc.onload=resolve; sc.onerror=()=>reject(new Error('Pyodide를 불러오지 못했습니다.'));
+        document.head.appendChild(sc);
+      });
+    }
+    if(!labPyodide) labPyodide=await loadPyodide({indexURL:'https://cdn.jsdelivr.net/pyodide/v0.27.7/full/'});
+    $('labStatus').textContent='hexo_bot2 엔진을 불러오는 중…';
+    const url='https://raw.githubusercontent.com/sub-surface/hexo-theory/efa8012/competition/hexo_bot2.py';
+    const resp=await fetch(url,{cache:'no-store'});
+    if(!resp.ok) throw new Error('hexo_bot2 원본을 불러오지 못했습니다.');
+    const source=await resp.text();
+    labPyodide.runPython(source);
+    labPyodide.runPython(`
+import json
+
+def _hexo_lab_choose(payload):
+    d=json.loads(payload)
+    stones={(int(q),int(r)):int(p) for q,r,p in d["stones"]}
+    q,r=choose_move(stones,int(d["turn"]),int(d["placed"]),int(d["spt"]),time_budget_s=float(d["budget"]),use_tss=True)
+    return json.dumps([q,r])
+`);
+    labHbChoose=labPyodide.globals.get('_hexo_lab_choose');
+  }
+
+  function labBoardRows(){
+    return [...board.entries()].map(([k,c])=>{const [q,r]=k.split(',').map(Number); return [q,r,c==='black'?1:2];});
+  }
+
+  function labPut(q,r,color){
+    const k=key(q,r);
+    if(board.has(k)) return false;
+    board.set(k,color); expandActiveArea(q,r);
+    return Boolean(getWinningLine(q,r,color));
+  }
+
+  async function labHbMove(color,placed,spt,budget){
+    const payload=JSON.stringify({stones:labBoardRows(),turn:color==='black'?1:2,placed,spt,budget});
+    const out=labHbChoose(payload);
+    const parsed=JSON.parse(String(out));
+    return {q:Number(parsed[0]),r:Number(parsed[1])};
+  }
+
+  async function runLabGame(oursBlack,budgetSec,gameIndex,totalGames){
+    board=new Map(); activeCells=new Set([CENTER_KEY]); history=[]; winningKeys=[]; lastKey=null; gameOver=false;
+    let color='black'; let fullTurn=0; const maxFullTurns=90;
+    labAdvancedBudgetMs=budgetSec*1000;
+    while(fullTurn<maxFullTurns && !labStopRequested){
+      const isOurs=(color==='black')===oursBlack;
+      const spt=(board.size===0&&color==='black')?1:2;
+      let moves=[];
+      if(isOurs){
+        current=color; turnLimit=spt; stonesThisTurn=0; aiColor=color;
+        moves=chooseAdvancedTurn(color).slice(0,spt);
+      } else {
+        for(let placed=0;placed<spt;placed++){
+          const mv=await labHbMove(color,placed,spt,budgetSec);
+          moves.push(mv);
+          if(labPut(mv.q,mv.r,color)) return isOurs?'ours':'hb';
+          await new Promise(r=>setTimeout(r,0));
+        }
+        moves=[]; // already placed
+      }
+      if(isOurs){
+        for(const mv of moves){
+          if(labPut(mv.q,mv.r,color)) return 'ours';
+        }
+      }
+      color=opponentColor(color); fullTurn++;
+      if((fullTurn&3)===0){
+        $('labStatus').textContent=`${gameIndex+1}/${totalGames}판 진행 중 · ${fullTurn}턴`;
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+    return 'draw';
+  }
+
+  async function startLab(){
+    if(labRunning) return;
+    labRunning=true; labStopRequested=false;
+    $('labStartBtn').disabled=true; $('labStopBtn').disabled=false;
+    let our=0,hb=0,draw=0;
+    const split={black:{our:0,hb:0,draw:0},white:{our:0,hb:0,draw:0}};
+    $('labOurWins').textContent='0'; $('labHbWins').textContent='0'; $('labDraws').textContent='0'; $('labScore').textContent='-';
+    $('labBreakdown').textContent='선공/후공별 결과 집계 중…';
+    const games=Number($('labGames').value)||1;
+    const budget=Number($('labBudget').value)||0.7;
+    const side=$('labSide').value;
+    $('labProgress').max=games; $('labProgress').value=0;
+    try{
+      await loadHexoBot2();
+      for(let g=0;g<games && !labStopRequested;g++){
+        const oursBlack=side==='ours-black'?true:side==='ours-white'?false:(g%2===0);
+        $('labStatus').textContent=`${g+1}/${games}판 시작 · 우리 AI ${oursBlack?'선공':'후공'}`;
+        const result=await runLabGame(oursBlack,budget,g,games);
+        if(result==='ours') our++; else if(result==='hb') hb++; else draw++;
+        const seat=oursBlack?'black':'white';
+        split[seat][result==='ours'?'our':result==='hb'?'hb':'draw']++;
+        $('labOurWins').textContent=String(our); $('labHbWins').textContent=String(hb); $('labDraws').textContent=String(draw);
+        $('labScore').textContent=((our/Math.max(1,our+hb+draw))*100).toFixed(0)+'%';
+        $('labBreakdown').textContent=`우리 선공 ${split.black.our}승 ${split.black.hb}패 ${split.black.draw}무 · 우리 후공 ${split.white.our}승 ${split.white.hb}패 ${split.white.draw}무`;
+        $('labProgress').value=g+1;
+      }
+      $('labStatus').textContent=labStopRequested?'실험을 중지했습니다.':`완료 · 우리 AI ${our}승 / hexo_bot2 ${hb}승 / 무승부 ${draw}`;
+    }catch(e){
+      $('labStatus').textContent='실험실 오류: '+(e&&e.message?e.message:String(e));
+    }finally{
+      labAdvancedBudgetMs=null; labRunning=false; $('labStartBtn').disabled=false; $('labStopBtn').disabled=true;
+      reset();
+    }
+  }
+
+  function maybeScheduleAI(){
+    if(gameMode!=='ai' || !['beginner','intermediate','advanced'].includes(aiDifficulty) || gameOver || current!==aiColor || aiTimer) return;
+    aiThinking=true;
+    updateUI();
+    const delay = aiDifficulty==='beginner'
+      ? (stonesThisTurn===0 ? 260 : 170)
+      : aiDifficulty==='intermediate'
+        ? (stonesThisTurn===0 ? 340 : 190)
+        : (stonesThisTurn===0 ? 180 : 120);
+    aiTimer=setTimeout(()=>{
+      aiTimer=null;
+      if(gameMode!=='ai' || !['beginner','intermediate','advanced'].includes(aiDifficulty) || gameOver || current!==aiColor){
+        aiThinking=false;
+        updateUI();
+        return;
+      }
+
+      let move=null;
+      if(aiDifficulty==='beginner'){
+        move=chooseBeginnerMove(aiColor);
+      } else {
+        if(!aiPlannedMoves.length){
+          aiPlannedMoves = aiDifficulty==='advanced' ? chooseAdvancedTurn(aiColor) : chooseLegacyAdvancedTurn(aiColor);
+        }
+        move=aiPlannedMoves.shift() || null;
+      }
+
+      aiThinking=false;
+      if(move) placeStone(move.q,move.r,'ai');
+      else updateUI();
+    },delay);
+  }
+
+  function formatTime(ms){
+    const safe=Math.max(0,Math.ceil(ms/1000));
+    const m=Math.floor(safe/60);
+    const s=safe%60;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function resetTimerState(){
+    stopGameClock();
+    if(gameMode!=='local' || localTimeConfig.type==='unlimited'){
+      turnRemainingMs=0;
+      chessRemainingMs={black:0,white:0};
+    } else if(localTimeConfig.type==='turn'){
+      turnRemainingMs=localTimeConfig.seconds*1000;
+      chessRemainingMs={black:0,white:0};
+    } else if(localTimeConfig.type==='increment'){
+      turnRemainingMs=0;
+      chessRemainingMs={black:localTimeConfig.baseSeconds*1000,white:localTimeConfig.baseSeconds*1000};
+    }
+    renderTimerPanel();
+  }
+
+
+  function renderTimerPanel(){
+    const timed=gameMode==='local' && localTimeConfig.type!=='unlimited';
+    timerPanel.hidden=!timed;
+    if(!timed) return;
+    if(localTimeConfig.type==='turn'){
+      turnClock.hidden=false;
+      chessClocks.hidden=true;
+      turnClock.textContent=`${current==='black'?'노랑':'하늘'} · ${formatTime(turnRemainingMs)}`;
+    } else {
+      turnClock.hidden=true;
+      chessClocks.hidden=false;
+      blackClock.querySelector('.clock-time').textContent=formatTime(chessRemainingMs.black);
+      whiteClock.querySelector('.clock-time').textContent=formatTime(chessRemainingMs.white);
+      blackClock.classList.toggle('active',current==='black' && !gameOver);
+      whiteClock.classList.toggle('active',current==='white' && !gameOver);
+    }
+  }
+
+  function stopGameClock(){
+    if(gameClockTimer){ clearInterval(gameClockTimer); gameClockTimer=null; }
+    lastClockTick=0;
+  }
+
+  function startGameClock(){
+    stopGameClock();
+    if(gameMode!=='local' || localTimeConfig.type==='unlimited' || gameOver) return;
+    lastClockTick=Date.now();
+    gameClockTimer=setInterval(()=>{
+      syncClock();
+      renderTimerPanel();
+    },100);
+  }
+
+  function syncClock(){
+    if(!gameClockTimer || gameMode!=='local' || localTimeConfig.type==='unlimited' || gameOver) return;
+    const now=Date.now();
+    const delta=Math.max(0,now-lastClockTick);
+    lastClockTick=now;
+    if(localTimeConfig.type==='turn'){
+      turnRemainingMs-=delta;
+      if(turnRemainingMs<=0){ turnRemainingMs=0; handleTimeout(current); }
+    } else if(localTimeConfig.type==='increment'){
+      chessRemainingMs[current]-=delta;
+      if(chessRemainingMs[current]<=0){ chessRemainingMs[current]=0; handleTimeout(current); }
+    }
+  }
+
+  function onTurnCompleted(color){
+    syncClock();
+    if(gameMode!=='local' || gameOver) return;
+    if(localTimeConfig.type==='turn'){
+      turnRemainingMs=localTimeConfig.seconds*1000;
+    } else if(localTimeConfig.type==='increment'){
+      chessRemainingMs[color]+=localTimeConfig.incrementSeconds*1000;
+    }
+    lastClockTick=Date.now();
+    renderTimerPanel();
+  }
+
+  function handleTimeout(loserColor){
+    if(gameOver) return;
+    gameOver=true;
+    stopGameClock();
+    const winner=opponentColor(loserColor);
+    current=winner;
+    winningKeys=[];
+    winnerText.textContent=`${winner==='black'?'흑':'백'} 승리!`;
+    winDetail.textContent=`${loserColor==='black'?'흑':'백'}의 시간이 모두 소진되었습니다.`;
+    renderStones();
+    updateUI();
+    renderTimerPanel();
+    if(typeof winDialog.showModal==='function' && !winDialog.open) winDialog.showModal();
+  }
+
+  function placeStone(q,r,source='human'){
+    syncClock();
+    if(gameOver || !Number.isInteger(q) || !Number.isInteger(r)) return;
+    if(gameMode==='ai' && current===aiColor && source!=='ai'){
+      showToast('AI가 두는 중입니다.');
+      return;
+    }
+    if(board.size===0 && current==='black' && (q!==0 || r!==0)){
+      showToast('첫 수는 정중앙 칸에 놓아주세요.');
+      return;
+    }
+    const k=key(q,r);
+    if(!activeCells.has(k)){ showToast('아직 활성화되지 않은 칸입니다.'); return; }
+    if(board.has(k)){ showToast('이미 돌이 있는 칸입니다.'); return; }
+    history.push({key:k,color:current,currentBefore:current,turnLimitBefore:turnLimit,stonesBefore:stonesThisTurn});
+    board.set(k,current);
+    lastKey=k;
+    stonesThisTurn++;
+    expandActiveArea(q,r);
+    renderedWorld=null;
+    renderVisibleCells(true);
+
+    const win=getWinningLine(q,r,current);
+    if(win){
+      gameOver=true; winningKeys=win; renderStones(); updateUI();
+      if(gameMode==='ai') winnerText.textContent=current===humanColor?'플레이어 승리!':`${difficultyLabel(aiDifficulty)} AI 승리!`;
+      else winnerText.textContent=`${current==='black'?'흑':'백'} 승리!`;
+      winDetail.textContent='초록색 테두리로 승리한 6개의 돌을 표시했습니다.';
+      stopGameClock();
+      if(typeof winDialog.showModal==='function') winDialog.showModal();
+      return;
+    }
+    if(stonesThisTurn>=turnLimit){ const finishedColor=current; onTurnCompleted(finishedColor); if(gameOver){ renderStones(); updateUI(); return; } current=current==='black'?'white':'black'; stonesThisTurn=0; turnLimit=2; lastClockTick=Date.now(); }
+    renderStones(); updateUI();
+    maybeScheduleAI();
+  }
+
+  function getWinningLine(q,r,color){
+    for(const [dq,dr] of WIN_DIRS){
+      const line=[key(q,r)];
+      let a=q-dq,b=r-dr;
+      while(board.get(key(a,b))===color){ line.unshift(key(a,b)); a-=dq; b-=dr; }
+      a=q+dq; b=r+dr;
+      while(board.get(key(a,b))===color){ line.push(key(a,b)); a+=dq; b+=dr; }
+      if(line.length>=6){
+        const i=line.indexOf(key(q,r));
+        const start=Math.max(0,Math.min(i,line.length-6));
+        return line.slice(start,start+6);
+      }
+    }
+    return null;
+  }
+
+  function updateUI(){
+    if(gameOver){
+      if(gameMode==='ai') statusText.textContent=current===humanColor?'플레이어 승리':'AI 승리';
+      else statusText.textContent=`${current==='black'?'흑':'백'} 승리`;
+      moveText.textContent='게임이 끝났습니다.';
+      stonesLeft.textContent='승리';
+    } else if(gameMode==='ai') {
+      if(current===aiColor){
+        statusText.textContent=aiThinking?'AI 생각 중…':`AI 차례 · ${colorLabel(aiColor)}`;
+        moveText.textContent=aiThinking?`${difficultyLabel(aiDifficulty)} AI가 수를 고르고 있습니다.`:`AI 턴 ${stonesThisTurn}/${turnLimit}`;
+        stonesLeft.textContent=aiThinking?'…':`${turnLimit-stonesThisTurn}개 남음`;
+      } else {
+        statusText.textContent=`내 차례 · ${colorLabel(humanColor)}`;
+        moveText.textContent=board.size===0 && humanColor==='black'?'첫 수는 정중앙에 놓아주세요.':`이번 턴 ${stonesThisTurn}/${turnLimit}`;
+        stonesLeft.textContent=`${turnLimit-stonesThisTurn}개 남음`;
+      }
+    } else {
+      const who=current==='black'?'흑':'백';
+      statusText.textContent=`${who} 차례`;
+      if(board.size===0 && current==='black') moveText.textContent='첫 수는 정중앙에 놓아주세요.';
+      else moveText.textContent=`이번 턴 ${stonesThisTurn}/${turnLimit}`;
+      stonesLeft.textContent=`${turnLimit-stonesThisTurn}개 남음`;
+    }
+    turnDot.className=`turn-dot ${current}`;
+    undoBtn.disabled=(gameMode==='ai' ? !history.some(m=>m.color===humanColor) : history.length===0) || aiThinking;
+    renderTimerPanel();
+  }
+
+  function undoOneState(){
+    if(!history.length) return false;
+    const m=history.pop();
+    board.delete(m.key);
+    current=m.currentBefore;
+    turnLimit=m.turnLimitBefore;
+    stonesThisTurn=m.stonesBefore;
+    return true;
+  }
+
+  function undo(){
+    if(!history.length) return;
+    cancelAI();
+    if(gameMode==='ai'){
+      // AI 대전에서는 AI의 응수와 직전 플레이어 턴을 함께 되돌려 다시 생각할 수 있게 한다.
+      do {
+        if(!undoOneState()) break;
+      } while(history.length && !(current===humanColor && stonesThisTurn===0));
+    } else {
+      undoOneState();
+    }
+    gameOver=false;
+    winningKeys=[];
+    lastKey=history.length?history[history.length-1].key:null;
+    if(winDialog.open) winDialog.close();
+    rebuildActiveArea();
+    renderStones();
+    updateUI();
+    startGameClock();
+  }
+  function startNewGame(){
+    cancelAI();
+    stopGameClock();
+    board.clear();
+    activeCells=new Set([CENTER_KEY]);
+    history=[];
+    renderedWorld=null;
+    current='black';
+    stonesThisTurn=0;
+    turnLimit=1;
+    gameOver=false;
+    winningKeys=[];
+    lastKey=null;
+    resetTimerState();
+  }
+
+  function reset(){
+    startNewGame();
+    if(winDialog.open) winDialog.close();
+    centerBoard();
+    renderStones();
+    updateUI();
+    startGameClock();
+    if(gameMode==='local'){
+      showToast(`새 게임 · ${localTimeLabel(localTimeConfig)}`);
+    } else {
+      const order=humanColor==='black'?'선공':'후공';
+      showToast(`${difficultyLabel(aiDifficulty)} AI 대전 시작! ${order} · ${colorLabel(humanColor)}으로 플레이합니다.`);
+      maybeScheduleAI();
+    }
+  }
+
+  function applyView(refreshCells=true){
+    svg.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
+    if(refreshCells) renderVisibleCells(false);
+  }
+  function centerBoard(){
+    view={x:90,y:70,w:720,h:608};
+    renderedWorld=null;
+    applyView(true);
+    renderStones();
+  }
+  const MIN_VIEW_W=120;
+  const MAX_VIEW_W=12000;
+
+  function clientToWorld(clientX,clientY,sourceView=view){
+    const rect=svg.getBoundingClientRect();
+    const nx=(clientX-rect.left)/Math.max(1,rect.width);
+    const ny=(clientY-rect.top)/Math.max(1,rect.height);
+    return {x:sourceView.x+nx*sourceView.w,y:sourceView.y+ny*sourceView.h,nx,ny};
+  }
+
+  function zoomAt(f,clientX=null,clientY=null){
+    const rect=svg.getBoundingClientRect();
+    const ax=clientX==null ? rect.left+rect.width/2 : clientX;
+    const ay=clientY==null ? rect.top+rect.height/2 : clientY;
+    const anchor=clientToWorld(ax,ay);
+    const nw=Math.max(MIN_VIEW_W,Math.min(MAX_VIEW_W,view.w*f));
+    const ratio=nw/view.w;
+    const nh=view.h*ratio;
+    view={x:anchor.x-anchor.nx*nw,y:anchor.y-anchor.ny*nh,w:nw,h:nh};
+    applyView(true);
+  }
+
+  function zoom(f){ zoomAt(f); }
+  function svgDelta(dx,dy){ const rect=svg.getBoundingClientRect(); return {dx:dx*view.w/Math.max(1,rect.width),dy:dy*view.h/Math.max(1,rect.height)}; }
+  function pointerDistance(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+  function pointerMidpoint(a,b){ return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
+
+  function beginPinch(){
+    if(activePointers.size<2) return;
+    const [a,b]=[...activePointers.values()].slice(0,2);
+    const midpoint=pointerMidpoint(a,b);
+    const startView={...view};
+    pinch={
+      startDistance:Math.max(1,pointerDistance(a,b)),
+      startView,
+      anchor:clientToWorld(midpoint.x,midpoint.y,startView)
+    };
+    gesture=null;
+    suppressClickUntil=performance.now()+500;
+  }
+
+  function updatePinch(){
+    if(!pinch || activePointers.size<2) return;
+    const [a,b]=[...activePointers.values()].slice(0,2);
+    const distance=Math.max(1,pointerDistance(a,b));
+    const midpoint=pointerMidpoint(a,b);
+    const rect=svg.getBoundingClientRect();
+    const nx=(midpoint.x-rect.left)/Math.max(1,rect.width);
+    const ny=(midpoint.y-rect.top)/Math.max(1,rect.height);
+    let nw=pinch.startView.w*(pinch.startDistance/distance);
+    nw=Math.max(MIN_VIEW_W,Math.min(MAX_VIEW_W,nw));
+    const ratio=nw/pinch.startView.w;
+    const nh=pinch.startView.h*ratio;
+    view={x:pinch.anchor.x-nx*nw,y:pinch.anchor.y-ny*nh,w:nw,h:nh};
+    applyView(true);
+  }
+
+  svg.addEventListener('wheel',(e)=>{
+    e.preventDefault();
+    const factor=Math.exp(e.deltaY*0.00135);
+    zoomAt(factor,e.clientX,e.clientY);
+  },{passive:false});
+
+  svg.addEventListener('pointerdown',(e)=>{
+    if(e.pointerType==='touch' || e.pointerType==='pen'){
+      activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      try{ svg.setPointerCapture(e.pointerId); }catch(_){ }
+      if(activePointers.size===1){
+        gesture={id:e.pointerId,startX:e.clientX,startY:e.clientY,viewX:view.x,viewY:view.y,moved:false,pointerType:e.pointerType};
+      } else if(activePointers.size===2){
+        beginPinch();
+      }
+      return;
+    }
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    gesture={id:e.pointerId,startX:e.clientX,startY:e.clientY,viewX:view.x,viewY:view.y,moved:false,pointerType:e.pointerType};
+    try{ svg.setPointerCapture(e.pointerId); }catch(_){ }
+  });
+
+  svg.addEventListener('pointermove',(e)=>{
+    if(activePointers.has(e.pointerId)){
+      activePointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(activePointers.size>=2){ updatePinch(); return; }
+    }
+    if(!gesture || gesture.id!==e.pointerId || pinch) return;
+    const dx=e.clientX-gesture.startX, dy=e.clientY-gesture.startY;
+    if(!gesture.moved && Math.hypot(dx,dy)>12) gesture.moved=true;
+    if(!gesture.moved) return;
+    const d=svgDelta(dx,dy);
+    view.x=gesture.viewX-d.dx;
+    view.y=gesture.viewY-d.dy;
+    applyView();
+  });
+
+  function finishPointer(e,cancelled=false){
+    const wasTouch=activePointers.has(e.pointerId);
+    const wasPinching=Boolean(pinch);
+    if(wasTouch) activePointers.delete(e.pointerId);
+
+    if(wasPinching){
+      suppressClickUntil=performance.now()+450;
+      if(activePointers.size<2) pinch=null;
+      if(activePointers.size===1){
+        const [id,p]=activePointers.entries().next().value;
+        gesture={id,startX:p.x,startY:p.y,viewX:view.x,viewY:view.y,moved:true,pointerType:'touch'};
+      } else if(activePointers.size===0){
+        gesture=null;
+      }
+      return;
+    }
+
+    if(!gesture || gesture.id!==e.pointerId){
+      if(activePointers.size===0) gesture=null;
+      return;
+    }
+    const moved=gesture.moved;
+    gesture=null;
+    if(cancelled || moved){ suppressClickUntil=performance.now()+350; return; }
+    const target=document.elementFromPoint(e.clientX,e.clientY);
+    const cell=target && target.closest ? target.closest('.hex-cell') : null;
+    if(cell && svg.contains(cell)) placeStone(Number(cell.dataset.q),Number(cell.dataset.r));
+  }
+
+  svg.addEventListener('pointerup',(e)=>finishPointer(e,false));
+  svg.addEventListener('pointercancel',(e)=>finishPointer(e,true));
+  svg.addEventListener('click',(e)=>{
+    if(performance.now()<suppressClickUntil) return;
+    if(window.PointerEvent) return;
+    const cell=e.target.closest && e.target.closest('.hex-cell');
+    if(cell) placeStone(Number(cell.dataset.q),Number(cell.dataset.r));
+  });
+
+  $('zoomIn').addEventListener('click',()=>zoom(.82));
+  $('zoomOut').addEventListener('click',()=>zoom(1.22));
+  $('centerBtn').addEventListener('click',centerBoard);
+  $('helpBtn').addEventListener('click',()=>helpDialog.showModal());
+  $('closeHelp').addEventListener('click',()=>helpDialog.close());
+  $('closeWin').addEventListener('click',()=>winDialog.close());
+  $('restartWin').addEventListener('click',()=>{ winDialog.close(); if(gameMode==='ai') openSideSelection(aiDifficulty,'game'); else reset(); });
+  undoBtn.addEventListener('click',undo);
+  newBtn.addEventListener('click',()=>{ if(gameMode==='ai') openSideSelection(aiDifficulty,'game'); else reset(); });
+  $('homeBtn').addEventListener('click',goHome);
+  $('gameHomeBtn').addEventListener('click',goHome);
+  $('localModeBtn').addEventListener('click',()=>{ stopGameClock(); showScreen(localTimeScreen); });
+  $('aiModeBtn').addEventListener('click',()=>showScreen(difficultyScreen));
+  $('difficultyBackBtn').addEventListener('click',()=>showScreen(homeScreen));
+  $('localTimeBackBtn').addEventListener('click',()=>showScreen(homeScreen));
+  $('turnTimeBackBtn').addEventListener('click',()=>showScreen(localTimeScreen));
+  $('chessTimeBackBtn').addEventListener('click',()=>showScreen(localTimeScreen));
+  document.querySelectorAll('[data-time-mode]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      if(btn.dataset.timeMode==='unlimited') enterGame('local',null,'first',{type:'unlimited'});
+      else if(btn.dataset.timeMode==='turn') showScreen(turnTimeScreen);
+      else showScreen(chessTimeScreen);
+    });
+  });
+  document.querySelectorAll('[data-turn-seconds]').forEach(btn=>{
+    btn.addEventListener('click',()=>enterGame('local',null,'first',{type:'turn',seconds:Number(btn.dataset.turnSeconds)}));
+  });
+  const baseMinutesRange=$('baseMinutesRange');
+  const baseMinutesInput=$('baseMinutesInput');
+  const incrementSecondsRange=$('incrementSecondsRange');
+  const incrementSecondsInput=$('incrementSecondsInput');
+
+  function clampInt(value,min,max,fallback){
+    const n=Math.round(Number(value));
+    if(!Number.isFinite(n)) return fallback;
+    return Math.max(min,Math.min(max,n));
+  }
+  function setBaseMinutes(value){
+    const v=clampInt(value,1,60,5);
+    baseMinutesRange.value=String(v);
+    baseMinutesInput.value=String(v);
+  }
+  function setIncrementSeconds(value){
+    const v=clampInt(value,0,30,3);
+    incrementSecondsRange.value=String(v);
+    incrementSecondsInput.value=String(v);
+  }
+  baseMinutesRange.addEventListener('input',()=>setBaseMinutes(baseMinutesRange.value));
+  incrementSecondsRange.addEventListener('input',()=>setIncrementSeconds(incrementSecondsRange.value));
+  baseMinutesInput.addEventListener('change',()=>setBaseMinutes(baseMinutesInput.value));
+  incrementSecondsInput.addEventListener('change',()=>setIncrementSeconds(incrementSecondsInput.value));
+  baseMinutesInput.addEventListener('blur',()=>setBaseMinutes(baseMinutesInput.value));
+  incrementSecondsInput.addEventListener('blur',()=>setIncrementSeconds(incrementSecondsInput.value));
+  $('baseMinus').addEventListener('click',()=>setBaseMinutes(Number(baseMinutesInput.value)-1));
+  $('basePlus').addEventListener('click',()=>setBaseMinutes(Number(baseMinutesInput.value)+1));
+  $('incrementMinus').addEventListener('click',()=>setIncrementSeconds(Number(incrementSecondsInput.value)-1));
+  $('incrementPlus').addEventListener('click',()=>setIncrementSeconds(Number(incrementSecondsInput.value)+1));
+  $('startIncrementGameBtn').addEventListener('click',()=>{
+    setBaseMinutes(baseMinutesInput.value);
+    setIncrementSeconds(incrementSecondsInput.value);
+    enterGame('local',null,'first',{
+      type:'increment',
+      baseSeconds:Number(baseMinutesInput.value)*60,
+      incrementSeconds:Number(incrementSecondsInput.value)
+    });
+  });
+  document.querySelectorAll('[data-difficulty]').forEach(btn=>{
+    btn.addEventListener('click',()=>openSideSelection(btn.dataset.difficulty,'difficulty'));
+  });
+  $('sideBackBtn').addEventListener('click',()=>{
+    if(sideOrigin==='game'){ showScreen(gameScreen); maybeScheduleAI(); }
+    else showScreen(difficultyScreen);
+  });
+  document.querySelectorAll('[data-side]').forEach(btn=>{
+    btn.addEventListener('click',()=>enterGame('ai',pendingDifficulty,btn.dataset.side));
+  });
+
+  function showToast(msg){ toast.textContent=msg; toast.classList.add('show'); clearTimeout(showToast.t); showToast.t=setTimeout(()=>toast.classList.remove('show'),2200); }
+
+  startNewGame();
+  drawBoard();
+  updateUI();
+  $('labBackBtn').addEventListener('click',()=>{ if(!labRunning) showScreen(homeScreen); });
+  $('labStartBtn').addEventListener('click',startLab);
+  $('labStopBtn').addEventListener('click',()=>{ labStopRequested=true; $('labStatus').textContent='현재 수 계산이 끝나면 중지합니다…'; });
+  let labHoldTimer=null;
+  const homeTitle=$('homeBrandTitle');
+  const openLab=()=>{ if(!labRunning) showScreen(labScreen); };
+  homeTitle.addEventListener('pointerdown',()=>{ labHoldTimer=setTimeout(openLab,900); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>homeTitle.addEventListener(ev,()=>{ if(labHoldTimer){clearTimeout(labHoldTimer);labHoldTimer=null;} }));
+  showScreen(homeScreen);
+  if(location.hash==='#lab') openLab();
+})();
+</script>
+<script type="module" src="../../shared/game-shell.js"></script>
 </body>
 </html>
