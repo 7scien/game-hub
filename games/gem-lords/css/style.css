@@ -1392,7 +1392,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   transform-origin: center;
   contain: layout paint style;
   pointer-events: none;
-  animation: token-parabolic-flight .72s cubic-bezier(.18,.62,.2,1) var(--token-flight-delay) both;
+  animation: token-smooth-flight .76s cubic-bezier(.16,1,.3,1) var(--token-flight-delay) both;
   will-change: transform, opacity;
 }
 .flying-token::before { content: ""; position: absolute; inset: 15%; border: 1px solid color-mix(in srgb, var(--flight-token-color) 42%, #c6af82); border-radius: 50%; }
@@ -1404,7 +1404,6 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 .flying-token.onyx { --flight-token-color: #3b3542; }
 .flying-token.gold { --flight-token-color: #d8aa35; }
 .token-stack.giving-token .token-disc.top-disc { opacity: .36; }
-.physical-token-stack.receiving-token { animation: vault-token-receive .48s ease .62s both; }
 
 @keyframes purchase-card-flight {
   0% { transform: translate3d(0, 0, 0) scale(1) rotate(0); opacity: 1; filter: brightness(1); }
@@ -1423,36 +1422,15 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   48% { transform: scale(1.13); filter: brightness(1.38) drop-shadow(0 0 9px rgba(255,222,148,.72)); }
   100% { transform: scale(1); filter: brightness(1); }
 }
-@keyframes token-parabolic-flight {
+@keyframes token-smooth-flight {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
   }
-  28% {
-    transform: translate3d(var(--token-q1-x), var(--token-q1-y), 0) scale(.98);
-    opacity: 1;
-  }
-  58% {
-    transform: translate3d(var(--token-q2-x), var(--token-q2-y), 0) scale(.94);
-    opacity: 1;
-  }
-  82% {
-    transform: translate3d(var(--token-q3-x), var(--token-q3-y), 0) scale(var(--token-end-scale));
-    opacity: 1;
-  }
-  94% {
-    transform: translate3d(var(--token-end-x), calc(var(--token-end-y) - 5px), 0) scale(var(--token-end-scale));
-    opacity: .96;
-  }
   100% {
     transform: translate3d(var(--token-end-x), var(--token-end-y), 0) scale(var(--token-end-scale));
-    opacity: .14;
+    opacity: 1;
   }
-}
-@keyframes vault-token-receive {
-  0% { transform: translateY(0) scale(1); }
-  52% { transform: translateY(-3px) scale(1.035); }
-  100% { transform: translateY(0) scale(1); }
 }
 
 @media (max-width: 1050px) {
@@ -1475,5 +1453,5 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
   .purchase-flight-card, .purchase-flight-caption, .bonus-card-stack.receiving-card,
-  .flying-token, .physical-token-stack.receiving-token { animation: none; }
+  .flying-token { animation: none; }
 }

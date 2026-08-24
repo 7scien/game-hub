@@ -523,7 +523,6 @@ export function animateTakenTokens(colors) {
   layer.setAttribute('aria-hidden', 'true');
   const colorOccurrences = new Map();
   const touchedSources = new Set();
-  const touchedDestinations = new Set();
   const flyingTokens = [];
 
   colors.forEach((color, animationIndex) => {
@@ -545,25 +544,13 @@ export function animateTakenTokens(colors) {
     const startLeft = startCenterX - startSize / 2;
     const startTop = startCenterY - startSize / 2;
     const destinationDepth = 10;
-    const destinationCapHeight = 4;
     const destinationRise = 2;
     const landingBottom = 2 + (existingCount + occurrence) * destinationRise;
     const landingDiscTop = destinationRect.bottom - landingBottom - destinationDepth;
     const destinationCenterX = destinationRect.left + destinationRect.width / 2;
-    const destinationCenterY = landingDiscTop - destinationCapHeight + (destinationDepth + destinationCapHeight) / 2;
+    const destinationCenterY = landingDiscTop;
     const dx = destinationCenterX - startCenterX;
     const dy = destinationCenterY - startCenterY;
-    const distance = Math.hypot(dx, dy);
-    const arcHeight = Math.min(175, Math.max(72, distance * 0.24));
-    const controlX = dx * 0.5;
-    const controlY = dy * 0.5 - arcHeight;
-    const curvePoint = (time) => ({
-      x: 2 * (1 - time) * time * controlX + time * time * dx,
-      y: 2 * (1 - time) * time * controlY + time * time * dy,
-    });
-    const pointOne = curvePoint(0.28);
-    const pointTwo = curvePoint(0.58);
-    const pointThree = curvePoint(0.82);
     const finalScale = destinationRect.width / startSize;
     const meta = RESOURCE_META[color];
 
@@ -573,26 +560,18 @@ export function animateTakenTokens(colors) {
     flyingToken.style.top = `${startTop}px`;
     flyingToken.style.width = `${startSize}px`;
     flyingToken.style.height = `${startSize}px`;
-    flyingToken.style.setProperty('--token-q1-x', `${pointOne.x}px`);
-    flyingToken.style.setProperty('--token-q1-y', `${pointOne.y}px`);
-    flyingToken.style.setProperty('--token-q2-x', `${pointTwo.x}px`);
-    flyingToken.style.setProperty('--token-q2-y', `${pointTwo.y}px`);
-    flyingToken.style.setProperty('--token-q3-x', `${pointThree.x}px`);
-    flyingToken.style.setProperty('--token-q3-y', `${pointThree.y}px`);
     flyingToken.style.setProperty('--token-end-x', `${dx}px`);
     flyingToken.style.setProperty('--token-end-y', `${dy}px`);
     flyingToken.style.setProperty('--token-end-scale', finalScale);
-    flyingToken.style.setProperty('--token-flight-delay', `${animationIndex * 90}ms`);
+    flyingToken.style.setProperty('--token-flight-delay', `${animationIndex * 80}ms`);
     flyingToken.innerHTML = `<i>${meta.symbol}</i>`;
     layer.append(flyingToken);
     flyingTokens.push(flyingToken);
     touchedSources.add(source);
-    touchedDestinations.add(destination);
   });
 
   if (flyingTokens.length === 0) return Promise.resolve();
   touchedSources.forEach((source) => source.classList.add('giving-token'));
-  touchedDestinations.forEach((destination) => destination.classList.add('receiving-token'));
   document.body.append(layer);
 
   return new Promise((resolve) => {
@@ -601,12 +580,11 @@ export function animateTakenTokens(colors) {
       if (completed) return;
       completed = true;
       touchedSources.forEach((source) => source.classList.remove('giving-token'));
-      touchedDestinations.forEach((destination) => destination.classList.remove('receiving-token'));
       layer.remove();
       resolve();
     };
     flyingTokens.at(-1).addEventListener('animationend', finish, { once: true });
-    window.setTimeout(finish, 1200 + flyingTokens.length * 90);
+    window.setTimeout(finish, 1100 + flyingTokens.length * 80);
   });
 }
 
