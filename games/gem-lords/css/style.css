@@ -1169,6 +1169,8 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 .physical-token-stack.gold { --token-color: #d8aa35; }
 
 .token-disc {
+  --token-face-top: -7px;
+  --token-symbol-center-y: -0.5px;
   position: absolute;
   left: 50%;
   bottom: calc(5px + var(--stack-offset));
@@ -1187,7 +1189,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   position: absolute;
   left: 1px;
   right: 1px;
-  top: -7px;
+  top: var(--token-face-top);
   height: var(--token-cap);
   border: 2px solid color-mix(in srgb, var(--token-color) 72%, #4b351d);
   border-radius: 50%;
@@ -1197,42 +1199,23 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), 0 -1px 2px rgba(0,0,0,.3);
 }
 .token-disc.top-disc { z-index: 2; }
-.token-disc.top-disc::after {
-  content: none;
-  position: absolute;
-  z-index: 3;
-  left: 50%;
-  top: -10px;
-  width: 29%;
-  aspect-ratio: 1;
-  transform: translateX(-50%);
-  border: 1px solid rgba(255,255,255,.72);
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.9), transparent 28%),
-    linear-gradient(315deg, color-mix(in srgb, var(--token-color) 80%, white), color-mix(in srgb, var(--token-color) 77%, #120d0a));
-  box-shadow: 0 2px 4px rgba(0,0,0,.48), inset 2px 2px 3px rgba(255,255,255,.36);
-  clip-path: polygon(50% 0, 93% 24%, 100% 66%, 67% 100%, 20% 88%, 0 45%, 19% 12%);
-}
-.physical-token-stack.sapphire .token-disc.top-disc::after { border-radius: 50%; clip-path: none; }
-.physical-token-stack.emerald .token-disc.top-disc::after { clip-path: polygon(28% 0, 72% 0, 100% 28%, 100% 72%, 72% 100%, 28% 100%, 0 72%, 0 28%); }
-.physical-token-stack.diamond .token-disc.top-disc::after { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
-.physical-token-stack.onyx .token-disc.top-disc::after { transform: translateX(-50%) rotate(45deg); border-radius: 2px; clip-path: none; }
-.physical-token-stack.gold .token-disc.top-disc::after { border-radius: 50%; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 94%, 50% 72%, 20% 94%, 31% 57%, 1% 35%, 39% 35%); }
 .token-disc i {
   position: absolute;
   z-index: 3;
   left: 50%;
-  top: -7px;
-  width: 42%;
+  top: var(--token-symbol-center-y);
+  width: 38%;
   height: var(--token-cap);
   display: grid;
   place-items: center;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%) scaleY(.52);
+  transform-origin: center;
   color: color-mix(in srgb, var(--token-color) 82%, #24170e);
-  font-size: 12px;
+  font-size: calc(var(--token-size) * .2);
   font-weight: 950;
   font-style: normal;
   line-height: 1;
+  text-align: center;
   opacity: 1;
   text-shadow: none;
 }
@@ -1272,10 +1255,8 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   height: 44px;
   filter: drop-shadow(0 3px 3px rgba(0,0,0,.3));
 }
-.physical-token-stack.compact .token-disc { bottom: calc(2px + var(--stack-offset)); }
+.physical-token-stack.compact .token-disc { --token-face-top: -4px; --token-symbol-center-y: 0px; bottom: calc(2px + var(--stack-offset)); }
 .physical-token-stack.compact .token-disc::before { top: -4px; border-width: 1px; }
-.physical-token-stack.compact .token-disc i { top: -4px; font-size: 7px; }
-.physical-token-stack.compact .token-disc.top-disc::after { top: -6px; }
 .physical-token-stack.compact .empty-stack-marker { bottom: 2px; }
 .vault-token-caption, .bonus-card-caption {
   min-width: 0;
@@ -1392,8 +1373,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   overflow: hidden;
   contain: strict;
   background: transparent;
-  pointer-events: auto;
-  perspective: 900px;
+  pointer-events: none;
 }
 .flying-token {
   --flight-token-color: #aaa;
@@ -1408,13 +1388,11 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   border: 5px solid color-mix(in srgb, var(--flight-token-color) 80%, #5a4023);
   border-radius: 50%;
   background: #f8efd9;
-  box-shadow: 0 10px 16px rgba(0,0,0,.38), inset 0 0 0 3px rgba(255,255,255,.58), inset 0 0 0 5px color-mix(in srgb, var(--flight-token-color) 24%, transparent);
+  box-shadow: 0 6px 10px rgba(0,0,0,.28), inset 0 0 0 3px rgba(255,255,255,.58), inset 0 0 0 5px color-mix(in srgb, var(--flight-token-color) 24%, transparent);
   transform-origin: center;
-  transform-style: preserve-3d;
-  backface-visibility: visible;
   contain: layout paint style;
   pointer-events: none;
-  animation: token-parabolic-flight .82s cubic-bezier(.18,.62,.2,1) var(--token-flight-delay) both;
+  animation: token-parabolic-flight .72s cubic-bezier(.18,.62,.2,1) var(--token-flight-delay) both;
   will-change: transform, opacity;
 }
 .flying-token::before { content: ""; position: absolute; inset: 15%; border: 1px solid color-mix(in srgb, var(--flight-token-color) 42%, #c6af82); border-radius: 50%; }
@@ -1447,27 +1425,27 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 }
 @keyframes token-parabolic-flight {
   0% {
-    transform: translate3d(0, 0, 0) scale(1) rotateX(0) rotateZ(0);
+    transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
   }
   28% {
-    transform: translate3d(var(--token-q1-x), var(--token-q1-y), 80px) scale(.97) rotateX(68deg) rotateZ(180deg);
+    transform: translate3d(var(--token-q1-x), var(--token-q1-y), 0) scale(.98);
     opacity: 1;
   }
   58% {
-    transform: translate3d(var(--token-q2-x), var(--token-q2-y), 112px) scale(.9) rotateX(148deg) rotateZ(390deg);
+    transform: translate3d(var(--token-q2-x), var(--token-q2-y), 0) scale(.94);
     opacity: 1;
   }
   82% {
-    transform: translate3d(var(--token-q3-x), var(--token-q3-y), 48px) scale(var(--token-end-scale)) rotateX(42deg) rotateZ(620deg);
+    transform: translate3d(var(--token-q3-x), var(--token-q3-y), 0) scale(var(--token-end-scale));
     opacity: 1;
   }
   94% {
-    transform: translate3d(var(--token-end-x), calc(var(--token-end-y) - 9px), 8px) scale(var(--token-end-scale)) rotateX(10deg) rotateZ(708deg);
+    transform: translate3d(var(--token-end-x), calc(var(--token-end-y) - 5px), 0) scale(var(--token-end-scale));
     opacity: .96;
   }
   100% {
-    transform: translate3d(var(--token-end-x), var(--token-end-y), 0) scale(var(--token-end-scale)) rotateX(0) rotateZ(720deg);
+    transform: translate3d(var(--token-end-x), var(--token-end-y), 0) scale(var(--token-end-scale));
     opacity: .14;
   }
 }
