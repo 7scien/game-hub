@@ -1,7 +1,6 @@
 import {
   DEFAULT_GAME_TITLE,
   MAX_TITLE_LENGTH,
-  STORAGE_KEY,
   TITLE_STORAGE_KEY,
   normalizeGameTitle,
 } from './config.js';
@@ -16,15 +15,17 @@ import {
   takeDouble,
 } from './game.js';
 import { CONFIG, emptyResources } from './rules.js';
-import { PATRONS } from './data/patrons.js';
+import { loadSaveSlots, writeSaveSlot } from './storage.js';
 import {
   closeModal,
   renderGame,
   renderStart,
+  showExitPrompt,
   showGameOver,
   showHelp,
   showPatronChoice,
   showReturnTokens,
+  showSaveSlotPicker,
   showTitleEditor,
   showTurnOverlay,
   toast,
@@ -33,7 +34,10 @@ import {
 let state = null;
 let selection = null;
 let returns = emptyResources();
-let savedGame = loadSavedGame();
+let saveSlots = loadSaveSlots();
+let activeSlotIndex = null;
+let startView = saveSlots.some(Boolean) ? 'saves' : 'players';
+let pendingPlayerCount = null;
 let gameTitle = loadGameTitle();
 let titleHold = null;
 
@@ -64,40 +68,9 @@ function resetCustomTitle() {
   syncDocumentTitle();
 }
 
-function loadSavedGame() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!isValidSavedGame(parsed)) return null;
-    const latestPatrons = new Map(PATRONS.map((patron) => [patron.id, patron]));
-    const refreshPatron = (patron) => {
-      const latest = latestPatrons.get(patron.id);
-      return latest ? { ...latest, requirements: { ...latest.requirements } } : patron;
-    };
-    parsed.patrons = parsed.patrons.map(refreshPatron);
-    parsed.players.forEach((player) => {
-      player.patrons = player.patrons.map(refreshPatron);
-    });
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function saveGame() {
-  if (!state) return;
-  state.updatedAt = Date.now();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  savedGame = state;
-}
-
-function clearSave() {
-  localStorage.removeItem(STORAGE_KEY);
-  savedGame = null;
-}
-
 function render() {
   if (!state) {
-    renderStart(Boolean(savedGame), !savedGame, gameTitle);
+    renderStart(saveSlots, { view: startView, playerCount: pendingPlayerCount }, gameTitle);
     return;
   }
   renderGame(state, selection);
@@ -106,12 +79,12 @@ function render() {
   if (state.status === 'finished') showGameOver(state);
 }
 
-function beginNewGame(playerCount) {
-  clearSave();
-  state = createGame(playerCount);
+function beginNewGame(playerCount, playerNames) {
+  state = createGame(playerCount, Math.random, playerNames);
+  activeSlotIndex = null;
+  pendingPlayerCount = null;
   selection = null;
   returns = emptyResources();
-  saveGame();
   render();
   const overlay = showTurnOverlay(state.players[0].name);
   window.setTimeout(() => overlay.remove(), CONFIG.TURN_TRANSITION_MS);
@@ -123,7 +96,6 @@ function executeAction(action) {
     action();
     selection = null;
     returns = emptyResources();
-    saveGame();
     render();
     if (state.status === 'playing' && state.phase === 'action' && previousPlayer !== state.currentPlayerIndex) {
       const overlay = showTurnOverlay(state.players[state.currentPlayerIndex].name);
@@ -132,6 +104,16 @@ function executeAction(action) {
   } catch (error) {
     toast(error.message || '행동을 완료하지 못했습니다.');
   }
+}
+
+function leaveGame() {
+  state = null;
+  activeSlotIndex = null;
+  selection = null;
+  returns = emptyResources();
+  pendingPlayerCount = null;
+  startView = saveSlots.some(Boolean) ? 'saves' : 'players';
+  render();
 }
 
 function sourceFromSelection() {
@@ -144,9 +126,23 @@ document.addEventListener('click', (event) => {
   if (!target) return;
   const action = target.dataset.action;
 
-  if (action === 'start-game') return beginNewGame(Number(target.dataset.players));
-  if (action === 'continue-game') {
-    state = savedGame;
+  if (action === 'choose-player-count') {
+    pendingPlayerCount = Number(target.dataset.players);
+    startView = 'names';
+    return render();
+  }
+  if (action === 'start-game') {
+    const playerCount = Number(target.dataset.players);
+    const playerNames = Array.from(document.querySelectorAll('[data-player-name]'))
+      .slice(0, playerCount)
+      .map((input) => input.value);
+    return beginNewGame(playerCount, playerNames);
+  }
+  if (action === 'continue-slot') {
+    const slotIndex = Number(target.dataset.slot);
+    if (!isValidSavedGame(saveSlots[slotIndex])) return toast('이 저장 슬롯은 비어 있습니다.');
+    state = JSON.parse(JSON.stringify(saveSlots[slotIndex]));
+    activeSlotIndex = slotIndex;
     selection = null;
     returns = emptyResources();
     render();
@@ -154,12 +150,38 @@ document.addEventListener('click', (event) => {
   }
   if (action === 'new-game-menu') {
     state = null;
-    clearSave();
-    renderStart(false, true, gameTitle);
-    return;
+    activeSlotIndex = null;
+    pendingPlayerCount = null;
+    startView = 'players';
+    return render();
   }
-  if (action === 'back-to-save') return renderStart(true, false, gameTitle);
+  if (action === 'back-to-saves') {
+    pendingPlayerCount = null;
+    startView = 'saves';
+    return render();
+  }
+  if (action === 'back-to-player-count') {
+    pendingPlayerCount = null;
+    startView = 'players';
+    return render();
+  }
   if (action === 'open-help') return showHelp();
+  if (action === 'open-exit') return showExitPrompt();
+  if (action === 'open-save-slots') return showSaveSlotPicker(saveSlots, activeSlotIndex);
+  if (action === 'save-to-slot') {
+    const slotIndex = Number(target.dataset.slot);
+    try {
+      saveSlots = writeSaveSlot(localStorage, saveSlots, slotIndex, state);
+      leaveGame();
+      return toast(`${slotIndex + 1}번 슬롯에 저장했습니다.`);
+    } catch (error) {
+      return toast(error.message || '게임을 저장하지 못했습니다.');
+    }
+  }
+  if (action === 'exit-without-save') {
+    leaveGame();
+    return toast('이번 진행 내용은 저장하지 않았습니다.');
+  }
   if (action === 'save-title') {
     const input = document.querySelector('[data-title-input]');
     saveCustomTitle(input?.value);
@@ -174,7 +196,7 @@ document.addEventListener('click', (event) => {
     return toast('기본 제목으로 되돌렸습니다.');
   }
   if (action === 'close-modal') {
-    if (event.target.closest('[data-modal-panel]') && !target.classList.contains('modal-close') && !target.classList.contains('modal-primary')) return;
+    if (target.classList.contains('modal-backdrop') && event.target.closest('[data-modal-panel]')) return;
     return closeModal();
   }
   if (!state || state.status !== 'playing') return;
@@ -236,6 +258,11 @@ document.addEventListener('keydown', (event) => {
     toast('게임 제목을 저장했습니다.');
     return;
   }
+  if (event.key === 'Enter' && event.target.matches?.('[data-player-name]')) {
+    event.preventDefault();
+    document.querySelector('[data-action="start-game"]')?.click();
+    return;
+  }
   if (event.key === 'Escape' && document.querySelector('.modal-backdrop:not(.locked)')) closeModal();
 });
 
@@ -280,7 +307,8 @@ window.addEventListener('storage', () => {
   gameTitle = loadGameTitle();
   syncDocumentTitle();
   if (!state) {
-    savedGame = loadSavedGame();
+    saveSlots = loadSaveSlots();
+    if (startView === 'saves' && !saveSlots.some(Boolean)) startView = 'players';
     render();
   }
 });

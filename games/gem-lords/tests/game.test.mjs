@@ -22,7 +22,17 @@ import {
 } from '../js/rules.js';
 import { CARDS } from '../js/data/cards.js';
 import { PATRONS } from '../js/data/patrons.js';
-import { DEFAULT_GAME_TITLE, MAX_TITLE_LENGTH, normalizeGameTitle } from '../js/config.js';
+import {
+  DEFAULT_GAME_TITLE,
+  MAX_PLAYER_NAME_LENGTH,
+  MAX_SAVE_SLOTS,
+  SAVE_SLOTS_KEY,
+  STORAGE_KEY,
+  MAX_TITLE_LENGTH,
+  normalizeGameTitle,
+  normalizePlayerName,
+} from '../js/config.js';
+import { emptySaveSlots, loadSaveSlots, writeSaveSlot } from '../js/storage.js';
 
 const fixedRandom = () => 0.42;
 const zeroCost = () => Object.fromEntries(COLORS.map((color) => [color, 0]));
@@ -31,6 +41,37 @@ test('사용자 제목은 공백과 길이를 정리하고 빈 제목은 기본�
   assert.equal(normalizeGameTitle('  나만의   보석 게임  '), '나만의 보석 게임');
   assert.equal(normalizeGameTitle(''), DEFAULT_GAME_TITLE);
   assert.equal(normalizeGameTitle('가'.repeat(MAX_TITLE_LENGTH + 5)).length, MAX_TITLE_LENGTH);
+});
+
+test('플레이어 이름은 시작 시 지정하며 공백·길이·빈 이름을 안전하게 정리한다', () => {
+  assert.equal(normalizePlayerName('  보석   장인  ', 0), '보석 장인');
+  assert.equal(normalizePlayerName('', 1), '플레이어 2');
+  assert.equal(normalizePlayerName('가'.repeat(MAX_PLAYER_NAME_LENGTH + 5), 0).length, MAX_PLAYER_NAME_LENGTH);
+  const state = createGame(3, fixedRandom, ['민지', '  준호  ', '']);
+  assert.deepEqual(state.players.map((player) => player.name), ['민지', '준호', '플레이어 3']);
+});
+
+test('저장 슬롯은 세 개를 유지하고 기존 단일 저장을 1번 슬롯으로 옮긴다', () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  const legacy = createGame(2, fixedRandom, ['기존 1', '기존 2']);
+  storage.setItem(STORAGE_KEY, JSON.stringify(legacy));
+
+  const migrated = loadSaveSlots(storage);
+  assert.equal(migrated.length, MAX_SAVE_SLOTS);
+  assert.equal(migrated[0].players[0].name, '기존 1');
+  assert.equal(storage.getItem(STORAGE_KEY), null);
+  assert.ok(storage.getItem(SAVE_SLOTS_KEY));
+
+  const next = createGame(3, fixedRandom, ['하나', '둘', '셋']);
+  const saved = writeSaveSlot(storage, migrated, 2, next);
+  assert.equal(saved[2].players.length, 3);
+  assert.equal(loadSaveSlots(storage)[2].players[2].name, '셋');
+  assert.throws(() => writeSaveSlot(storage, emptySaveSlots(), 3, next), /올바른 저장 슬롯/);
 });
 
 test('2–4인 게임은 색상별 7개와 황금 5개, 인원수+1개의 귀족, 단계별 공개 카드 4장을 만든다', () => {

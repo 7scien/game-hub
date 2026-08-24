@@ -1,5 +1,6 @@
 import { CARDS } from './data/cards.js';
 import { PATRONS } from './data/patrons.js';
+import { normalizePlayerName } from './config.js';
 import {
   ALL_RESOURCES,
   COLORS,
@@ -25,10 +26,10 @@ export function shuffle(items, random = Math.random) {
   return result;
 }
 
-function createPlayer(index) {
+function createPlayer(index, name) {
   return {
     id: `player-${index + 1}`,
-    name: `PLAYER ${index + 1}`,
+    name: normalizePlayerName(name, index),
     score: 0,
     tokens: emptyResources(),
     bonuses: emptyBonuses(),
@@ -45,7 +46,7 @@ function supplyFor() {
   };
 }
 
-export function createGame(playerCount, random = Math.random) {
+export function createGame(playerCount, random = Math.random, playerNames = []) {
   if (![2, 3, 4].includes(playerCount)) throw new Error('플레이어 수는 2–4명이어야 합니다.');
 
   const decks = {};
@@ -63,7 +64,7 @@ export function createGame(playerCount, random = Math.random) {
     currentPlayerIndex: 0,
     round: 1,
     turnNumber: 1,
-    players: Array.from({ length: playerCount }, (_, index) => createPlayer(index)),
+    players: Array.from({ length: playerCount }, (_, index) => createPlayer(index, playerNames[index])),
     supply: supplyFor(),
     decks,
     market,

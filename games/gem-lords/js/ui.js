@@ -8,6 +8,7 @@ import {
   canTakeDouble,
   totalTokens,
 } from './rules.js';
+import { MAX_PLAYER_NAME_LENGTH, MAX_SAVE_SLOTS } from './config.js';
 
 const app = document.querySelector('#app');
 const modalRoot = () => document.querySelector('#modal-root');
@@ -45,8 +46,66 @@ const requirementChips = (requirements) => Object.entries(requirements)
   .map(([color, amount]) => gem(color, amount, 'tiny'))
   .join('');
 
-export function renderStart(hasSave, choosingPlayers = !hasSave, gameTitle = '보석의 군주') {
+function savedAtLabel(timestamp) {
+  if (!Number.isFinite(timestamp)) return '저장 시간 정보 없음';
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  }).format(new Date(timestamp));
+}
+
+function saveSlotList(saveSlots, action, activeSlotIndex = null) {
+  return Array.from({ length: MAX_SAVE_SLOTS }, (_, index) => {
+    const saved = saveSlots[index];
+    const active = index === activeSlotIndex;
+    if (!saved) {
+      const emptyContent = `<strong>${index + 1}번 슬롯 <em>비어 있음</em></strong><span>새 게임을 저장할 수 있습니다.</span>`;
+      return action === 'save-to-slot'
+        ? `<button class="save-slot empty" type="button" data-action="save-to-slot" data-slot="${index}">${emptyContent}</button>`
+        : `<div class="save-slot empty" aria-label="${index + 1}번 슬롯 비어 있음">${emptyContent}</div>`;
+    }
+    const names = saved.players.map((player) => escapeHtml(player.name)).join(' · ');
+    const content = `
+      <strong>${index + 1}번 슬롯 ${active ? '<em>현재 게임</em>' : '<em>저장됨</em>'}</strong>
+      <span>${names}</span>
+      <small>${saved.round}라운드 · ${savedAtLabel(saved.updatedAt)}${action === 'save-to-slot' ? ' · 선택하면 덮어쓰기' : ''}</small>`;
+    return `<button class="save-slot ${active ? 'active' : ''}" type="button" data-action="${action}" data-slot="${index}">${content}</button>`;
+  }).join('');
+}
+
+export function renderStart(saveSlots = [], startState = {}, gameTitle = '보석의 군주') {
   const safeTitle = escapeHtml(gameTitle);
+  const hasSaves = saveSlots.some(Boolean);
+  const requestedView = startState.view || (hasSaves ? 'saves' : 'players');
+  const view = requestedView === 'saves' && !hasSaves ? 'players' : requestedView;
+  const playerCount = [2, 3, 4].includes(startState.playerCount) ? startState.playerCount : 2;
+  let startControls;
+
+  if (view === 'saves') {
+    startControls = `
+      <p class="picker-label">저장된 게임</p>
+      <div class="start-save-list">${saveSlotList(saveSlots, 'continue-slot')}</div>
+      <button class="secondary-start" type="button" data-action="new-game-menu">새 게임 시작</button>`;
+  } else if (view === 'names') {
+    startControls = `
+      <div class="setup-heading"><span>${playerCount}인 게임</span><strong>플레이어 이름</strong></div>
+      <div class="player-name-list">
+        ${Array.from({ length: playerCount }, (_, index) => `
+          <label class="player-name-field" for="player-name-${index}">
+            <span>플레이어 ${index + 1}</span>
+            <input id="player-name-${index}" data-player-name type="text" value="플레이어 ${index + 1}" maxlength="${MAX_PLAYER_NAME_LENGTH}" autocomplete="off" />
+          </label>`).join('')}
+      </div>
+      <button class="primary-start" type="button" data-action="start-game" data-players="${playerCount}">이 이름으로 시작</button>
+      <button class="text-button" type="button" data-action="back-to-player-count">인원수 다시 선택</button>`;
+  } else {
+    startControls = `
+      <p class="picker-label">플레이어 수</p>
+      <div class="player-picker" aria-label="플레이어 수 선택">
+        ${[2, 3, 4].map((count) => `<button class="player-option ${count === 3 ? 'featured' : ''}" type="button" data-action="choose-player-count" data-players="${count}"><strong>${count}</strong><span>명</span></button>`).join('')}
+      </div>
+      ${hasSaves ? '<button class="text-button" type="button" data-action="back-to-saves">저장된 게임 보기</button>' : ''}`;
+  }
+
   app.innerHTML = `
     <main class="start-screen" aria-labelledby="game-title">
       <div class="start-glow start-glow-one" aria-hidden="true"></div>
@@ -62,18 +121,7 @@ export function renderStart(hasSave, choosingPlayers = !hasSave, gameTitle = '�
           <h1 id="game-title" class="editable-title" data-title-editor tabindex="0" role="button" aria-label="현재 제목 ${safeTitle}. 길게 눌러 제목 수정">${titleMarkup(gameTitle)}</h1>
           <p class="title-edit-hint">제목을 길게 눌러 이름 바꾸기</p>
           <p class="start-copy">묵직한 보석을 모으고 상단을 키워<br />왕국에서 가장 높은 명성을 차지하세요.</p>
-          ${hasSave && !choosingPlayers ? `
-            <div class="continue-actions">
-              <button class="primary-start" type="button" data-action="continue-game">게임 계속하기</button>
-              <button class="secondary-start" type="button" data-action="new-game-menu">새 게임</button>
-            </div>
-          ` : `
-            <p class="picker-label">플레이어 수</p>
-            <div class="player-picker" aria-label="플레이어 수 선택">
-              ${[2, 3, 4].map((count) => `<button class="player-option ${count === 3 ? 'featured' : ''}" type="button" data-action="start-game" data-players="${count}"><strong>${count}</strong><span>명</span></button>`).join('')}
-            </div>
-            ${hasSave ? '<button class="text-button" type="button" data-action="back-to-save">저장된 게임으로 돌아가기</button>' : ''}
-          `}
+          ${startControls}
           <button class="how-button" type="button" data-action="open-help">?&nbsp;&nbsp;게임 방법</button>
         </div>
       </section>
@@ -84,23 +132,38 @@ export function renderStart(hasSave, choosingPlayers = !hasSave, gameTitle = '�
 }
 
 function scoreboard(state) {
-  return state.players.map((player, index) => `
+  return state.players.map((player, index) => {
+    const safeName = escapeHtml(player.name);
+    return `
     <div class="score-card ${index === state.currentPlayerIndex ? 'active' : ''}">
-      <div class="score-card-head"><span>${player.name}</span><strong>${player.score}<small> VP</small></strong></div>
-      <div class="score-resources" aria-label="${player.name} 보유 보석">
-        ${ALL_RESOURCES.map((color) => {
+      <div class="score-card-head"><span>${safeName}</span><strong>${player.score}<small> VP</small></strong></div>
+      <div class="score-resource-group">
+        <span class="score-resource-label">보석</span>
+        <div class="score-resources" aria-label="${safeName} 보유 보석">
+          ${ALL_RESOURCES.map((color) => {
           const meta = RESOURCE_META[color];
           return `<span class="score-resource ${meta.className}" title="${meta.label} ${player.tokens[color]}개"><i aria-hidden="true">${meta.symbol}</i><b>${player.tokens[color]}</b></span>`;
-        }).join('')}
+          }).join('')}
+        </div>
       </div>
-    </div>`).join('');
+      <div class="score-resource-group">
+        <span class="score-resource-label">영구</span>
+        <div class="score-resources score-bonuses" aria-label="${safeName} 영구 보너스 카드">
+          ${COLORS.map((color) => {
+            const meta = RESOURCE_META[color];
+            return `<span class="score-resource permanent ${meta.className}" title="${meta.label} 영구 카드 ${player.bonuses[color]}장"><i aria-hidden="true">${meta.symbol}</i><b>${player.bonuses[color]}</b></span>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function patronCard(patron, eligible = false) {
   return `
     <article class="patron-card ${eligible ? 'eligible' : ''}" data-patron-id="${patron.id}">
       <div class="patron-seal portrait-${patron.id}" aria-hidden="true"></div>
-      <div><strong>${patron.name}</strong><div class="patron-cost">${requirementChips(patron.requirements)}</div></div>
+      <div class="patron-copy"><strong>${escapeHtml(patron.name)}</strong><div class="patron-cost">${requirementChips(patron.requirements)}</div></div>
       <span class="patron-points">+${patron.victoryPoints}<small>VP</small></span>
     </article>`;
 }
@@ -184,14 +247,18 @@ function bonusStrip(player) {
 
 export function renderGame(state, selection) {
   const player = state.players[state.currentPlayerIndex];
+  const safePlayerName = escapeHtml(player.name);
   const eligibleIds = new Set(state.patronChoices);
   app.innerHTML = `
     <div class="game-shell">
       <header class="game-header">
         <span class="hub-home-spacer" aria-hidden="true"></span>
-        <div class="turn-heading"><span>${state.round}라운드 · ${state.turnNumber}번째 턴</span><strong>${player.name} <em>차례</em></strong></div>
+        <div class="turn-heading"><span>${state.round}라운드 · ${state.turnNumber}번째 턴</span><strong>${safePlayerName} <em>차례</em></strong></div>
         <div class="scoreboard">${scoreboard(state)}</div>
-        <button class="icon-button" type="button" data-action="open-help" aria-label="게임 방법">?</button>
+        <div class="header-actions">
+          <button class="icon-button" type="button" data-action="open-help" aria-label="게임 방법">?</button>
+          <button class="icon-button exit-button" type="button" data-action="open-exit" aria-label="게임 나가기">×</button>
+        </div>
       </header>
 
       ${state.endGame.triggered && state.status === 'playing' ? '<div class="final-round-banner">FINAL ROUND · 이번 라운드가 끝나면 승자를 결정합니다</div>' : ''}
@@ -224,7 +291,7 @@ export function renderGame(state, selection) {
           </div>
 
           <div class="player-panel">
-            <div class="dock-title"><span>${player.name}의 금고</span><small>토큰 ${totalTokens(player.tokens)}/${CONFIG.TOKEN_LIMIT} · 카드 ${player.purchased.length}장</small></div>
+            <div class="dock-title"><span>${safePlayerName}의 금고</span><small>토큰 ${totalTokens(player.tokens)}/${CONFIG.TOKEN_LIMIT} · 카드 ${player.purchased.length}장</small></div>
             <div class="vault-grid">
               <div><label>보유 토큰</label><div class="mini-gems">${ALL_RESOURCES.map((color) => gem(color, player.tokens[color], 'vault-gem')).join('')}</div></div>
               <div><label>영구 보너스</label><div class="mini-gems">${bonusStrip(player)}</div></div>
@@ -286,6 +353,37 @@ export function showTitleEditor(currentTitle, maxLength) {
   });
 }
 
+export function showExitPrompt() {
+  modalRoot().innerHTML = `
+    <div class="modal-backdrop" data-action="close-modal">
+      <section class="modal exit-modal" role="dialog" aria-modal="true" aria-labelledby="exit-title" data-modal-panel>
+        <button class="modal-close" type="button" data-action="close-modal" aria-label="닫기">×</button>
+        <p class="modal-kicker">게임 나가기</p>
+        <h2 id="exit-title">진행 내용을 저장할까요?</h2>
+        <p class="modal-copy">저장을 선택하면 세 개의 슬롯 중 원하는 위치에 현재 게임을 보관할 수 있습니다.</p>
+        <div class="exit-actions">
+          <button class="modal-primary" type="button" data-action="open-save-slots">저장하고 나가기</button>
+          <button class="danger-button" type="button" data-action="exit-without-save">저장하지 않고 나가기</button>
+          <button class="text-button" type="button" data-action="close-modal">게임 계속하기</button>
+        </div>
+      </section>
+    </div>`;
+}
+
+export function showSaveSlotPicker(saveSlots, activeSlotIndex = null) {
+  modalRoot().innerHTML = `
+    <div class="modal-backdrop" data-action="close-modal">
+      <section class="modal save-slot-modal" role="dialog" aria-modal="true" aria-labelledby="save-slot-title" data-modal-panel>
+        <button class="modal-close" type="button" data-action="close-modal" aria-label="닫기">×</button>
+        <p class="modal-kicker">게임 저장</p>
+        <h2 id="save-slot-title">저장 위치 선택</h2>
+        <p class="modal-copy">비어 있는 슬롯이나 덮어쓸 슬롯을 선택하세요.</p>
+        <div class="modal-save-list">${saveSlotList(saveSlots, 'save-to-slot', activeSlotIndex)}</div>
+        <button class="text-button" type="button" data-action="open-exit">이전으로</button>
+      </section>
+    </div>`;
+}
+
 export function closeModal() {
   const root = modalRoot();
   if (root) root.innerHTML = '';
@@ -327,7 +425,7 @@ export function showTurnOverlay(playerName) {
   const overlay = document.createElement('div');
   overlay.className = 'turn-overlay';
   overlay.setAttribute('role', 'status');
-  overlay.innerHTML = `<div><span>PASS THE DEVICE</span><strong>${playerName}</strong><em>TURN</em><small>화면을 터치하면 바로 시작합니다</small></div>`;
+  overlay.innerHTML = `<div><span>PASS THE DEVICE</span><strong>${escapeHtml(playerName)}</strong><em>TURN</em><small>화면을 터치하면 바로 시작합니다</small></div>`;
   overlay.addEventListener('click', () => overlay.remove());
   document.body.append(overlay);
   return overlay;
@@ -340,9 +438,9 @@ export function showGameOver(state) {
     <div class="modal-backdrop locked victory-backdrop">
       <section class="modal victory-modal" role="dialog" aria-modal="true" aria-labelledby="victory-title" data-modal-panel>
         <div class="victory-gem" aria-hidden="true">✦</div><p class="modal-kicker">MARKET LEGACY SEALED</p>
-        <h2 id="victory-title">${winners.length > 1 ? '공동 승리!' : `${winners[0].name} 승리!`}</h2>
+        <h2 id="victory-title">${winners.length > 1 ? '공동 승리!' : `${escapeHtml(winners[0].name)} 승리!`}</h2>
         <p class="victory-score">${winners[0].score}<small> VICTORY POINTS</small></p>
-        <ol class="ranking">${ranked.map((player, index) => `<li class="${state.result.winnerIds.includes(player.id) ? 'winner' : ''}"><b>${index + 1}</b><span>${player.name}</span><strong>${player.score} VP</strong><small>${player.purchased.length} cards</small></li>`).join('')}</ol>
+        <ol class="ranking">${ranked.map((player, index) => `<li class="${state.result.winnerIds.includes(player.id) ? 'winner' : ''}"><b>${index + 1}</b><span>${escapeHtml(player.name)}</span><strong>${player.score} VP</strong><small>${player.purchased.length} cards</small></li>`).join('')}</ol>
         <p class="tie-note">동점은 구매한 개발 카드가 더 적은 플레이어가 우선합니다.</p>
         <button class="modal-primary" type="button" data-action="new-game-menu">새 게임</button>
       </section>
