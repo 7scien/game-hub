@@ -18,6 +18,7 @@ import { CONFIG, emptyResources } from './rules.js';
 import { loadSaveSlots, writeSaveSlot } from './storage.js';
 import {
   animatePurchasedCard,
+  animateTakenTokens,
   closeModal,
   renderGame,
   renderStart,
@@ -98,7 +99,7 @@ function selectedBonusColor() {
   return null;
 }
 
-async function executeAction(action, { animatePurchase = false } = {}) {
+async function executeAction(action, { animatePurchase = false, tokenColors = [] } = {}) {
   if (actionInProgress) return;
   const previousPlayer = state.currentPlayerIndex;
   const bonusColor = animatePurchase ? selectedBonusColor() : null;
@@ -106,6 +107,7 @@ async function executeAction(action, { animatePurchase = false } = {}) {
   try {
     action();
     if (bonusColor) await animatePurchasedCard(bonusColor);
+    else if (tokenColors.length) await animateTakenTokens(tokenColors);
     selection = null;
     returns = emptyResources();
     render();
@@ -244,8 +246,14 @@ document.addEventListener('click', (event) => {
     return;
   }
 
-  if (action === 'take-different') return executeAction(() => takeDifferent(state, selection?.colors || []));
-  if (action === 'take-double') return executeAction(() => takeDouble(state, selection?.colors?.[0]));
+  if (action === 'take-different') {
+    const tokenColors = [...(selection?.colors || [])];
+    return executeAction(() => takeDifferent(state, tokenColors), { tokenColors });
+  }
+  if (action === 'take-double') {
+    const color = selection?.colors?.[0];
+    return executeAction(() => takeDouble(state, color), { tokenColors: color ? [color, color] : [] });
+  }
   if (action === 'buy-selected') return executeAction(
     () => purchaseCard(state, sourceFromSelection()),
     { animatePurchase: true },

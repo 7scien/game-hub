@@ -1202,10 +1202,10 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   position: absolute;
   z-index: 3;
   left: 50%;
-  top: -5px;
+  top: -10px;
   width: 29%;
   aspect-ratio: 1;
-  transform: translateX(-50%) rotate(45deg);
+  transform: translateX(-50%);
   border: 1px solid rgba(255,255,255,.72);
   background:
     linear-gradient(135deg, rgba(255,255,255,.9), transparent 28%),
@@ -1216,7 +1216,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 .physical-token-stack.sapphire .token-disc.top-disc::after { border-radius: 50%; clip-path: none; }
 .physical-token-stack.emerald .token-disc.top-disc::after { clip-path: polygon(28% 0, 72% 0, 100% 28%, 100% 72%, 72% 100%, 28% 100%, 0 72%, 0 28%); }
 .physical-token-stack.diamond .token-disc.top-disc::after { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
-.physical-token-stack.onyx .token-disc.top-disc::after { border-radius: 2px; clip-path: none; }
+.physical-token-stack.onyx .token-disc.top-disc::after { transform: translateX(-50%) rotate(45deg); border-radius: 2px; clip-path: none; }
 .physical-token-stack.gold .token-disc.top-disc::after { border-radius: 50%; clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 94%, 50% 72%, 20% 94%, 31% 57%, 1% 35%, 39% 35%); }
 .token-disc i {
   position: absolute;
@@ -1247,6 +1247,14 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 .token-stack .token-count { margin-top: -2px; color: #fff1cb; line-height: 1; text-shadow: 0 1px 2px #000; }
 .token-stack:disabled .physical-token-stack { opacity: .82; filter: saturate(.78) drop-shadow(0 5px 4px rgba(0,0,0,.28)); }
 .token-stack:disabled > .token-count { opacity: .58; }
+.token-stack.selected { transform: none; border-color: transparent; background: transparent; box-shadow: none; }
+.token-stack.selected .token-disc.top-disc::before {
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.35),
+    0 -1px 2px rgba(0,0,0,.3),
+    0 0 0 3px color-mix(in srgb, var(--token-color) 70%, #fff4cf),
+    0 0 17px color-mix(in srgb, var(--token-color) 64%, transparent);
+}
 
 .vault-grid { grid-template-columns: minmax(190px, .84fr) minmax(215px, 1.16fr); gap: 10px; }
 .vault-token-grid { display: grid; grid-template-columns: repeat(6, minmax(27px, 1fr)); gap: 2px; }
@@ -1261,7 +1269,7 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 .physical-token-stack.compact .token-disc { bottom: calc(2px + var(--stack-offset)); }
 .physical-token-stack.compact .token-disc::before { top: -4px; border-width: 1px; }
 .physical-token-stack.compact .token-disc i { top: -3px; font-size: 7px; }
-.physical-token-stack.compact .token-disc.top-disc::after { top: -3px; }
+.physical-token-stack.compact .token-disc.top-disc::after { top: -6px; }
 .physical-token-stack.compact .empty-stack-marker { bottom: 2px; }
 .vault-token-caption, .bonus-card-caption {
   min-width: 0;
@@ -1371,6 +1379,30 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 }
 .bonus-card-stack.receiving-card { animation: bonus-stack-receive .62s ease .53s both; }
 
+.token-flight-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 242;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 78%, rgba(255,225,158,.045), transparent 34%);
+  pointer-events: auto;
+  perspective: 900px;
+}
+.flying-physical-token {
+  position: fixed !important;
+  z-index: 2;
+  margin: 0 !important;
+  transform-origin: center;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  filter: drop-shadow(0 12px 8px rgba(0,0,0,.42));
+  animation: token-parabolic-flight .92s cubic-bezier(.18,.62,.2,1) var(--token-flight-delay) both;
+  will-change: transform, opacity, filter;
+}
+.flying-physical-token .token-disc { bottom: 0; }
+.token-stack.giving-token .token-disc.top-disc { opacity: .36; }
+.physical-token-stack.receiving-token { animation: vault-token-receive .48s ease .62s both; }
+
 @keyframes purchase-card-flight {
   0% { transform: translate3d(0, 0, 0) scale(1) rotate(0); opacity: 1; filter: brightness(1); }
   18% { transform: translate3d(0, -24px, 0) scale(1.055) rotate(-1.5deg); opacity: 1; filter: brightness(1.16); box-shadow: 0 20px 32px rgba(0,0,0,.45), 0 0 24px rgba(255,220,145,.28); }
@@ -1387,6 +1419,37 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   0% { transform: scale(1); filter: brightness(1); }
   48% { transform: scale(1.13); filter: brightness(1.38) drop-shadow(0 0 9px rgba(255,222,148,.72)); }
   100% { transform: scale(1); filter: brightness(1); }
+}
+@keyframes token-parabolic-flight {
+  0% {
+    transform: perspective(700px) translate3d(0, 0, 0) scale(1) rotateX(0) rotateZ(0);
+    opacity: 1;
+  }
+  28% {
+    transform: perspective(700px) translate3d(var(--token-q1-x), var(--token-q1-y), 80px) scale(.97) rotateX(68deg) rotateZ(180deg);
+    opacity: 1;
+  }
+  58% {
+    transform: perspective(700px) translate3d(var(--token-q2-x), var(--token-q2-y), 112px) scale(.9) rotateX(148deg) rotateZ(390deg);
+    opacity: 1;
+  }
+  82% {
+    transform: perspective(700px) translate3d(var(--token-q3-x), var(--token-q3-y), 48px) scale(var(--token-end-scale)) rotateX(42deg) rotateZ(620deg);
+    opacity: 1;
+  }
+  94% {
+    transform: perspective(700px) translate3d(var(--token-end-x), calc(var(--token-end-y) - 9px), 8px) scale(var(--token-end-scale)) rotateX(10deg) rotateZ(708deg);
+    opacity: .96;
+  }
+  100% {
+    transform: perspective(700px) translate3d(var(--token-end-x), var(--token-end-y), 0) scale(var(--token-end-scale)) rotateX(0) rotateZ(720deg);
+    opacity: .14;
+  }
+}
+@keyframes vault-token-receive {
+  0% { transform: translateY(0); filter: brightness(1); }
+  52% { transform: translateY(-3px); filter: brightness(1.25) drop-shadow(0 0 7px rgba(255,229,166,.55)); }
+  100% { transform: translateY(0); filter: brightness(1); }
 }
 
 @media (max-width: 1050px) {
@@ -1408,5 +1471,6 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .purchase-flight-card, .purchase-flight-caption, .bonus-card-stack.receiving-card { animation: none; }
+  .purchase-flight-card, .purchase-flight-caption, .bonus-card-stack.receiving-card,
+  .flying-physical-token, .physical-token-stack.receiving-token { animation: none; }
 }

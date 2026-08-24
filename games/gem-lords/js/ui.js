@@ -242,7 +242,7 @@ function physicalTokenStack(color, count, extraClass = '') {
       ${index === amount - 1 ? `<i>${meta.symbol}</i>` : ''}
     </span>`).join('');
   return `
-    <span class="physical-token-stack ${meta.className} ${extraClass}" aria-hidden="true">
+    <span class="physical-token-stack ${meta.className} ${extraClass}" data-color="${color}" data-count="${amount}" aria-hidden="true">
       ${discs || '<span class="empty-stack-marker"></span>'}
     </span>`;
 }
@@ -259,7 +259,7 @@ function tokenButton(color, count, selected, disabled) {
 function vaultToken(color, count) {
   const meta = RESOURCE_META[color];
   return `
-    <div class="vault-token-item" title="${meta.label} ${count}개">
+    <div class="vault-token-item" data-color="${color}" title="${meta.label} ${count}개">
       ${physicalTokenStack(color, count, 'compact vault-token-stack')}
       <span class="vault-token-caption"><b>${count}</b><small>${meta.label}</small></span>
     </div>`;
@@ -510,6 +510,107 @@ export function animatePurchasedCard(bonusColor) {
     };
     flyingCard.addEventListener('animationend', finish, { once: true });
     window.setTimeout(finish, 1250);
+  });
+}
+
+export function animateTakenTokens(colors) {
+  if (!Array.isArray(colors) || colors.length === 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return Promise.resolve();
+  }
+
+  const layer = document.createElement('div');
+  layer.className = 'token-flight-layer';
+  layer.setAttribute('aria-hidden', 'true');
+  const colorOccurrences = new Map();
+  const touchedSources = new Set();
+  const touchedDestinations = new Set();
+  const flyingTokens = [];
+
+  colors.forEach((color, animationIndex) => {
+    const source = document.querySelector(`.token-stack[data-color="${color}"]`);
+    const sourceDisc = source?.querySelector('.physical-token-stack .token-disc.top-disc');
+    const destination = document.querySelector(`.vault-token-item[data-color="${color}"] .physical-token-stack`);
+    if (!source || !sourceDisc || !destination) return;
+
+    const sourceRect = sourceDisc.getBoundingClientRect();
+    const destinationRect = destination.getBoundingClientRect();
+    if (!sourceRect.width || !sourceRect.height || !destinationRect.width) return;
+
+    const occurrence = colorOccurrences.get(color) || 0;
+    colorOccurrences.set(color, occurrence + 1);
+    const existingCount = Number(destination.dataset.count) || 0;
+    const sourceCapHeight = 7;
+    const startHeight = sourceRect.height + sourceCapHeight;
+    const startLeft = sourceRect.left;
+    const startTop = sourceRect.top - sourceCapHeight;
+    const startCenterX = startLeft + sourceRect.width / 2;
+    const startCenterY = startTop + startHeight / 2;
+    const destinationDepth = 10;
+    const destinationCapHeight = 4;
+    const destinationRise = 2;
+    const landingBottom = 2 + (existingCount + occurrence) * destinationRise;
+    const landingDiscTop = destinationRect.bottom - landingBottom - destinationDepth;
+    const destinationCenterX = destinationRect.left + destinationRect.width / 2;
+    const destinationCenterY = landingDiscTop - destinationCapHeight + (destinationDepth + destinationCapHeight) / 2;
+    const dx = destinationCenterX - startCenterX;
+    const dy = destinationCenterY - startCenterY;
+    const distance = Math.hypot(dx, dy);
+    const arcHeight = Math.min(175, Math.max(72, distance * 0.24));
+    const controlX = dx * 0.5;
+    const controlY = dy * 0.5 - arcHeight;
+    const curvePoint = (time) => ({
+      x: 2 * (1 - time) * time * controlX + time * time * dx,
+      y: 2 * (1 - time) * time * controlY + time * time * dy,
+    });
+    const pointOne = curvePoint(0.28);
+    const pointTwo = curvePoint(0.58);
+    const pointThree = curvePoint(0.82);
+    const finalScale = destinationRect.width / sourceRect.width;
+    const meta = RESOURCE_META[color];
+
+    const flyingToken = document.createElement('span');
+    flyingToken.className = `physical-token-stack ${meta.className} flying-physical-token`;
+    flyingToken.style.left = `${startLeft}px`;
+    flyingToken.style.top = `${startTop}px`;
+    flyingToken.style.width = `${sourceRect.width}px`;
+    flyingToken.style.height = `${startHeight}px`;
+    flyingToken.style.setProperty('--token-size', `${sourceRect.width}px`);
+    flyingToken.style.setProperty('--token-depth', `${sourceRect.height}px`);
+    flyingToken.style.setProperty('--token-cap', `${sourceCapHeight * 2 - 1}px`);
+    flyingToken.style.setProperty('--token-q1-x', `${pointOne.x}px`);
+    flyingToken.style.setProperty('--token-q1-y', `${pointOne.y}px`);
+    flyingToken.style.setProperty('--token-q2-x', `${pointTwo.x}px`);
+    flyingToken.style.setProperty('--token-q2-y', `${pointTwo.y}px`);
+    flyingToken.style.setProperty('--token-q3-x', `${pointThree.x}px`);
+    flyingToken.style.setProperty('--token-q3-y', `${pointThree.y}px`);
+    flyingToken.style.setProperty('--token-end-x', `${dx}px`);
+    flyingToken.style.setProperty('--token-end-y', `${dy}px`);
+    flyingToken.style.setProperty('--token-end-scale', finalScale);
+    flyingToken.style.setProperty('--token-flight-delay', `${animationIndex * 120}ms`);
+    flyingToken.innerHTML = `<span class="token-disc top-disc" style="--stack-offset: 0px"><i>${meta.symbol}</i></span>`;
+    layer.append(flyingToken);
+    flyingTokens.push(flyingToken);
+    touchedSources.add(source);
+    touchedDestinations.add(destination);
+  });
+
+  if (flyingTokens.length === 0) return Promise.resolve();
+  touchedSources.forEach((source) => source.classList.add('giving-token'));
+  touchedDestinations.forEach((destination) => destination.classList.add('receiving-token'));
+  document.body.append(layer);
+
+  return new Promise((resolve) => {
+    let completed = false;
+    const finish = () => {
+      if (completed) return;
+      completed = true;
+      touchedSources.forEach((source) => source.classList.remove('giving-token'));
+      touchedDestinations.forEach((destination) => destination.classList.remove('receiving-token'));
+      layer.remove();
+      resolve();
+    };
+    flyingTokens.at(-1).addEventListener('animationend', finish, { once: true });
+    window.setTimeout(finish, 1450 + flyingTokens.length * 120);
   });
 }
 
