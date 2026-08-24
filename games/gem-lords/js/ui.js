@@ -12,6 +12,14 @@ import {
 const app = document.querySelector('#app');
 const modalRoot = () => document.querySelector('#modal-root');
 
+const WORKSHOP_NAMES = {
+  Ruby: '홍염 대장간',
+  Sapphire: '청람 세공소',
+  Emerald: '녹음 공방',
+  Diamond: '백야 보석원',
+  Onyx: '흑요 상회',
+};
+
 const gem = (color, count, extra = '') => {
   const meta = RESOURCE_META[color];
   return `<span class="gem-chip ${meta.className} ${extra}" title="${meta.label}"><i aria-hidden="true">${meta.symbol}</i><b>${count}</b></span>`;
@@ -27,26 +35,32 @@ export function renderStart(hasSave, choosingPlayers = !hasSave) {
     <main class="start-screen" aria-labelledby="game-title">
       <div class="start-glow start-glow-one" aria-hidden="true"></div>
       <div class="start-glow start-glow-two" aria-hidden="true"></div>
-      <section class="start-card">
-        <p class="eyebrow">PASS &amp; PLAY · 2–4 PLAYERS</p>
-        <div class="brand-mark" aria-hidden="true"><span>✦</span></div>
-        <h1 id="game-title">GEM <em>LORDS</em></h1>
-        <p class="start-copy">빛나는 원석을 모으고, 시장의 영향력을 키워<br />가장 명망 높은 보석 군주가 되세요.</p>
-        ${hasSave && !choosingPlayers ? `
-          <div class="continue-actions">
-            <button class="primary-start" type="button" data-action="continue-game">Continue Game</button>
-            <button class="secondary-start" type="button" data-action="new-game-menu">New Game</button>
-          </div>
-        ` : `
-          <p class="picker-label">새 게임 인원</p>
-          <div class="player-picker" aria-label="플레이어 수 선택">
-            ${[2, 3, 4].map((count) => `<button class="player-option ${count === 3 ? 'featured' : ''}" type="button" data-action="start-game" data-players="${count}"><strong>${count}</strong><span>Players</span></button>`).join('')}
-          </div>
-          ${hasSave ? '<button class="text-button" type="button" data-action="back-to-save">저장된 게임으로 돌아가기</button>' : ''}
-        `}
-        <button class="how-button" type="button" data-action="open-help">?&nbsp;&nbsp;How to Play</button>
+      <section class="start-table">
+        <div class="box-cover" aria-hidden="true">
+          <div class="box-shine"></div>
+          <div class="box-title"><span>찬란한 보석으로 왕국을 세워라</span><strong>보석의 군주</strong><em>2–4인 전략 보드게임</em></div>
+        </div>
+        <div class="start-card">
+          <p class="eyebrow">한 기기에서 즐기는 2–4인 보드게임</p>
+          <div class="brand-mark" aria-hidden="true"><span>✦</span></div>
+          <h1 id="game-title"><span>보석의</span> <em>군주</em></h1>
+          <p class="start-copy">묵직한 보석을 모으고 상단을 키워<br />왕국에서 가장 높은 명성을 차지하세요.</p>
+          ${hasSave && !choosingPlayers ? `
+            <div class="continue-actions">
+              <button class="primary-start" type="button" data-action="continue-game">게임 계속하기</button>
+              <button class="secondary-start" type="button" data-action="new-game-menu">새 게임</button>
+            </div>
+          ` : `
+            <p class="picker-label">플레이어 수</p>
+            <div class="player-picker" aria-label="플레이어 수 선택">
+              ${[2, 3, 4].map((count) => `<button class="player-option ${count === 3 ? 'featured' : ''}" type="button" data-action="start-game" data-players="${count}"><strong>${count}</strong><span>명</span></button>`).join('')}
+            </div>
+            ${hasSave ? '<button class="text-button" type="button" data-action="back-to-save">저장된 게임으로 돌아가기</button>' : ''}
+          `}
+          <button class="how-button" type="button" data-action="open-help">?&nbsp;&nbsp;게임 방법</button>
+        </div>
       </section>
-      <p class="start-footnote">A LOCAL TABLETOP EXPERIENCE</p>
+      <p class="start-footnote">ORIGINAL LOCAL TABLETOP GAME</p>
     </main>
     <div id="modal-root"></div>
     <div id="toast-root" role="status" aria-live="polite"></div>`;
@@ -71,6 +85,7 @@ function patronCard(patron, eligible = false) {
 
 function developmentCard(card, source, selected, player) {
   const affordable = canAffordCard(player, card);
+  const bonusMeta = RESOURCE_META[card.permanentBonusColor];
   const sourceData = source.kind === 'market'
     ? `data-kind="market" data-tier="${source.tier}" data-index="${source.index}"`
     : `data-kind="reserved" data-index="${source.index}"`;
@@ -78,18 +93,18 @@ function developmentCard(card, source, selected, player) {
     .map((color) => gem(color, card.cost[color], 'cost-chip'))
     .join('');
   return `
-    <button type="button" class="dev-card bonus-${RESOURCE_META[card.permanentBonusColor].className} ${selected ? 'selected' : ''} ${affordable ? 'affordable' : ''}"
-      data-action="select-card" ${sourceData} aria-label="Tier ${card.tier}, ${card.victoryPoints}점, ${card.permanentBonusColor} 보너스 카드">
-      <span class="card-top"><span class="card-vp">${card.victoryPoints || '·'}<small>VP</small></span>${gem(card.permanentBonusColor, '+1', 'bonus-gem')}</span>
-      <span class="card-pattern" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="card-meta"><em>TIER ${card.tier}</em><span class="card-costs">${costs}</span></span>
+    <button type="button" class="dev-card bonus-${bonusMeta.className} tier-card-${card.tier} ${selected ? 'selected' : ''} ${affordable ? 'affordable' : ''}"
+      data-action="select-card" ${sourceData} aria-label="${card.tier}단계, ${card.victoryPoints}점, ${bonusMeta.label} 보너스 카드">
+      <span class="card-top"><span class="card-vp">${card.victoryPoints || '·'}<small>명성</small></span>${gem(card.permanentBonusColor, '+1', 'bonus-gem')}</span>
+      <span class="card-art" aria-hidden="true"><i></i><b>${WORKSHOP_NAMES[card.permanentBonusColor]}</b></span>
+      <span class="card-meta"><em>${card.tier}단계</em><span class="card-costs">${costs}</span></span>
     </button>`;
 }
 
 function deckCard(tier, count, selected, canReserve) {
   return `
     <button type="button" class="deck-card tier-${tier} ${selected ? 'selected' : ''}" data-action="select-deck" data-tier="${tier}" ${count === 0 || !canReserve ? 'disabled' : ''}>
-      <span>TIER</span><strong>${tier}</strong><small>${count} CARDS</small><em>TOP RESERVE</em>
+      <span>개발 카드</span><strong>${tier}</strong><small>${count}장</small><em>맨 위 카드 예약</em>
     </button>`;
 }
 
@@ -151,7 +166,7 @@ export function renderGame(state, selection) {
     <div class="game-shell">
       <header class="game-header">
         <span class="hub-home-spacer" aria-hidden="true"></span>
-        <div class="turn-heading"><span>ROUND ${state.round} · TURN ${state.turnNumber}</span><strong>${player.name} <em>TURN</em></strong></div>
+        <div class="turn-heading"><span>${state.round}라운드 · ${state.turnNumber}번째 턴</span><strong>${player.name} <em>차례</em></strong></div>
         <div class="scoreboard">${scoreboard(state)}</div>
         <button class="icon-button" type="button" data-action="open-help" aria-label="게임 방법">?</button>
       </header>
@@ -160,14 +175,14 @@ export function renderGame(state, selection) {
 
       <main class="board">
         <section class="patron-zone" aria-labelledby="patron-title">
-          <div class="section-label"><span>ROYAL COURT</span><h2 id="patron-title">Patrons</h2></div>
+          <div class="section-label"><span>왕실의 초대</span><h2 id="patron-title">후원자</h2></div>
           <div class="patron-list">${state.patrons.map((patron) => patronCard(patron, eligibleIds.has(patron.id))).join('') || '<p class="empty-message">모든 후원자가 주인을 찾았습니다.</p>'}</div>
         </section>
 
         <section class="market-zone" aria-label="개발 카드 시장">
           ${[3, 2, 1].map((tier) => `
             <div class="tier-row">
-              <div class="tier-heading"><span>TIER</span><strong>${tier}</strong></div>
+              <div class="tier-heading"><span>단계</span><strong>${tier}</strong></div>
               <div class="tier-cards">
                 ${deckCard(tier, state.decks[tier].length, selection?.kind === 'deck' && selection.tier === tier, player.reserved.length < CONFIG.MAX_RESERVED)}
                 ${state.market[tier].map((card, index) => developmentCard(card, { kind: 'market', tier, index }, selection?.kind === 'market' && selection.tier === tier && selection.index === index, player)).join('')}
@@ -178,7 +193,7 @@ export function renderGame(state, selection) {
 
         <section class="player-dock">
           <div class="supply-panel">
-            <div class="dock-title"><span>MARKET SUPPLY</span><small>Gold는 예약으로만 획득</small></div>
+            <div class="dock-title"><span>보석 공급처</span><small>황금은 예약으로만 획득</small></div>
             <div class="token-row">
               ${COLORS.map((color) => tokenButton(color, state.supply[color], selection?.kind === 'tokens' && selection.colors.includes(color), state.phase !== 'action' || state.supply[color] === 0)).join('')}
               ${tokenButton('Gold', state.supply.Gold, false, true)}
@@ -186,13 +201,13 @@ export function renderGame(state, selection) {
           </div>
 
           <div class="player-panel">
-            <div class="dock-title"><span>${player.name} VAULT</span><small>${totalTokens(player.tokens)}/${CONFIG.TOKEN_LIMIT} tokens · ${player.purchased.length} cards</small></div>
+            <div class="dock-title"><span>${player.name}의 금고</span><small>토큰 ${totalTokens(player.tokens)}/${CONFIG.TOKEN_LIMIT} · 카드 ${player.purchased.length}장</small></div>
             <div class="vault-grid">
-              <div><label>Tokens</label><div class="mini-gems">${ALL_RESOURCES.map((color) => gem(color, player.tokens[color], 'vault-gem')).join('')}</div></div>
-              <div><label>Permanent bonuses</label><div class="mini-gems">${bonusStrip(player)}</div></div>
+              <div><label>보유 토큰</label><div class="mini-gems">${ALL_RESOURCES.map((color) => gem(color, player.tokens[color], 'vault-gem')).join('')}</div></div>
+              <div><label>영구 보너스</label><div class="mini-gems">${bonusStrip(player)}</div></div>
             </div>
             <div class="reserved-zone">
-              <label>Reserved <span>${player.reserved.length}/${CONFIG.MAX_RESERVED}</span></label>
+              <label>예약 카드 <span>${player.reserved.length}/${CONFIG.MAX_RESERVED}</span></label>
               <div class="reserved-cards">${player.reserved.map((card, index) => developmentCard(card, { kind: 'reserved', index }, selection?.kind === 'reserved' && selection.index === index, player)).join('') || '<p>예약 카드가 없습니다.</p>'}</div>
             </div>
           </div>

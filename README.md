@@ -6,7 +6,7 @@
 
 - `games/duo-party/` — DUO PARTY / Push Arena (vanilla JavaScript)
 - `games/catan/` — Catan (독립 React 진입점, 기존 게임 규칙과 UI 재사용)
-- `games/gem-lords/` — Gem Lords (2–4인 로컬 보석 수집·엔진 빌딩 게임)
+- `games/gem-lords/` — 보석의 군주 / Gem Lords (2–4인 로컬 보석 수집·엔진 빌딩 게임)
 - `games/hexo/` — HeXO 원본 소스 연결을 기다리는 독립 슬롯
 
 각 게임은 별도의 HTML 진입점을 가지므로 한 게임의 런타임 오류가 허브나 다른 게임에 전파되지 않습니다. `shared/game-shell.js`가 각 게임에 공통 홈 버튼을 제공합니다.

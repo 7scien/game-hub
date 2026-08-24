@@ -2,12 +2,12 @@ export const COLORS = ['Ruby', 'Sapphire', 'Emerald', 'Diamond', 'Onyx'];
 export const ALL_RESOURCES = [...COLORS, 'Gold'];
 
 export const RESOURCE_META = {
-  Ruby: { label: 'Ruby', symbol: '◆', className: 'ruby' },
-  Sapphire: { label: 'Sapphire', symbol: '●', className: 'sapphire' },
-  Emerald: { label: 'Emerald', symbol: '⬟', className: 'emerald' },
-  Diamond: { label: 'Diamond', symbol: '✦', className: 'diamond' },
-  Onyx: { label: 'Onyx', symbol: '■', className: 'onyx' },
-  Gold: { label: 'Gold', symbol: '★', className: 'gold' },
+  Ruby: { label: '루비', symbol: '◆', className: 'ruby' },
+  Sapphire: { label: '사파이어', symbol: '●', className: 'sapphire' },
+  Emerald: { label: '에메랄드', symbol: '⬟', className: 'emerald' },
+  Diamond: { label: '다이아몬드', symbol: '✦', className: 'diamond' },
+  Onyx: { label: '오닉스', symbol: '■', className: 'onyx' },
+  Gold: { label: '황금', symbol: '★', className: 'gold' },
 };
 
 export const CONFIG = Object.freeze({
