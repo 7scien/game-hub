@@ -7,3 +7,4 @@
 @media(max-width:850px){.hero{min-height:0;grid-template-columns:1fr;padding-bottom:56px}.hero-orbit{width:min(360px,82vw);margin:auto}.game-grid{grid-template-columns:1fr 1fr}.game-card:last-child{grid-column:1/-1;min-height:300px}.offline-status{display:none}}
 @media(max-width:580px){.hub-shell{padding:0 15px}.topbar{min-height:72px}.hub-logo strong{display:none}.hero{padding:46px 4px}.hero h1{font-size:clamp(3.15rem,16vw,5.4rem)}.hero-orbit{display:none}.game-grid{grid-template-columns:1fr}.game-card,.game-card:last-child{grid-column:auto;min-height:330px}.section-heading>span{display:none}footer{align-items:flex-start;flex-direction:column}.card-mark{font-size:6rem}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+.theme-gem::before{background:linear-gradient(145deg,#173d69,#2d1d4d)}

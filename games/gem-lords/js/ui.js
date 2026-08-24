@@ -1,0 +1,295 @@
+import {
+  ALL_RESOURCES,
+  COLORS,
+  CONFIG,
+  RESOURCE_META,
+  calculatePayment,
+  canAffordCard,
+  canTakeDouble,
+  totalTokens,
+} from './rules.js';
+
+const app = document.querySelector('#app');
+const modalRoot = () => document.querySelector('#modal-root');
+
+const gem = (color, count, extra = '') => {
+  const meta = RESOURCE_META[color];
+  return `<span class="gem-chip ${meta.className} ${extra}" title="${meta.label}"><i aria-hidden="true">${meta.symbol}</i><b>${count}</b></span>`;
+};
+
+const requirementChips = (requirements) => Object.entries(requirements)
+  .filter(([, amount]) => amount > 0)
+  .map(([color, amount]) => gem(color, amount, 'tiny'))
+  .join('');
+
+export function renderStart(hasSave, choosingPlayers = !hasSave) {
+  app.innerHTML = `
+    <main class="start-screen" aria-labelledby="game-title">
+      <div class="start-glow start-glow-one" aria-hidden="true"></div>
+      <div class="start-glow start-glow-two" aria-hidden="true"></div>
+      <section class="start-card">
+        <p class="eyebrow">PASS &amp; PLAY · 2–4 PLAYERS</p>
+        <div class="brand-mark" aria-hidden="true"><span>✦</span></div>
+        <h1 id="game-title">GEM <em>LORDS</em></h1>
+        <p class="start-copy">빛나는 원석을 모으고, 시장의 영향력을 키워<br />가장 명망 높은 보석 군주가 되세요.</p>
+        ${hasSave && !choosingPlayers ? `
+          <div class="continue-actions">
+            <button class="primary-start" type="button" data-action="continue-game">Continue Game</button>
+            <button class="secondary-start" type="button" data-action="new-game-menu">New Game</button>
+          </div>
+        ` : `
+          <p class="picker-label">새 게임 인원</p>
+          <div class="player-picker" aria-label="플레이어 수 선택">
+            ${[2, 3, 4].map((count) => `<button class="player-option ${count === 3 ? 'featured' : ''}" type="button" data-action="start-game" data-players="${count}"><strong>${count}</strong><span>Players</span></button>`).join('')}
+          </div>
+          ${hasSave ? '<button class="text-button" type="button" data-action="back-to-save">저장된 게임으로 돌아가기</button>' : ''}
+        `}
+        <button class="how-button" type="button" data-action="open-help">?&nbsp;&nbsp;How to Play</button>
+      </section>
+      <p class="start-footnote">A LOCAL TABLETOP EXPERIENCE</p>
+    </main>
+    <div id="modal-root"></div>
+    <div id="toast-root" role="status" aria-live="polite"></div>`;
+}
+
+function scoreboard(state) {
+  return state.players.map((player, index) => `
+    <div class="score-card ${index === state.currentPlayerIndex ? 'active' : ''}">
+      <span>${player.name}</span>
+      <strong>${player.score}<small> VP</small></strong>
+    </div>`).join('');
+}
+
+function patronCard(patron, eligible = false) {
+  return `
+    <article class="patron-card ${eligible ? 'eligible' : ''}" data-patron-id="${patron.id}">
+      <div class="patron-seal" aria-hidden="true">✧</div>
+      <div><strong>${patron.name}</strong><div class="patron-cost">${requirementChips(patron.requirements)}</div></div>
+      <span class="patron-points">+${patron.victoryPoints}<small>VP</small></span>
+    </article>`;
+}
+
+function developmentCard(card, source, selected, player) {
+  const affordable = canAffordCard(player, card);
+  const sourceData = source.kind === 'market'
+    ? `data-kind="market" data-tier="${source.tier}" data-index="${source.index}"`
+    : `data-kind="reserved" data-index="${source.index}"`;
+  const costs = COLORS.filter((color) => card.cost[color] > 0)
+    .map((color) => gem(color, card.cost[color], 'cost-chip'))
+    .join('');
+  return `
+    <button type="button" class="dev-card bonus-${RESOURCE_META[card.permanentBonusColor].className} ${selected ? 'selected' : ''} ${affordable ? 'affordable' : ''}"
+      data-action="select-card" ${sourceData} aria-label="Tier ${card.tier}, ${card.victoryPoints}점, ${card.permanentBonusColor} 보너스 카드">
+      <span class="card-top"><span class="card-vp">${card.victoryPoints || '·'}<small>VP</small></span>${gem(card.permanentBonusColor, '+1', 'bonus-gem')}</span>
+      <span class="card-pattern" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="card-meta"><em>TIER ${card.tier}</em><span class="card-costs">${costs}</span></span>
+    </button>`;
+}
+
+function deckCard(tier, count, selected, canReserve) {
+  return `
+    <button type="button" class="deck-card tier-${tier} ${selected ? 'selected' : ''}" data-action="select-deck" data-tier="${tier}" ${count === 0 || !canReserve ? 'disabled' : ''}>
+      <span>TIER</span><strong>${tier}</strong><small>${count} CARDS</small><em>TOP RESERVE</em>
+    </button>`;
+}
+
+function selectedActionPanel(state, selection) {
+  const player = state.players[state.currentPlayerIndex];
+  if (!selection) return '<div class="action-hint"><span>✦</span><p>보석이나 카드를 선택해<br />이번 턴의 행동을 정하세요.</p></div>';
+
+  if (selection.kind === 'tokens') {
+    const names = selection.colors.map((color) => RESOURCE_META[color].label).join(' · ') || '보석을 선택하세요';
+    const validDifferent = selection.colors.length >= 1 && selection.colors.length <= 3
+      && selection.colors.every((color) => state.supply[color] > 0);
+    const doubleColor = selection.colors.length === 1 ? selection.colors[0] : null;
+    return `
+      <div class="action-panel">
+        <div><span class="action-kicker">SELECTED GEMS</span><strong>${names}</strong></div>
+        <div class="action-buttons">
+          <button type="button" class="action-button" data-action="take-different" ${validDifferent ? '' : 'disabled'}>서로 다른 보석 받기 <small>${selection.colors.length}/3</small></button>
+          <button type="button" class="action-button gold-action" data-action="take-double" ${doubleColor && canTakeDouble(state.supply, doubleColor) ? '' : 'disabled'}>같은 보석 2개 받기</button>
+        </div>
+      </div>`;
+  }
+
+  let card;
+  if (selection.kind === 'market') card = state.market[selection.tier]?.[selection.index];
+  if (selection.kind === 'reserved') card = player.reserved[selection.index];
+  if (selection.kind === 'deck') {
+    return `<div class="action-panel"><div><span class="action-kicker">TIER ${selection.tier} DECK</span><strong>맨 위 카드를 비공개로 예약</strong></div><button type="button" class="action-button gold-action" data-action="reserve-selected" ${player.reserved.length >= CONFIG.MAX_RESERVED || state.decks[selection.tier].length === 0 ? 'disabled' : ''}>예약하기${state.supply.Gold ? ' · Gold +1' : ''}</button></div>`;
+  }
+  if (!card) return '';
+  const payment = calculatePayment(player, card);
+  const paySummary = payment.goldNeeded ? `Gold ${payment.goldNeeded}개 대체` : 'Gold 없이 구매 가능';
+  return `
+    <div class="action-panel">
+      <div><span class="action-kicker">${selection.kind === 'reserved' ? 'RESERVED CARD' : `TIER ${card.tier} CARD`}</span><strong>${card.permanentBonusColor} 보너스 · ${card.victoryPoints} VP</strong><small>${payment.canAfford ? paySummary : '보석이 부족합니다'}</small></div>
+      <div class="action-buttons">
+        <button type="button" class="action-button" data-action="buy-selected" ${payment.canAfford ? '' : 'disabled'}>구매하기</button>
+        ${selection.kind === 'market' ? `<button type="button" class="action-button gold-action" data-action="reserve-selected" ${player.reserved.length >= CONFIG.MAX_RESERVED ? 'disabled' : ''}>예약${state.supply.Gold ? ' · Gold +1' : ''}</button>` : ''}
+      </div>
+    </div>`;
+}
+
+function tokenButton(color, count, selected, disabled) {
+  const meta = RESOURCE_META[color];
+  return `
+    <button type="button" class="token-stack ${meta.className} ${selected ? 'selected' : ''}" data-action="select-token" data-color="${color}" ${disabled ? 'disabled' : ''} aria-pressed="${selected}">
+      <span class="token-face"><i aria-hidden="true">${meta.symbol}</i></span>
+      <strong>${count}</strong><small>${meta.label}</small>
+    </button>`;
+}
+
+function bonusStrip(player) {
+  return COLORS.map((color) => gem(color, player.bonuses[color], 'bonus-count')).join('');
+}
+
+export function renderGame(state, selection) {
+  const player = state.players[state.currentPlayerIndex];
+  const eligibleIds = new Set(state.patronChoices);
+  app.innerHTML = `
+    <div class="game-shell">
+      <header class="game-header">
+        <span class="hub-home-spacer" aria-hidden="true"></span>
+        <div class="turn-heading"><span>ROUND ${state.round} · TURN ${state.turnNumber}</span><strong>${player.name} <em>TURN</em></strong></div>
+        <div class="scoreboard">${scoreboard(state)}</div>
+        <button class="icon-button" type="button" data-action="open-help" aria-label="게임 방법">?</button>
+      </header>
+
+      ${state.endGame.triggered && state.status === 'playing' ? '<div class="final-round-banner">FINAL ROUND · 이번 라운드가 끝나면 승자를 결정합니다</div>' : ''}
+
+      <main class="board">
+        <section class="patron-zone" aria-labelledby="patron-title">
+          <div class="section-label"><span>ROYAL COURT</span><h2 id="patron-title">Patrons</h2></div>
+          <div class="patron-list">${state.patrons.map((patron) => patronCard(patron, eligibleIds.has(patron.id))).join('') || '<p class="empty-message">모든 후원자가 주인을 찾았습니다.</p>'}</div>
+        </section>
+
+        <section class="market-zone" aria-label="개발 카드 시장">
+          ${[3, 2, 1].map((tier) => `
+            <div class="tier-row">
+              <div class="tier-heading"><span>TIER</span><strong>${tier}</strong></div>
+              <div class="tier-cards">
+                ${deckCard(tier, state.decks[tier].length, selection?.kind === 'deck' && selection.tier === tier, player.reserved.length < CONFIG.MAX_RESERVED)}
+                ${state.market[tier].map((card, index) => developmentCard(card, { kind: 'market', tier, index }, selection?.kind === 'market' && selection.tier === tier && selection.index === index, player)).join('')}
+                ${Array.from({ length: Math.max(0, CONFIG.MARKET_SIZE - state.market[tier].length) }, () => '<div class="empty-card"><span>EMPTY</span></div>').join('')}
+              </div>
+            </div>`).join('')}
+        </section>
+
+        <section class="player-dock">
+          <div class="supply-panel">
+            <div class="dock-title"><span>MARKET SUPPLY</span><small>Gold는 예약으로만 획득</small></div>
+            <div class="token-row">
+              ${COLORS.map((color) => tokenButton(color, state.supply[color], selection?.kind === 'tokens' && selection.colors.includes(color), state.phase !== 'action' || state.supply[color] === 0)).join('')}
+              ${tokenButton('Gold', state.supply.Gold, false, true)}
+            </div>
+          </div>
+
+          <div class="player-panel">
+            <div class="dock-title"><span>${player.name} VAULT</span><small>${totalTokens(player.tokens)}/${CONFIG.TOKEN_LIMIT} tokens · ${player.purchased.length} cards</small></div>
+            <div class="vault-grid">
+              <div><label>Tokens</label><div class="mini-gems">${ALL_RESOURCES.map((color) => gem(color, player.tokens[color], 'vault-gem')).join('')}</div></div>
+              <div><label>Permanent bonuses</label><div class="mini-gems">${bonusStrip(player)}</div></div>
+            </div>
+            <div class="reserved-zone">
+              <label>Reserved <span>${player.reserved.length}/${CONFIG.MAX_RESERVED}</span></label>
+              <div class="reserved-cards">${player.reserved.map((card, index) => developmentCard(card, { kind: 'reserved', index }, selection?.kind === 'reserved' && selection.index === index, player)).join('') || '<p>예약 카드가 없습니다.</p>'}</div>
+            </div>
+          </div>
+
+          <div class="turn-action-area">${selectedActionPanel(state, selection)}</div>
+        </section>
+      </main>
+      <div id="modal-root"></div>
+      <div id="toast-root" role="status" aria-live="polite"></div>
+    </div>`;
+}
+
+export function showHelp() {
+  modalRoot().innerHTML = `
+    <div class="modal-backdrop" data-action="close-modal">
+      <section class="modal help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" data-modal-panel>
+        <button class="modal-close" type="button" data-action="close-modal" aria-label="닫기">×</button>
+        <p class="modal-kicker">QUICK GUIDE</p><h2 id="help-title">How to Play</h2>
+        <div class="rule-grid">
+          <article><b>01</b><div><h3>보석 가져오기</h3><p>서로 다른 색 1–3개 또는 공급처에 4개 이상 남은 한 색 2개를 받습니다.</p></div></article>
+          <article><b>02</b><div><h3>카드 구매</h3><p>표시된 비용을 지불하면 카드의 점수와 영구 보너스를 얻습니다.</p></div></article>
+          <article><b>03</b><div><h3>영구 할인</h3><p>보너스 1개마다 같은 색 카드 비용이 매번 1씩 줄어듭니다.</p></div></article>
+          <article><b>04</b><div><h3>예약 &amp; Gold</h3><p>공개 카드나 덱 맨 위를 최대 3장 예약합니다. 남아 있다면 Gold 1개도 받습니다.</p></div></article>
+          <article><b>05</b><div><h3>Patron</h3><p>개발 카드 보너스 조건을 충족하면 후원자를 얻습니다. 토큰은 계산하지 않습니다.</p></div></article>
+          <article><b>06</b><div><h3>승리</h3><p>${CONFIG.TARGET_SCORE}점 도달 후 라운드를 마칩니다. 동점이면 구매 카드가 적은 플레이어가 앞섭니다.</p></div></article>
+        </div>
+        <button class="modal-primary" type="button" data-action="close-modal">시장으로 돌아가기</button>
+      </section>
+    </div>`;
+}
+
+export function closeModal() {
+  const root = modalRoot();
+  if (root) root.innerHTML = '';
+}
+
+export function showReturnTokens(state, returns) {
+  const player = state.players[state.currentPlayerIndex];
+  const excess = totalTokens(player.tokens) - CONFIG.TOKEN_LIMIT;
+  const selectedCount = ALL_RESOURCES.reduce((sum, color) => sum + (returns[color] || 0), 0);
+  modalRoot().innerHTML = `
+    <div class="modal-backdrop locked">
+      <section class="modal token-return-modal" role="dialog" aria-modal="true" aria-labelledby="return-title" data-modal-panel>
+        <p class="modal-kicker">VAULT LIMIT</p><h2 id="return-title">토큰 ${excess}개를 반환하세요</h2>
+        <p class="modal-copy">보유 한도는 ${CONFIG.TOKEN_LIMIT}개입니다. 반환할 토큰을 직접 선택하세요.</p>
+        <div class="return-list">
+          ${ALL_RESOURCES.filter((color) => player.tokens[color] > 0).map((color) => {
+            const meta = RESOURCE_META[color];
+            return `<div class="return-item ${meta.className}"><span class="return-gem">${meta.symbol}</span><div><strong>${meta.label}</strong><small>보유 ${player.tokens[color]}</small></div><div class="stepper"><button type="button" data-action="return-remove" data-color="${color}" ${returns[color] ? '' : 'disabled'}>−</button><b>${returns[color] || 0}</b><button type="button" data-action="return-add" data-color="${color}" ${(returns[color] || 0) < player.tokens[color] && selectedCount < excess ? '' : 'disabled'}>+</button></div></div>`;
+          }).join('')}
+        </div>
+        <button class="modal-primary" type="button" data-action="confirm-return" ${selectedCount === excess ? '' : 'disabled'}>선택한 ${selectedCount}/${excess}개 반환</button>
+      </section>
+    </div>`;
+}
+
+export function showPatronChoice(state) {
+  const choices = state.patrons.filter((patron) => state.patronChoices.includes(patron.id));
+  modalRoot().innerHTML = `
+    <div class="modal-backdrop locked">
+      <section class="modal patron-modal" role="dialog" aria-modal="true" aria-labelledby="patron-choice-title" data-modal-panel>
+        <p class="modal-kicker">ROYAL FAVOR</p><h2 id="patron-choice-title">후원자 한 명을 선택하세요</h2>
+        <p class="modal-copy">여러 조건을 동시에 달성했습니다. 이번 턴에는 한 명만 합류합니다.</p>
+        <div class="patron-choice-list">${choices.map((patron) => `<button type="button" data-action="choose-patron" data-patron-id="${patron.id}">${patronCard(patron, true)}</button>`).join('')}</div>
+      </section>
+    </div>`;
+}
+
+export function showTurnOverlay(playerName) {
+  const overlay = document.createElement('div');
+  overlay.className = 'turn-overlay';
+  overlay.setAttribute('role', 'status');
+  overlay.innerHTML = `<div><span>PASS THE DEVICE</span><strong>${playerName}</strong><em>TURN</em><small>화면을 터치하면 바로 시작합니다</small></div>`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.append(overlay);
+  return overlay;
+}
+
+export function showGameOver(state) {
+  const ranked = state.result.rankedIds.map((id) => state.players.find((player) => player.id === id));
+  const winners = state.result.winnerIds.map((id) => state.players.find((player) => player.id === id));
+  modalRoot().innerHTML = `
+    <div class="modal-backdrop locked victory-backdrop">
+      <section class="modal victory-modal" role="dialog" aria-modal="true" aria-labelledby="victory-title" data-modal-panel>
+        <div class="victory-gem" aria-hidden="true">✦</div><p class="modal-kicker">MARKET LEGACY SEALED</p>
+        <h2 id="victory-title">${winners.length > 1 ? '공동 승리!' : `${winners[0].name} 승리!`}</h2>
+        <p class="victory-score">${winners[0].score}<small> VICTORY POINTS</small></p>
+        <ol class="ranking">${ranked.map((player, index) => `<li class="${state.result.winnerIds.includes(player.id) ? 'winner' : ''}"><b>${index + 1}</b><span>${player.name}</span><strong>${player.score} VP</strong><small>${player.purchased.length} cards</small></li>`).join('')}</ol>
+        <p class="tie-note">동점은 구매한 개발 카드가 더 적은 플레이어가 우선합니다.</p>
+        <button class="modal-primary" type="button" data-action="new-game-menu">새 게임</button>
+      </section>
+    </div>`;
+}
+
+export function toast(message) {
+  const root = document.querySelector('#toast-root');
+  if (!root) return;
+  root.innerHTML = `<div class="toast">${message}</div>`;
+  window.setTimeout(() => { if (root) root.innerHTML = ''; }, 2600);
+}
