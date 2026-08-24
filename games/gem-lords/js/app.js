@@ -1,4 +1,10 @@
-import { STORAGE_KEY } from './config.js';
+import {
+  DEFAULT_GAME_TITLE,
+  MAX_TITLE_LENGTH,
+  STORAGE_KEY,
+  TITLE_STORAGE_KEY,
+  normalizeGameTitle,
+} from './config.js';
 import {
   choosePatron,
   createGame,
@@ -18,6 +24,7 @@ import {
   showHelp,
   showPatronChoice,
   showReturnTokens,
+  showTitleEditor,
   showTurnOverlay,
   toast,
 } from './ui.js';
@@ -26,6 +33,35 @@ let state = null;
 let selection = null;
 let returns = emptyResources();
 let savedGame = loadSavedGame();
+let gameTitle = loadGameTitle();
+let titleHold = null;
+
+const TITLE_HOLD_MS = 680;
+const TITLE_MOVE_TOLERANCE = 12;
+
+function loadGameTitle() {
+  try {
+    return normalizeGameTitle(localStorage.getItem(TITLE_STORAGE_KEY) || DEFAULT_GAME_TITLE);
+  } catch {
+    return DEFAULT_GAME_TITLE;
+  }
+}
+
+function syncDocumentTitle() {
+  document.title = `${gameTitle} — 로컬 전략 보드게임`;
+}
+
+function saveCustomTitle(value) {
+  gameTitle = normalizeGameTitle(value);
+  localStorage.setItem(TITLE_STORAGE_KEY, gameTitle);
+  syncDocumentTitle();
+}
+
+function resetCustomTitle() {
+  gameTitle = DEFAULT_GAME_TITLE;
+  localStorage.removeItem(TITLE_STORAGE_KEY);
+  syncDocumentTitle();
+}
 
 function loadSavedGame() {
   try {
@@ -50,7 +86,7 @@ function clearSave() {
 
 function render() {
   if (!state) {
-    renderStart(Boolean(savedGame));
+    renderStart(Boolean(savedGame), !savedGame, gameTitle);
     return;
   }
   renderGame(state, selection);
@@ -108,11 +144,24 @@ document.addEventListener('click', (event) => {
   if (action === 'new-game-menu') {
     state = null;
     clearSave();
-    renderStart(false, true);
+    renderStart(false, true, gameTitle);
     return;
   }
-  if (action === 'back-to-save') return renderStart(true, false);
+  if (action === 'back-to-save') return renderStart(true, false, gameTitle);
   if (action === 'open-help') return showHelp();
+  if (action === 'save-title') {
+    const input = document.querySelector('[data-title-input]');
+    saveCustomTitle(input?.value);
+    closeModal();
+    render();
+    return toast('게임 제목을 저장했습니다.');
+  }
+  if (action === 'reset-title') {
+    resetCustomTitle();
+    closeModal();
+    render();
+    return toast('기본 제목으로 되돌렸습니다.');
+  }
   if (action === 'close-modal') {
     if (event.target.closest('[data-modal-panel]') && !target.classList.contains('modal-close') && !target.classList.contains('modal-primary')) return;
     return closeModal();
@@ -163,14 +212,67 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && state?.phase === 'action') closeModal();
+  if ((event.key === 'Enter' || event.key === ' ') && event.target.closest?.('[data-title-editor]')) {
+    event.preventDefault();
+    showTitleEditor(gameTitle, MAX_TITLE_LENGTH);
+    return;
+  }
+  if (event.key === 'Enter' && event.target.matches?.('[data-title-input]')) {
+    event.preventDefault();
+    saveCustomTitle(event.target.value);
+    closeModal();
+    render();
+    toast('게임 제목을 저장했습니다.');
+    return;
+  }
+  if (event.key === 'Escape' && document.querySelector('.modal-backdrop:not(.locked)')) closeModal();
+});
+
+function cancelTitleHold() {
+  if (!titleHold) return;
+  window.clearTimeout(titleHold.timer);
+  titleHold.element.classList.remove('holding');
+  titleHold = null;
+}
+
+document.addEventListener('pointerdown', (event) => {
+  const title = event.target.closest?.('[data-title-editor]');
+  if (!title || event.button > 0) return;
+  cancelTitleHold();
+  title.classList.add('holding');
+  titleHold = {
+    element: title,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    timer: window.setTimeout(() => {
+      title.classList.remove('holding');
+      titleHold = null;
+      navigator.vibrate?.(25);
+      showTitleEditor(gameTitle, MAX_TITLE_LENGTH);
+    }, TITLE_HOLD_MS),
+  };
+});
+
+document.addEventListener('pointermove', (event) => {
+  if (!titleHold || event.pointerId !== titleHold.pointerId) return;
+  if (Math.hypot(event.clientX - titleHold.startX, event.clientY - titleHold.startY) > TITLE_MOVE_TOLERANCE) cancelTitleHold();
+});
+
+document.addEventListener('pointerup', cancelTitleHold);
+document.addEventListener('pointercancel', cancelTitleHold);
+document.addEventListener('contextmenu', (event) => {
+  if (event.target.closest?.('[data-title-editor]')) event.preventDefault();
 });
 
 window.addEventListener('storage', () => {
+  gameTitle = loadGameTitle();
+  syncDocumentTitle();
   if (!state) {
     savedGame = loadSavedGame();
     render();
   }
 });
 
+syncDocumentTitle();
 render();

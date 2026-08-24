@@ -9,11 +9,19 @@ import {
 import { clearGame, exportGame, importGame, loadGame, saveGame } from '../../lib/game/storage';
 import {
   bagTotal, COSTS, DEV_LABELS, emptyBag, RESOURCES, RESOURCE_ICONS, RESOURCE_LABELS,
-  TERRAIN_LABELS, type DevCard, type GameState, type Resource, type ResourceBag,
+  TERRAIN_LABELS, type DevCard, type GameState, type Resource, type ResourceBag, type Terrain,
 } from '../../lib/game/types';
+import desertArt from '../../assets/terrain/desert.webp';
+import fieldArt from '../../assets/terrain/field.webp';
+import forestArt from '../../assets/terrain/forest.webp';
+import hillArt from '../../assets/terrain/hill.webp';
+import mountainArt from '../../assets/terrain/mountain.webp';
+import pastureArt from '../../assets/terrain/pasture.webp';
 
 const COLORS = ['#c65343', '#287a72', '#d49a32', '#6552a0'];
-const TERRAIN_MARKS = { forest: '♠', hill: '▰', pasture: '⌁', field: '≋', mountain: '◆', desert: '◌' } as const;
+const TERRAIN_IMAGES: Record<Terrain,string> = {
+  forest: forestArt, hill: hillArt, pasture: pastureArt, field: fieldArt, mountain: mountainArt, desert: desertArt,
+};
 
 function tone(enabled: boolean, kind: 'tap' | 'dice' | 'build' = 'tap') {
   if (!enabled || typeof window === 'undefined') return;
@@ -115,7 +123,9 @@ function SetupScreen({ onStart }: { onStart: (game: GameState) => void }) {
 function PreviewBoard() {
   const terrains = ['forest','hill','field','pasture','mountain','forest','field','field','pasture','desert','hill','forest','mountain','forest','pasture','field','hill','mountain','pasture'] as const;
   const coords = Array.from({ length: 5 }, (_, row) => row - 2).flatMap((r) => Array.from({ length: 5 }, (_, col) => col - 2).filter((q) => Math.abs(q + r) <= 2).map((q) => [q, r]));
-  return <svg className="mini-board" viewBox="-140 -115 280 230" role="img" aria-label="육각 타일 19개로 이루어진 섬 미리보기">{coords.map(([q, r], index) => { const size=31,x=size*Math.sqrt(3)*(q+r/2),y=size*1.5*r; const points=Array.from({length:6},(_,corner)=>{const angle=Math.PI/180*(60*corner-30);return `${x+size*Math.cos(angle)},${y+size*Math.sin(angle)}`}).join(' '); return <polygon key={index} points={points} className={`tile ${terrains[index]}`} />; })}</svg>;
+  const size=31;
+  const tiles=coords.map(([q,r],index)=>{const x=size*Math.sqrt(3)*(q+r/2),y=size*1.5*r;const points=Array.from({length:6},(_,corner)=>{const angle=Math.PI/180*(60*corner-30);return `${x+size*Math.cos(angle)},${y+size*Math.sin(angle)}`}).join(' ');return {index,x,y,points,terrain:terrains[index]}});
+  return <svg className="mini-board" viewBox="-140 -115 280 230" role="img" aria-label="손그림 지형의 육각 타일 19개로 이루어진 섬 미리보기"><defs>{tiles.map((tile)=><clipPath key={tile.index} id={`preview-tile-${tile.index}`}><polygon points={tile.points}/></clipPath>)}</defs>{tiles.map((tile)=><g key={tile.index}><image className="mini-tile-art" href={TERRAIN_IMAGES[tile.terrain]} x={tile.x-size} y={tile.y-size} width={size*2} height={size*2} preserveAspectRatio="xMidYMid slice" clipPath={`url(#preview-tile-${tile.index})`}/><polygon points={tile.points} className="mini-tile-frame"/></g>)}</svg>;
 }
 
 type BuildMode = 'road' | 'settlement' | 'city' | null;
@@ -138,13 +148,13 @@ function GameBoard({ game, buildMode, act }: { game: GameState; buildMode: Build
   return (
     <div className="board-wrap">
       <svg className="game-board" viewBox="-410 -335 820 670" role="group" aria-label="카탄 게임판">
-        <defs><filter id="boardShadow"><feDropShadow dx="0" dy="8" stdDeviation="8" floodOpacity=".25" /></filter></defs>
+        <defs><filter id="boardShadow"><feDropShadow dx="0" dy="8" stdDeviation="8" floodOpacity=".25" /></filter>{game.board.tiles.map((tile,index)=><clipPath key={tile.id} id={`board-tile-${index}`}><polygon points={tilePoints(tile)}/></clipPath>)}</defs>
         <ellipse className="sea" cx="0" cy="0" rx="390" ry="305" />
         <g filter="url(#boardShadow)">
-          {game.board.tiles.map((tile) => (
+          {game.board.tiles.map((tile,index) => (
             <g key={tile.id} className={`board-tile-group${canTile && tile.id !== game.board.robberTileId ? ' selectable' : ''}`} onClick={() => canTile && act({ type: 'MOVE_ROBBER', tileId: tile.id })} onKeyDown={(event) => { if (canTile && (event.key === 'Enter' || event.key === ' ')) act({ type: 'MOVE_ROBBER', tileId: tile.id }); }} role={canTile ? 'button' : undefined} aria-label={canTile ? `${TERRAIN_LABELS[tile.terrain]} 타일로 도둑 이동` : undefined} tabIndex={canTile && tile.id !== game.board.robberTileId ? 0 : undefined}>
-              <polygon points={tilePoints(tile)} className={`board-tile ${tile.terrain}`} />
-              <text x={tile.x} y={tile.y - 20} className="terrain-mark" textAnchor="middle" aria-hidden="true">{TERRAIN_MARKS[tile.terrain]}</text>
+              <image className="tile-art-image" href={TERRAIN_IMAGES[tile.terrain]} x={tile.x-74} y={tile.y-74} width="148" height="148" preserveAspectRatio="xMidYMid slice" clipPath={`url(#board-tile-${index})`}/>
+              <polygon points={tilePoints(tile)} className={`board-tile ${tile.terrain}`} style={{fill:'transparent'}} />
               <text x={tile.x} y={tile.y + 38} className="terrain-name" textAnchor="middle">{TERRAIN_LABELS[tile.terrain]}</text>
               {tile.number && <g className={tile.number === 6 || tile.number === 8 ? 'hot-number' : ''}><circle cx={tile.x} cy={tile.y + 5} r="20" className="number-disc" /><text x={tile.x} y={tile.y + 12} className="number-text" textAnchor="middle">{tile.number}</text></g>}
               {game.board.robberTileId === tile.id && <g className="robber" transform={`translate(${tile.x + 29} ${tile.y - 25})`}><circle cy="-9" r="8"/><path d="M-10 18 Q0-3 10 18Z"/></g>}

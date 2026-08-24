@@ -13,24 +13,65 @@ import {
 import {
   COLORS,
   CONFIG,
+  RESOURCE_META,
   calculatePayment,
   canTakeDouble,
   emptyBonuses,
   emptyResources,
   rankPlayers,
 } from '../js/rules.js';
+import { CARDS } from '../js/data/cards.js';
+import { PATRONS } from '../js/data/patrons.js';
+import { DEFAULT_GAME_TITLE, MAX_TITLE_LENGTH, normalizeGameTitle } from '../js/config.js';
 
 const fixedRandom = () => 0.42;
 const zeroCost = () => Object.fromEntries(COLORS.map((color) => [color, 0]));
 
-test('2–4인 게임은 인원별 공급량, Patron, Tier별 공개 카드 4장을 만든다', () => {
-  for (const [playerCount, supplyCount] of [[2, 4], [3, 5], [4, 7]]) {
+test('사용자 제목은 공백과 길이를 정리하고 빈 제목은 기본값으로 되돌린다', () => {
+  assert.equal(normalizeGameTitle('  나만의   보석 게임  '), '나만의 보석 게임');
+  assert.equal(normalizeGameTitle(''), DEFAULT_GAME_TITLE);
+  assert.equal(normalizeGameTitle('가'.repeat(MAX_TITLE_LENGTH + 5)).length, MAX_TITLE_LENGTH);
+});
+
+test('2–4인 게임은 색상별 7개와 황금 5개, 인원수+1개의 귀족, 단계별 공개 카드 4장을 만든다', () => {
+  for (const playerCount of [2, 3, 4]) {
     const state = createGame(playerCount, fixedRandom);
     assert.equal(state.players.length, playerCount);
     assert.equal(state.patrons.length, playerCount + 1);
-    assert.equal(state.supply.Ruby, supplyCount);
-    assert.equal(state.supply.Gold, 5);
+    assert.deepEqual(COLORS.map((color) => state.supply[color]), [7, 7, 7, 7, 7]);
+    assert.equal(state.supply.Gold, CONFIG.GOLD_TOKEN_COUNT);
     assert.deepEqual([1, 2, 3].map((tier) => state.market[tier].length), [4, 4, 4]);
+  }
+});
+
+test('개발 카드 90장과 귀족 타일 10장이 지정된 단계·점수 분포를 정확히 따른다', () => {
+  const expected = {
+    1: { total: 40, points: { 0: 35, 1: 5 } },
+    2: { total: 30, points: { 0: 10, 1: 5, 2: 10, 3: 5 } },
+    3: { total: 20, points: { 3: 10, 4: 6, 5: 4 } },
+  };
+
+  assert.equal(CARDS.length, 90);
+  assert.equal(new Set(CARDS.map((card) => card.id)).size, 90);
+  assert.equal(PATRONS.length, 10);
+  assert.deepEqual(
+    [...COLORS, 'Gold'].map((color) => [RESOURCE_META[color].label, RESOURCE_META[color].tone]),
+    [
+      ['루비', '적색'],
+      ['사파이어', '청색'],
+      ['에메랄드', '녹색'],
+      ['다이아몬드', '백색'],
+      ['줄마노', '흑색'],
+      ['황금', '조커'],
+    ],
+  );
+
+  for (const [tier, distribution] of Object.entries(expected)) {
+    const cards = CARDS.filter((card) => card.tier === Number(tier));
+    assert.equal(cards.length, distribution.total);
+    for (const [points, count] of Object.entries(distribution.points)) {
+      assert.equal(cards.filter((card) => card.victoryPoints === Number(points)).length, count);
+    }
   }
 });
 
@@ -41,7 +82,7 @@ test('서로 다른 보석 3개를 가져오면 공급과 플레이어 보유량
     [state.players[0].tokens.Ruby, state.players[0].tokens.Sapphire, state.players[0].tokens.Emerald],
     [1, 1, 1],
   );
-  assert.equal(state.supply.Ruby, 3);
+  assert.equal(state.supply.Ruby, 6);
   assert.equal(state.currentPlayerIndex, 1);
 });
 
@@ -52,7 +93,7 @@ test('같은 보석 2개는 최소 잔여량 상수 경계에서만 허용된다
   const state = createGame(2, fixedRandom);
   takeDouble(state, 'Diamond');
   assert.equal(state.players[0].tokens.Diamond, 2);
-  assert.equal(state.supply.Diamond, 2);
+  assert.equal(state.supply.Diamond, 5);
 });
 
 test('영구 할인 후 부족분은 Gold로 대체 지불하고 시장 카드를 보충한다', () => {

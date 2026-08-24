@@ -38,9 +38,11 @@ function createPlayer(index) {
   };
 }
 
-function supplyFor(playerCount) {
-  const colorCount = ({ 2: 4, 3: 5, 4: 7 })[playerCount];
-  return { ...Object.fromEntries(COLORS.map((color) => [color, colorCount])), Gold: 5 };
+function supplyFor() {
+  return {
+    ...Object.fromEntries(COLORS.map((color) => [color, CONFIG.COLORED_TOKEN_COUNT])),
+    Gold: CONFIG.GOLD_TOKEN_COUNT,
+  };
 }
 
 export function createGame(playerCount, random = Math.random) {
@@ -62,7 +64,7 @@ export function createGame(playerCount, random = Math.random) {
     round: 1,
     turnNumber: 1,
     players: Array.from({ length: playerCount }, (_, index) => createPlayer(index)),
-    supply: supplyFor(playerCount),
+    supply: supplyFor(),
     decks,
     market,
     patrons: shuffle(PATRONS.map(clone), random).slice(0, playerCount + 1),

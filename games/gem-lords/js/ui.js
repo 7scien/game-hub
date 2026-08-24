@@ -12,6 +12,21 @@ import {
 const app = document.querySelector('#app');
 const modalRoot = () => document.querySelector('#modal-root');
 
+const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#39;',
+  '"': '&quot;',
+})[character]);
+
+const titleMarkup = (title) => {
+  const words = String(title).trim().split(/\s+/);
+  const lastWord = words.pop() || '';
+  const leadingWords = words.join(' ');
+  return `${leadingWords ? `<span>${escapeHtml(leadingWords)}</span> ` : ''}<em>${escapeHtml(lastWord)}</em>`;
+};
+
 const WORKSHOP_NAMES = {
   Ruby: '홍염 대장간',
   Sapphire: '청람 세공소',
@@ -22,7 +37,7 @@ const WORKSHOP_NAMES = {
 
 const gem = (color, count, extra = '') => {
   const meta = RESOURCE_META[color];
-  return `<span class="gem-chip ${meta.className} ${extra}" title="${meta.label}"><i aria-hidden="true">${meta.symbol}</i><b>${count}</b></span>`;
+  return `<span class="gem-chip ${meta.className} ${extra}" title="${meta.label} (${meta.tone})"><i aria-hidden="true">${meta.symbol}</i><b>${count}</b></span>`;
 };
 
 const requirementChips = (requirements) => Object.entries(requirements)
@@ -30,7 +45,8 @@ const requirementChips = (requirements) => Object.entries(requirements)
   .map(([color, amount]) => gem(color, amount, 'tiny'))
   .join('');
 
-export function renderStart(hasSave, choosingPlayers = !hasSave) {
+export function renderStart(hasSave, choosingPlayers = !hasSave, gameTitle = '보석의 군주') {
+  const safeTitle = escapeHtml(gameTitle);
   app.innerHTML = `
     <main class="start-screen" aria-labelledby="game-title">
       <div class="start-glow start-glow-one" aria-hidden="true"></div>
@@ -38,12 +54,13 @@ export function renderStart(hasSave, choosingPlayers = !hasSave) {
       <section class="start-table">
         <div class="box-cover" aria-hidden="true">
           <div class="box-shine"></div>
-          <div class="box-title"><span>찬란한 보석으로 왕국을 세워라</span><strong>보석의 군주</strong><em>2–4인 전략 보드게임</em></div>
+          <div class="box-title"><span>찬란한 보석으로 왕국을 세워라</span><strong>${safeTitle}</strong><em>2–4인 전략 보드게임</em></div>
         </div>
         <div class="start-card">
           <p class="eyebrow">한 기기에서 즐기는 2–4인 보드게임</p>
           <div class="brand-mark" aria-hidden="true"><span>✦</span></div>
-          <h1 id="game-title"><span>보석의</span> <em>군주</em></h1>
+          <h1 id="game-title" class="editable-title" data-title-editor tabindex="0" role="button" aria-label="현재 제목 ${safeTitle}. 길게 눌러 제목 수정">${titleMarkup(gameTitle)}</h1>
+          <p class="title-edit-hint">제목을 길게 눌러 이름 바꾸기</p>
           <p class="start-copy">묵직한 보석을 모으고 상단을 키워<br />왕국에서 가장 높은 명성을 차지하세요.</p>
           ${hasSave && !choosingPlayers ? `
             <div class="continue-actions">
@@ -77,7 +94,7 @@ function scoreboard(state) {
 function patronCard(patron, eligible = false) {
   return `
     <article class="patron-card ${eligible ? 'eligible' : ''}" data-patron-id="${patron.id}">
-      <div class="patron-seal" aria-hidden="true">✧</div>
+      <div class="patron-seal portrait-${patron.id}" aria-hidden="true"></div>
       <div><strong>${patron.name}</strong><div class="patron-cost">${requirementChips(patron.requirements)}</div></div>
       <span class="patron-points">+${patron.victoryPoints}<small>VP</small></span>
     </article>`;
@@ -131,17 +148,18 @@ function selectedActionPanel(state, selection) {
   if (selection.kind === 'market') card = state.market[selection.tier]?.[selection.index];
   if (selection.kind === 'reserved') card = player.reserved[selection.index];
   if (selection.kind === 'deck') {
-    return `<div class="action-panel"><div><span class="action-kicker">TIER ${selection.tier} DECK</span><strong>맨 위 카드를 비공개로 예약</strong></div><button type="button" class="action-button gold-action" data-action="reserve-selected" ${player.reserved.length >= CONFIG.MAX_RESERVED || state.decks[selection.tier].length === 0 ? 'disabled' : ''}>예약하기${state.supply.Gold ? ' · Gold +1' : ''}</button></div>`;
+    return `<div class="action-panel"><div><span class="action-kicker">${selection.tier}단계 카드 더미</span><strong>맨 위 카드를 비공개로 예약</strong></div><button type="button" class="action-button gold-action" data-action="reserve-selected" ${player.reserved.length >= CONFIG.MAX_RESERVED || state.decks[selection.tier].length === 0 ? 'disabled' : ''}>예약하기${state.supply.Gold ? ' · 황금 +1' : ''}</button></div>`;
   }
   if (!card) return '';
   const payment = calculatePayment(player, card);
-  const paySummary = payment.goldNeeded ? `Gold ${payment.goldNeeded}개 대체` : 'Gold 없이 구매 가능';
+  const paySummary = payment.goldNeeded ? `황금 ${payment.goldNeeded}개 대체` : '황금 없이 구매 가능';
+  const bonusName = RESOURCE_META[card.permanentBonusColor].label;
   return `
     <div class="action-panel">
-      <div><span class="action-kicker">${selection.kind === 'reserved' ? 'RESERVED CARD' : `TIER ${card.tier} CARD`}</span><strong>${card.permanentBonusColor} 보너스 · ${card.victoryPoints} VP</strong><small>${payment.canAfford ? paySummary : '보석이 부족합니다'}</small></div>
+      <div><span class="action-kicker">${selection.kind === 'reserved' ? '예약 카드' : `${card.tier}단계 카드`}</span><strong>${bonusName} 보너스 · 명성 ${card.victoryPoints}점</strong><small>${payment.canAfford ? paySummary : '보석이 부족합니다'}</small></div>
       <div class="action-buttons">
         <button type="button" class="action-button" data-action="buy-selected" ${payment.canAfford ? '' : 'disabled'}>구매하기</button>
-        ${selection.kind === 'market' ? `<button type="button" class="action-button gold-action" data-action="reserve-selected" ${player.reserved.length >= CONFIG.MAX_RESERVED ? 'disabled' : ''}>예약${state.supply.Gold ? ' · Gold +1' : ''}</button>` : ''}
+        ${selection.kind === 'market' ? `<button type="button" class="action-button gold-action" data-action="reserve-selected" ${player.reserved.length >= CONFIG.MAX_RESERVED ? 'disabled' : ''}>예약${state.supply.Gold ? ' · 황금 +1' : ''}</button>` : ''}
       </div>
     </div>`;
 }
@@ -151,7 +169,7 @@ function tokenButton(color, count, selected, disabled) {
   return `
     <button type="button" class="token-stack ${meta.className} ${selected ? 'selected' : ''}" data-action="select-token" data-color="${color}" ${disabled ? 'disabled' : ''} aria-pressed="${selected}">
       <span class="token-face"><i aria-hidden="true">${meta.symbol}</i></span>
-      <strong>${count}</strong><small>${meta.label}</small>
+      <strong>${count}</strong><span class="resource-name"><b>${meta.label}</b><em>${meta.tone}</em></span>
     </button>`;
 }
 
@@ -175,7 +193,7 @@ export function renderGame(state, selection) {
 
       <main class="board">
         <section class="patron-zone" aria-labelledby="patron-title">
-          <div class="section-label"><span>왕실의 초대</span><h2 id="patron-title">후원자</h2></div>
+          <div class="section-label"><span>왕실의 초대</span><h2 id="patron-title">귀족</h2></div>
           <div class="patron-list">${state.patrons.map((patron) => patronCard(patron, eligibleIds.has(patron.id))).join('') || '<p class="empty-message">모든 후원자가 주인을 찾았습니다.</p>'}</div>
         </section>
 
@@ -230,13 +248,37 @@ export function showHelp() {
           <article><b>01</b><div><h3>보석 가져오기</h3><p>서로 다른 색 1–3개 또는 공급처에 4개 이상 남은 한 색 2개를 받습니다.</p></div></article>
           <article><b>02</b><div><h3>카드 구매</h3><p>표시된 비용을 지불하면 카드의 점수와 영구 보너스를 얻습니다.</p></div></article>
           <article><b>03</b><div><h3>영구 할인</h3><p>보너스 1개마다 같은 색 카드 비용이 매번 1씩 줄어듭니다.</p></div></article>
-          <article><b>04</b><div><h3>예약 &amp; Gold</h3><p>공개 카드나 덱 맨 위를 최대 3장 예약합니다. 남아 있다면 Gold 1개도 받습니다.</p></div></article>
-          <article><b>05</b><div><h3>Patron</h3><p>개발 카드 보너스 조건을 충족하면 후원자를 얻습니다. 토큰은 계산하지 않습니다.</p></div></article>
+          <article><b>04</b><div><h3>예약과 황금</h3><p>공개 카드나 덱 맨 위를 최대 3장 예약합니다. 남아 있다면 황금 1개도 받습니다.</p></div></article>
+          <article><b>05</b><div><h3>귀족 타일</h3><p>개발 카드 보너스 조건을 충족하면 귀족을 얻습니다. 토큰은 계산하지 않습니다.</p></div></article>
           <article><b>06</b><div><h3>승리</h3><p>${CONFIG.TARGET_SCORE}점 도달 후 라운드를 마칩니다. 동점이면 구매 카드가 적은 플레이어가 앞섭니다.</p></div></article>
         </div>
         <button class="modal-primary" type="button" data-action="close-modal">시장으로 돌아가기</button>
       </section>
     </div>`;
+}
+
+export function showTitleEditor(currentTitle, maxLength) {
+  modalRoot().innerHTML = `
+    <div class="modal-backdrop" data-action="close-modal">
+      <section class="modal title-editor-modal" role="dialog" aria-modal="true" aria-labelledby="title-editor-heading" data-modal-panel>
+        <button class="modal-close" type="button" data-action="close-modal" aria-label="닫기">×</button>
+        <p class="modal-kicker">나만의 게임 이름</p>
+        <h2 id="title-editor-heading">제목 수정</h2>
+        <p class="modal-copy">이 기기에서 표시할 제목을 입력하세요. 언제든 기본 제목으로 되돌릴 수 있습니다.</p>
+        <label class="title-input-label" for="custom-game-title">게임 제목</label>
+        <input id="custom-game-title" class="title-input" data-title-input type="text" value="${escapeHtml(currentTitle)}" maxlength="${maxLength}" autocomplete="off" spellcheck="false" />
+        <small class="title-limit">최대 ${maxLength}자</small>
+        <div class="title-editor-actions">
+          <button class="secondary-start" type="button" data-action="reset-title">기본 제목</button>
+          <button class="modal-primary" type="button" data-action="save-title">저장</button>
+        </div>
+      </section>
+    </div>`;
+  window.requestAnimationFrame(() => {
+    const input = document.querySelector('[data-title-input]');
+    input?.focus();
+    input?.select();
+  });
 }
 
 export function closeModal() {
@@ -269,7 +311,7 @@ export function showPatronChoice(state) {
   modalRoot().innerHTML = `
     <div class="modal-backdrop locked">
       <section class="modal patron-modal" role="dialog" aria-modal="true" aria-labelledby="patron-choice-title" data-modal-panel>
-        <p class="modal-kicker">ROYAL FAVOR</p><h2 id="patron-choice-title">후원자 한 명을 선택하세요</h2>
+        <p class="modal-kicker">왕실의 총애</p><h2 id="patron-choice-title">귀족 한 명을 선택하세요</h2>
         <p class="modal-copy">여러 조건을 동시에 달성했습니다. 이번 턴에는 한 명만 합류합니다.</p>
         <div class="patron-choice-list">${choices.map((patron) => `<button type="button" data-action="choose-patron" data-patron-id="${patron.id}">${patronCard(patron, true)}</button>`).join('')}</div>
       </section>

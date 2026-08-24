@@ -2,22 +2,24 @@ export const COLORS = ['Ruby', 'Sapphire', 'Emerald', 'Diamond', 'Onyx'];
 export const ALL_RESOURCES = [...COLORS, 'Gold'];
 
 export const RESOURCE_META = {
-  Ruby: { label: '루비', symbol: '◆', className: 'ruby' },
-  Sapphire: { label: '사파이어', symbol: '●', className: 'sapphire' },
-  Emerald: { label: '에메랄드', symbol: '⬟', className: 'emerald' },
-  Diamond: { label: '다이아몬드', symbol: '✦', className: 'diamond' },
-  Onyx: { label: '오닉스', symbol: '■', className: 'onyx' },
-  Gold: { label: '황금', symbol: '★', className: 'gold' },
+  Ruby: { label: '루비', tone: '적색', symbol: '◆', className: 'ruby' },
+  Sapphire: { label: '사파이어', tone: '청색', symbol: '●', className: 'sapphire' },
+  Emerald: { label: '에메랄드', tone: '녹색', symbol: '⬟', className: 'emerald' },
+  Diamond: { label: '다이아몬드', tone: '백색', symbol: '✦', className: 'diamond' },
+  Onyx: { label: '줄마노', tone: '흑색', symbol: '■', className: 'onyx' },
+  Gold: { label: '황금', tone: '조커', symbol: '★', className: 'gold' },
 };
 
 export const CONFIG = Object.freeze({
   TOKEN_LIMIT: 10,
+  COLORED_TOKEN_COUNT: 7,
+  GOLD_TOKEN_COUNT: 5,
   TARGET_SCORE: 15,
   MIN_SUPPLY_FOR_DOUBLE: 4,
   MAX_RESERVED: 3,
   MARKET_SIZE: 4,
   TURN_TRANSITION_MS: 950,
-  SAVE_VERSION: 1,
+  SAVE_VERSION: 2,
 });
 
 export const emptyResources = () => Object.fromEntries(ALL_RESOURCES.map((color) => [color, 0]));
