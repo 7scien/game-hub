@@ -236,7 +236,7 @@ function physicalTokenStack(color, count, extraClass = '') {
   const meta = RESOURCE_META[color];
   const amount = Math.max(0, Number(count) || 0);
   const compact = extraClass.includes('compact');
-  const rise = compact ? 2 : 3;
+  const rise = compact ? 2 : 4;
   const discs = Array.from({ length: amount }, (_, index) => `
     <span class="token-disc ${index === amount - 1 ? 'top-disc' : ''}" style="--stack-offset: ${index * rise}px">
       ${index === amount - 1 ? `<i>${meta.symbol}</i>` : ''}
@@ -274,7 +274,7 @@ function bonusCardPile(color, count) {
     return `<span class="bonus-card-layer" style="--card-y: ${offset}px; --card-x: ${(index * offsetStep * 0.18).toFixed(2)}px"><i>${meta.symbol}</i></span>`;
   }).join('');
   return `
-    <div class="bonus-card-pile ${meta.className}" title="${meta.label} 영구 보너스 카드 ${amount}장">
+    <div class="bonus-card-pile ${meta.className}" data-color="${color}" title="${meta.label} 영구 보너스 카드 ${amount}장">
       <span class="bonus-card-stack" aria-hidden="true">${cards || '<span class="empty-card-marker"></span>'}</span>
       <span class="bonus-card-caption"><b>${amount}</b><small>${meta.label}</small></span>
     </div>`;
@@ -458,6 +458,59 @@ export function showPatronChoice(state) {
         <div class="patron-choice-list">${choices.map((patron) => `<button type="button" data-action="choose-patron" data-patron-id="${patron.id}">${patronCard(patron, true)}</button>`).join('')}</div>
       </section>
     </div>`;
+}
+
+export function animatePurchasedCard(bonusColor) {
+  const source = document.querySelector('.dev-card.selected');
+  const target = document.querySelector(`.bonus-card-pile[data-color="${bonusColor}"] .bonus-card-stack`);
+  if (!source || !target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
+
+  const start = source.getBoundingClientRect();
+  const destination = target.getBoundingClientRect();
+  if (!start.width || !start.height || !destination.width || !destination.height) return Promise.resolve();
+
+  const layer = document.createElement('div');
+  layer.className = 'purchase-flight-layer';
+  layer.setAttribute('aria-hidden', 'true');
+
+  const flyingCard = source.cloneNode(true);
+  flyingCard.classList.add('purchase-flight-card');
+  flyingCard.removeAttribute('data-action');
+  flyingCard.removeAttribute('aria-label');
+  flyingCard.style.left = `${start.left}px`;
+  flyingCard.style.top = `${start.top}px`;
+  flyingCard.style.width = `${start.width}px`;
+  flyingCard.style.height = `${start.height}px`;
+  flyingCard.style.setProperty('--flight-x', `${destination.left + destination.width / 2 - (start.left + start.width / 2)}px`);
+  flyingCard.style.setProperty('--flight-y', `${destination.top + destination.height / 2 - (start.top + start.height / 2)}px`);
+  const finalScale = Math.min(destination.width / start.width, destination.height / start.height) * 0.9;
+  flyingCard.style.setProperty('--flight-scale', finalScale);
+  flyingCard.style.setProperty('--flight-scale-overshoot', finalScale * 1.08);
+
+  const caption = document.createElement('span');
+  caption.className = 'purchase-flight-caption';
+  caption.textContent = `${RESOURCE_META[bonusColor].label} 영구 보너스 +1`;
+  caption.style.left = `${destination.left + destination.width / 2}px`;
+  caption.style.top = `${destination.top - 8}px`;
+
+  layer.append(flyingCard, caption);
+  document.body.append(layer);
+  source.classList.add('sending-card');
+  target.classList.add('receiving-card');
+
+  return new Promise((resolve) => {
+    let completed = false;
+    const finish = () => {
+      if (completed) return;
+      completed = true;
+      source.classList.remove('sending-card');
+      target.classList.remove('receiving-card');
+      layer.remove();
+      resolve();
+    };
+    flyingCard.addEventListener('animationend', finish, { once: true });
+    window.setTimeout(finish, 1250);
+  });
 }
 
 export function showTurnOverlay(playerName) {

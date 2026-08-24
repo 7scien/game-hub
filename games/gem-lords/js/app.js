@@ -17,6 +17,7 @@ import {
 import { CONFIG, emptyResources } from './rules.js';
 import { loadSaveSlots, writeSaveSlot } from './storage.js';
 import {
+  animatePurchasedCard,
   closeModal,
   renderGame,
   renderStart,
@@ -40,6 +41,7 @@ let startView = saveSlots.some(Boolean) ? 'saves' : 'players';
 let pendingPlayerCount = null;
 let gameTitle = loadGameTitle();
 let titleHold = null;
+let actionInProgress = false;
 
 const TITLE_HOLD_MS = 680;
 const TITLE_MOVE_TOLERANCE = 12;
@@ -90,10 +92,20 @@ function beginNewGame(playerCount, playerNames) {
   window.setTimeout(() => overlay.remove(), CONFIG.TURN_TRANSITION_MS);
 }
 
-function executeAction(action) {
+function selectedBonusColor() {
+  if (selection?.kind === 'market') return state.market[selection.tier]?.[selection.index]?.permanentBonusColor;
+  if (selection?.kind === 'reserved') return state.players[state.currentPlayerIndex].reserved[selection.index]?.permanentBonusColor;
+  return null;
+}
+
+async function executeAction(action, { animatePurchase = false } = {}) {
+  if (actionInProgress) return;
   const previousPlayer = state.currentPlayerIndex;
+  const bonusColor = animatePurchase ? selectedBonusColor() : null;
+  actionInProgress = true;
   try {
     action();
+    if (bonusColor) await animatePurchasedCard(bonusColor);
     selection = null;
     returns = emptyResources();
     render();
@@ -103,6 +115,8 @@ function executeAction(action) {
     }
   } catch (error) {
     toast(error.message || '행동을 완료하지 못했습니다.');
+  } finally {
+    actionInProgress = false;
   }
 }
 
@@ -125,6 +139,7 @@ document.addEventListener('click', (event) => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
+  if (actionInProgress) return;
 
   if (action === 'choose-player-count') {
     pendingPlayerCount = Number(target.dataset.players);
@@ -231,7 +246,10 @@ document.addEventListener('click', (event) => {
 
   if (action === 'take-different') return executeAction(() => takeDifferent(state, selection?.colors || []));
   if (action === 'take-double') return executeAction(() => takeDouble(state, selection?.colors?.[0]));
-  if (action === 'buy-selected') return executeAction(() => purchaseCard(state, sourceFromSelection()));
+  if (action === 'buy-selected') return executeAction(
+    () => purchaseCard(state, sourceFromSelection()),
+    { animatePurchase: true },
+  );
   if (action === 'reserve-selected') return executeAction(() => reserveCard(state, sourceFromSelection()));
 
   if (action === 'return-add' || action === 'return-remove') {
