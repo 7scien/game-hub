@@ -1141,3 +1141,187 @@ h1 em { color: #e1ba68; font-style: normal; font-weight: 700; }
   .start-footnote { position: static; margin-top: 24px; }
   .patron-card { min-width: 220px; }
 }
+
+/* Physical token piles and permanent-card tableau */
+.player-dock {
+  grid-template-columns: minmax(315px, .78fr) minmax(430px, 1.2fr) minmax(235px, .68fr);
+}
+
+.physical-token-stack {
+  --token-color: #aaa;
+  --token-size: clamp(40px, 3.6vw, 52px);
+  --token-depth: 13px;
+  --token-cap: 10px;
+  position: relative;
+  width: var(--token-size);
+  height: 51px;
+  display: block;
+  margin-inline: auto;
+  filter: drop-shadow(0 5px 4px rgba(0,0,0,.34));
+}
+.physical-token-stack.ruby { --token-color: var(--ruby); }
+.physical-token-stack.sapphire { --token-color: var(--sapphire); }
+.physical-token-stack.emerald { --token-color: var(--emerald); }
+.physical-token-stack.diamond { --token-color: #e9ece8; }
+.physical-token-stack.onyx { --token-color: #3b3542; }
+.physical-token-stack.gold { --token-color: #d8aa35; }
+
+.token-disc {
+  position: absolute;
+  left: 50%;
+  bottom: calc(3px + var(--stack-offset));
+  width: var(--token-size);
+  height: var(--token-depth);
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--token-color) 62%, #21170f);
+  border-radius: 50%;
+  background:
+    linear-gradient(to bottom, color-mix(in srgb, var(--token-color) 58%, white) 0 18%, var(--token-color) 19% 67%, color-mix(in srgb, var(--token-color) 58%, #100d0b) 68% 100%);
+  box-shadow: 0 2px 2px rgba(0,0,0,.45), inset 0 -2px 2px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.45);
+}
+.token-disc::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: -5px;
+  height: var(--token-cap);
+  border: 1px solid color-mix(in srgb, var(--token-color) 72%, #2d2117);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 27%, rgba(255,255,255,.72), transparent 22%),
+    radial-gradient(circle at center, color-mix(in srgb, var(--token-color) 32%, #f1e6ca) 0 42%, var(--token-color) 44% 70%, color-mix(in srgb, var(--token-color) 60%, #21170f) 72%);
+  box-shadow: inset 0 0 0 2px rgba(55,37,25,.2);
+}
+.token-disc.top-disc { z-index: 2; }
+.token-disc i {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: -5px;
+  transform: translateX(-50%);
+  color: #fffaf0;
+  font-size: 10px;
+  font-style: normal;
+  line-height: var(--token-cap);
+  text-shadow: 0 1px 2px #21170f, 0 0 3px #21170f;
+}
+.physical-token-stack.diamond .token-disc i { color: #303035; text-shadow: 0 1px rgba(255,255,255,.7); }
+.empty-stack-marker {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: var(--token-size);
+  height: var(--token-depth);
+  transform: translateX(-50%);
+  border: 1px dashed rgba(231,211,169,.34);
+  border-radius: 50%;
+  background: rgba(0,0,0,.12);
+}
+
+.token-stack { min-height: 91px; align-content: end; }
+.token-stack .token-count { margin-top: -2px; color: #fff1cb; line-height: 1; text-shadow: 0 1px 2px #000; }
+.token-stack:disabled .physical-token-stack { opacity: .72; filter: grayscale(.12) drop-shadow(0 4px 3px rgba(0,0,0,.26)); }
+.token-stack:disabled > .token-count { opacity: .58; }
+
+.vault-grid { grid-template-columns: minmax(190px, .84fr) minmax(215px, 1.16fr); gap: 10px; }
+.vault-token-grid { display: grid; grid-template-columns: repeat(6, minmax(27px, 1fr)); gap: 2px; }
+.vault-token-item { min-width: 0; display: grid; align-content: end; justify-items: center; }
+.physical-token-stack.compact {
+  --token-size: clamp(28px, 2.65vw, 36px);
+  --token-depth: 9px;
+  --token-cap: 7px;
+  height: 40px;
+  filter: drop-shadow(0 3px 3px rgba(0,0,0,.3));
+}
+.physical-token-stack.compact .token-disc { bottom: calc(2px + var(--stack-offset)); }
+.physical-token-stack.compact .token-disc::before { top: -3px; }
+.physical-token-stack.compact .token-disc i { top: -3px; font-size: 7px; }
+.physical-token-stack.compact .empty-stack-marker { bottom: 2px; }
+.vault-token-caption, .bonus-card-caption {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 1px;
+  color: #ead8b8;
+}
+.vault-token-caption b, .bonus-card-caption b { color: #fff0c9; font-size: 10px; }
+.vault-token-caption small, .bonus-card-caption small { max-width: 100%; overflow: hidden; color: #b9a582; font-size: 6px; text-overflow: ellipsis; white-space: nowrap; }
+
+.bonus-card-grid { display: grid; grid-template-columns: repeat(5, minmax(36px, 1fr)); gap: 3px; }
+.bonus-card-pile {
+  --bonus-color: #aaa;
+  --bonus-art: none;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+}
+.bonus-card-pile.ruby { --bonus-color: var(--ruby); --bonus-art: url("../assets/cards/ruby-1.webp"); }
+.bonus-card-pile.sapphire { --bonus-color: var(--sapphire); --bonus-art: url("../assets/cards/sapphire-1.webp"); }
+.bonus-card-pile.emerald { --bonus-color: var(--emerald); --bonus-art: url("../assets/cards/emerald-1.webp"); }
+.bonus-card-pile.diamond { --bonus-color: #e8ecea; --bonus-art: url("../assets/cards/diamond-1.webp"); }
+.bonus-card-pile.onyx { --bonus-color: #4a4350; --bonus-art: url("../assets/cards/onyx-1.webp"); }
+.bonus-card-stack { position: relative; width: 43px; height: 64px; display: block; }
+.bonus-card-layer, .empty-card-marker {
+  position: absolute;
+  top: var(--card-y, 0);
+  left: calc(1px + var(--card-x, 0px));
+  width: 38px;
+  height: 50px;
+  border-radius: 3px;
+}
+.bonus-card-layer {
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--bonus-color) 70%, #f0dcae);
+  background-image: linear-gradient(to bottom, rgba(255,255,255,.08), rgba(22,13,10,.25)), var(--bonus-art);
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 2px 3px rgba(0,0,0,.42), inset 0 0 0 1px rgba(255,255,255,.28);
+}
+.bonus-card-layer::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 7px;
+  background: color-mix(in srgb, var(--bonus-color) 72%, #24170e);
+  box-shadow: inset 0 1px rgba(255,255,255,.3);
+}
+.bonus-card-layer i {
+  position: absolute;
+  z-index: 1;
+  top: 3px;
+  right: 3px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.66);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bonus-color) 72%, #1e1510);
+  font-size: 7px;
+  font-style: normal;
+  text-shadow: 0 1px 2px #000;
+}
+.bonus-card-pile.diamond .bonus-card-layer i { color: #26252a; }
+.empty-card-marker { border: 1px dashed rgba(231,211,169,.32); background: rgba(0,0,0,.12); }
+
+@media (max-width: 1050px) {
+  .player-dock { grid-template-columns: minmax(300px, .84fr) minmax(410px, 1.16fr); }
+  .turn-action-area { grid-column: 1 / -1; }
+}
+
+@media (max-width: 720px) {
+  .player-dock { grid-template-columns: 1fr; }
+  .vault-grid { grid-template-columns: 1fr; }
+  .vault-token-grid { grid-template-columns: repeat(6, 1fr); }
+  .bonus-card-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+@media (max-width: 390px) {
+  .physical-token-stack { --token-size: 36px; }
+  .physical-token-stack.compact { --token-size: 27px; }
+  .bonus-card-stack { transform: scale(.9); transform-origin: bottom center; }
+}

@@ -180,7 +180,7 @@ function developmentCard(card, source, selected, player) {
   return `
     <button type="button" class="dev-card bonus-${bonusMeta.className} tier-card-${card.tier} ${selected ? 'selected' : ''} ${affordable ? 'affordable' : ''}"
       data-action="select-card" ${sourceData} aria-label="${card.tier}단계, ${card.victoryPoints}점, ${bonusMeta.label} 보너스 카드">
-      <span class="card-top"><span class="card-vp">${card.victoryPoints || '·'}<small>명성</small></span>${gem(card.permanentBonusColor, '+1', 'bonus-gem')}</span>
+      <span class="card-top"><span class="card-vp">${card.victoryPoints}<small>명성</small></span>${gem(card.permanentBonusColor, '+1', 'bonus-gem')}</span>
       <span class="card-art" aria-hidden="true"><i></i><b>${WORKSHOP_NAMES[card.permanentBonusColor]}</b></span>
       <span class="card-meta"><em>${card.tier}단계</em><span class="card-costs">${costs}</span></span>
     </button>`;
@@ -232,17 +232,56 @@ function selectedActionPanel(state, selection) {
     </div>`;
 }
 
+function physicalTokenStack(color, count, extraClass = '') {
+  const meta = RESOURCE_META[color];
+  const amount = Math.max(0, Number(count) || 0);
+  const compact = extraClass.includes('compact');
+  const rise = compact ? 2 : 3;
+  const discs = Array.from({ length: amount }, (_, index) => `
+    <span class="token-disc ${index === amount - 1 ? 'top-disc' : ''}" style="--stack-offset: ${index * rise}px">
+      ${index === amount - 1 ? `<i>${meta.symbol}</i>` : ''}
+    </span>`).join('');
+  return `
+    <span class="physical-token-stack ${meta.className} ${extraClass}" aria-hidden="true">
+      ${discs || '<span class="empty-stack-marker"></span>'}
+    </span>`;
+}
+
 function tokenButton(color, count, selected, disabled) {
   const meta = RESOURCE_META[color];
   return `
     <button type="button" class="token-stack ${meta.className} ${selected ? 'selected' : ''}" data-action="select-token" data-color="${color}" ${disabled ? 'disabled' : ''} aria-pressed="${selected}">
-      <span class="token-face"><i aria-hidden="true">${meta.symbol}</i></span>
-      <strong>${count}</strong><span class="resource-name"><b>${meta.label}</b><em>${meta.tone}</em></span>
+      ${physicalTokenStack(color, count, 'supply-token-stack')}
+      <strong class="token-count">${count}</strong><span class="resource-name"><b>${meta.label}</b><em>${meta.tone}</em></span>
     </button>`;
 }
 
+function vaultToken(color, count) {
+  const meta = RESOURCE_META[color];
+  return `
+    <div class="vault-token-item" title="${meta.label} ${count}개">
+      ${physicalTokenStack(color, count, 'compact vault-token-stack')}
+      <span class="vault-token-caption"><b>${count}</b><small>${meta.label}</small></span>
+    </div>`;
+}
+
+function bonusCardPile(color, count) {
+  const meta = RESOURCE_META[color];
+  const amount = Math.max(0, Number(count) || 0);
+  const offsetStep = amount > 1 ? Math.min(3, 14 / (amount - 1)) : 0;
+  const cards = Array.from({ length: amount }, (_, index) => {
+    const offset = (index * offsetStep).toFixed(2);
+    return `<span class="bonus-card-layer" style="--card-y: ${offset}px; --card-x: ${(index * offsetStep * 0.18).toFixed(2)}px"><i>${meta.symbol}</i></span>`;
+  }).join('');
+  return `
+    <div class="bonus-card-pile ${meta.className}" title="${meta.label} 영구 보너스 카드 ${amount}장">
+      <span class="bonus-card-stack" aria-hidden="true">${cards || '<span class="empty-card-marker"></span>'}</span>
+      <span class="bonus-card-caption"><b>${amount}</b><small>${meta.label}</small></span>
+    </div>`;
+}
+
 function bonusStrip(player) {
-  return COLORS.map((color) => gem(color, player.bonuses[color], 'bonus-count')).join('');
+  return COLORS.map((color) => bonusCardPile(color, player.bonuses[color])).join('');
 }
 
 export function renderGame(state, selection) {
@@ -293,8 +332,8 @@ export function renderGame(state, selection) {
           <div class="player-panel">
             <div class="dock-title"><span>${safePlayerName}의 금고</span><small>토큰 ${totalTokens(player.tokens)}/${CONFIG.TOKEN_LIMIT} · 카드 ${player.purchased.length}장</small></div>
             <div class="vault-grid">
-              <div><label>보유 토큰</label><div class="mini-gems">${ALL_RESOURCES.map((color) => gem(color, player.tokens[color], 'vault-gem')).join('')}</div></div>
-              <div><label>영구 보너스</label><div class="mini-gems">${bonusStrip(player)}</div></div>
+              <div class="vault-token-zone"><label>보유 토큰</label><div class="vault-token-grid">${ALL_RESOURCES.map((color) => vaultToken(color, player.tokens[color])).join('')}</div></div>
+              <div class="bonus-card-zone"><label>영구 보너스 카드</label><div class="bonus-card-grid">${bonusStrip(player)}</div></div>
             </div>
             <div class="reserved-zone">
               <label>예약 카드 <span>${player.reserved.length}/${CONFIG.MAX_RESERVED}</span></label>
