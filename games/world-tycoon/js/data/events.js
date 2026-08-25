@@ -3,7 +3,7 @@ export const EVENT_CARDS = [
   {id:'green-renovation',title:'친환경 리모델링',text:'보유 시설의 에너지 개선 비용으로 90을 냅니다.',effect:{type:'cash',amount:-90}},
   {id:'express-pass',title:'익스프레스 패스',text:'여행 일정이 앞당겨졌습니다. 3칸 전진합니다.',effect:{type:'moveBy',steps:3}},
   {id:'lost-luggage',title:'늦게 도착한 수하물',text:'공항으로 되돌아가느라 2칸 후퇴합니다.',effect:{type:'moveBy',steps:-2}},
-  {id:'airport-upgrade',title:'스마트 공항 초청',text:'국제 공항으로 바로 이동합니다.',effect:{type:'moveTo',tileId:'airport'}},
+  {id:'concorde-invitation',title:'콩코드 초청장',text:'콩코드여객기로 바로 이동합니다.',effect:{type:'moveTo',tileId:'concorde'}},
   {id:'travel-channel',title:'여행 채널 출연',text:'각 플레이어에게서 홍보 수익 35씩 받습니다.',effect:{type:'collectEach',amount:35}},
   {id:'team-retreat',title:'팀 워크숍 지원',text:'다른 모든 플레이어에게 30씩 지급합니다.',effect:{type:'payEach',amount:30}},
   {id:'local-pass',title:'현지인 패스',text:'다음 두 번의 통행료가 50% 할인됩니다.',effect:{type:'rentDiscount',charges:2,rate:.5}},

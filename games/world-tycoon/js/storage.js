@@ -1,7 +1,7 @@
 import {PHASES,RULES} from './rules.js';
 
 export function isValidSavedGame(value){
-  return Boolean(value&&value.version===RULES.SAVE_VERSION&&value.status==='playing'&&Array.isArray(value.players)&&[2,3,4].includes(value.players.length)&&Array.isArray(value.board)&&value.board.length===28&&Object.values(PHASES).includes(value.phase));
+  return Boolean(value&&value.version===RULES.SAVE_VERSION&&value.status==='playing'&&Array.isArray(value.players)&&[2,3,4].includes(value.players.length)&&Array.isArray(value.board)&&value.board.length===40&&Object.values(PHASES).includes(value.phase));
 }
 
 export function loadGame(storage=globalThis.localStorage){

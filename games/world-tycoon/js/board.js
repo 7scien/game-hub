@@ -10,10 +10,10 @@ export function createBoard(){
 }
 
 export function boardPosition(index){
-  if(index<=7)return {row:8,column:8-index};
-  if(index<=14)return {row:15-index,column:1};
-  if(index<=21)return {row:1,column:index-13};
-  return {row:index-20,column:8};
+  if(index<=10)return {row:11,column:11-index};
+  if(index<=20)return {row:21-index,column:1};
+  if(index<=30)return {row:1,column:index-19};
+  return {row:index-29,column:11};
 }
 
 export function findTileIndex(board,tileId){return board.findIndex(tile=>tile.id===tileId)}
