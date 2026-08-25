@@ -56,9 +56,9 @@ export function completeRoll(state){
   requirePhase(state,PHASES.ROLLING);const player=currentPlayer(state);state.phase=PHASES.MOVING;
   if(state.rolledDouble)state.consecutiveDoubles+=1;else state.consecutiveDoubles=0;
   if(state.consecutiveDoubles>=RULES.MAX_CONSECUTIVE_DOUBLES){
-    player.position=findTileIndex(state.board,'lounge');player.skipTurns=Math.max(player.skipTurns,1);
-    notice(state,'연속 더블!',`${RULES.MAX_CONSECUTIVE_DOUBLES}번 연속 더블로 공항 대기실로 이동합니다.`,'warning');
-    addLog(state,`${player.name}이 연속 더블로 공항 대기실로 이동했습니다.`);state.phase=PHASES.END_TURN;return;
+    player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=Math.max(player.skipTurns,1);
+    notice(state,'연속 더블!',`${RULES.MAX_CONSECUTIVE_DOUBLES}번 연속 더블로 무인도로 이동합니다.`,'warning');
+    addLog(state,`${player.name}이 연속 더블로 무인도로 이동했습니다.`);state.phase=PHASES.END_TURN;return;
   }
   moveBy(state,state.rollTotal);addLog(state,`${player.name}이 ${state.rollTotal}칸 이동했습니다.`);state.phase=PHASES.RESOLVING_TILE;resolveTile(state);
 }
@@ -123,7 +123,7 @@ export function resolveTile(state,depth=0){
   if(tile.type==='tax'){prepareDebt(state,{amount:tile.amount,reason:tile.name});return}
   if(tile.type==='bonus'){player.money+=tile.amount;notice(state,tile.name,`${tile.amount}을 받았습니다.`,'success');finishSimpleTile(state);return}
   if(tile.type==='wait'){player.skipTurns+=tile.turns;notice(state,tile.name,`다음 ${tile.turns}턴 동안 쉽니다.`,'warning');finishSimpleTile(state);return}
-  if(tile.type==='move'){moveTo(state,tile.target);notice(state,tile.name,'국제 공항으로 이동합니다.','event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
+  if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
   finishSimpleTile(state);
 }

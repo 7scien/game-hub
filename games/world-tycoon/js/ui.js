@@ -8,7 +8,7 @@ const phaseLabel={
   [PHASES.BUY_DECISION]:'인수 결정',[PHASES.BUILD_DECISION]:'도시 개발',[PHASES.TRADE]:'플레이어 거래',[PHASES.ASSET_MANAGEMENT]:'자산 정리',[PHASES.END_TURN]:'턴 마무리',[PHASES.GAME_OVER]:'게임 종료',
 };
 
-function tilePrice(tile){return tile.purchasePrice?`₩${formatMoney(tile.purchasePrice)}`:tile.type==='event'?'EVENT':tile.type==='tax'?`−${formatMoney(tile.amount)}`:tile.type.toUpperCase()}
+function tilePrice(tile){return tile.purchasePrice?`₩${formatMoney(tile.purchasePrice)}`:tile.type==='event'?'KEY CARD':tile.type==='tax'?`−${formatMoney(tile.amount)}`:tile.type.toUpperCase()}
 function buildingMarkup(tile){
   if(tile.type!=='city'||!tile.ownerId)return '';
   if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)return '<span class="landmark-mark" title="랜드마크">★</span>';
@@ -18,8 +18,8 @@ function tokenMarkup(players,index){
   return `<span class="tile-tokens">${players.filter(player=>!player.bankrupt&&player.position===index).map((player,tokenIndex)=>`<i class="player-token token-${tokenIndex}" style="--token:${player.color}" title="${escapeHtml(player.name)}"><b>${player.token}</b></i>`).join('')}</span>`;
 }
 function tileSide(index){
-  if([0,7,14,21].includes(index))return 'corner';
-  if(index<7)return 'bottom';if(index<14)return 'left';if(index<21)return 'top';return 'right';
+  if([0,10,20,30].includes(index))return 'corner';
+  if(index<10)return 'bottom';if(index<20)return 'left';if(index<30)return 'top';return 'right';
 }
 function boardMarkup(state){
   const board=state?.board??createBoard();const players=state?.players??[];
@@ -27,11 +27,11 @@ function boardMarkup(state){
     const position=boardPosition(index);const region=regionMeta(tile.region);const owner=state?.players.find(player=>player.id===tile.ownerId);
     const side=tileSide(index);
     return `<article class="board-tile tile-${tile.type} side-${side}${side==='corner'?' corner':''}${tile.buildingLevel===4?' landmark':''}" style="--row:${position.row};--column:${position.column};--region:${region.color};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}">
-      <span class="tile-band"></span><span class="owner-strip"></span>${buildingMarkup(tile)}<span class="tile-face"><b class="tile-icon" aria-hidden="true">${tile.icon}</b><strong>${escapeHtml(tile.name)}</strong><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
+      <span class="tile-band"></span><span class="owner-strip"></span>${buildingMarkup(tile)}<span class="tile-face"><b class="tile-icon" aria-hidden="true">${tile.icon}</b><strong>${escapeHtml(tile.name)}</strong><span class="tile-en">${escapeHtml(tile.englishName)}</span><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
     </article>`;
   }).join('')}
     <div class="board-center">
-      <span class="center-card-deck" aria-hidden="true"><i></i><b>WORLD<br>NEWS</b></span>
+      <span class="center-card-deck" aria-hidden="true"><i></i><b>GOLDEN<br>KEY</b></span>
       <span class="center-station" aria-hidden="true"><i></i><b>✦</b></span>
       <p>WORLD TRAVEL · CITY INVESTMENT</p><h1>WORLD<br><em>TYCOON</em></h1>
       <div class="route-orbit" aria-hidden="true"><i></i><i></i><i></i><span>✈</span></div>
@@ -100,7 +100,7 @@ function activity(state){return `<section class="activity-log"><div class="secti
 
 function noticeModal(state){
   if(!state.notice)return '';
-  return `<div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="notice-title"><section class="notice-card tone-${state.notice.tone}"><span class="notice-symbol">${state.notice.tone==='event'?'?':state.notice.tone==='landmark'?'★':state.notice.tone==='danger'?'!':'✦'}</span><p class="eyebrow">${state.notice.tone==='event'?'WORLD NEWS':'TRAVEL UPDATE'}</p><h2 id="notice-title">${escapeHtml(state.notice.title)}</h2><p>${escapeHtml(state.notice.message)}</p><button class="primary-button" type="button" data-action="dismiss-notice">확인 <span>→</span></button></section></div>`;
+  return `<div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="notice-title"><section class="notice-card tone-${state.notice.tone}"><span class="notice-symbol">${state.notice.tone==='event'?'◆':state.notice.tone==='landmark'?'★':state.notice.tone==='danger'?'!':'✦'}</span><p class="eyebrow">${state.notice.tone==='event'?'GOLDEN KEY':'TRAVEL UPDATE'}</p><h2 id="notice-title">${escapeHtml(state.notice.title)}</h2><p>${escapeHtml(state.notice.message)}</p><button class="primary-button" type="button" data-action="dismiss-notice">확인 <span>→</span></button></section></div>`;
 }
 
 function optionAssets(assets){return `<option value="">자산 없음</option>${assets.map(tile=>`<option value="${tile.id}">${escapeHtml(tile.name)}</option>`).join('')}`}
@@ -128,10 +128,10 @@ export function renderGame(root,state){
 
 export function renderHelp(){
   return `<div class="modal-backdrop free-modal" role="dialog" aria-modal="true"><section class="help-card"><button class="modal-close" type="button" data-action="close-free-modal" aria-label="닫기">×</button><p class="eyebrow">HOW TO PLAY</p><h2>World Tycoon 가이드</h2><div class="help-grid">${[
-    ['🎲','주사위','주사위 2개의 합만큼 이동합니다. 더블이면 보너스 턴을 얻고, 3연속 더블이면 공항에서 한 턴 쉽니다.'],
+    ['🎲','주사위','주사위 2개의 합만큼 이동합니다. 더블이면 보너스 턴을 얻고, 3연속 더블이면 무인도에서 한 턴 쉽니다.'],
     ['◈','도시 구매','소유자가 없는 도시에 도착하면 표시된 가격으로 인수할 수 있습니다.'],['▥','건물','자기 도시에 도착하면 Lv4 랜드마크까지 한 단계씩 개발할 수 있습니다.'],
-    ['₩','통행료','상대 도시나 시설에 도착하면 레벨과 지역 완성 보너스를 반영한 통행료를 냅니다.'],['?','이벤트','월드 뉴스는 돈, 이동, 할인, 대기 등 여행의 변수를 만듭니다.'],
-    ['✈','특별 시설','철도·항구·공항·우주 정거장을 함께 모을수록 이용료가 크게 오릅니다.'],['⇄','거래','주사위를 굴리기 전에 현금·도시·시설을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
+    ['₩','통행료','상대 도시나 시설에 도착하면 레벨과 지역 완성 보너스를 반영한 통행료를 냅니다.'],['◆','황금열쇠','황금열쇠는 돈, 이동, 할인, 대기 등 여행의 변수를 만듭니다.'],
+    ['✈','특별 시설','콩코드여객기·퀸 엘리자베스호·콜럼비아호를 함께 모을수록 이용료가 크게 오릅니다.'],['⇄','거래','주사위를 굴리기 전에 현금·도시·시설을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
     ['!','파산','현금이 부족하면 건물과 자산을 반값에 정리합니다. 모두 정리해도 못 내면 파산합니다.'],['♛','승리','완전 게임은 마지막 생존자가, 시간제 게임은 종료 시 순자산 1위가 승리합니다.']
   ].map(([icon,title,copy])=>`<article><i>${icon}</i><span><b>${title}</b><p>${copy}</p></span></article>`).join('')}</div></section></div>`;
 }
