@@ -48,19 +48,10 @@ async function networkFirst(request){
   }
 }
 
-async function cacheFirst(request){
-  const cache=await caches.open(CACHE_VERSION);
-  const cached=await cache.match(request,{ignoreSearch:true});
-  if(cached)return cached;
-  try{
-    const response=await fetch(request);
-    if(response.ok)await cache.put(request,response.clone());
-    return response;
-  }catch{return Response.error()}
-}
-
 self.addEventListener('fetch',event=>{
   const {request}=event;
   if(request.method!=='GET'||new URL(request.url).origin!==self.location.origin)return;
-  event.respondWith(request.mode==='navigate'?networkFirst(request):cacheFirst(request));
+  // Prefer the latest local/build asset whenever the server is reachable.
+  // The cache remains the fallback, so the installed app still works offline.
+  event.respondWith(networkFirst(request));
 });

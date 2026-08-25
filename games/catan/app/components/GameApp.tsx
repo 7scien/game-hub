@@ -6,7 +6,7 @@ import {
   canPlaceRoad, canPlaceSettlement, canUpgradeCity, createGame, getTradeRatio, hasResources,
   longestRoadLength, reduceGame, requiredDiscardCount, scorePlayer, type GameAction,
 } from '../../lib/game/rules';
-import { clearGame, exportGame, importGame, loadGame, saveGame } from '../../lib/game/storage';
+import { clearGame, exportGame, importGame, loadGames, saveGame, SAVE_SLOTS, type SaveSlot } from '../../lib/game/storage';
 import {
   bagTotal, COSTS, DEV_LABELS, emptyBag, RESOURCES, RESOURCE_ICONS, RESOURCE_LABELS,
   TERRAIN_LABELS, type DevCard, type GameState, type Resource, type ResourceBag, type Terrain,
@@ -65,15 +65,15 @@ function DicePair({ dice, rolling = false, compact = false }: { dice: [number | 
   return <span className={`dice-pair${rolling ? ' rolling' : ''}${compact ? ' compact' : ''}`}><DiceFace value={dice[0]} compact={compact} /><DiceFace value={dice[1]} compact={compact} /></span>;
 }
 
-function SetupScreen({ onStart }: { onStart: (game: GameState) => void }) {
+function SetupScreen({ onStart }: { onStart: (game: GameState, slot: SaveSlot | null) => void }) {
   const [count, setCount] = useState<3 | 4>(3);
   const [names, setNames] = useState(['', '', '', '']);
-  const [saved, setSaved] = useState<GameState | null>(null);
+  const [saved, setSaved] = useState<[GameState | null, GameState | null]>([null, null]);
   const [error, setError] = useState('');
   const [help, setHelp] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    const timer = window.setTimeout(() => setSaved(loadGame()), 0);
+    const timer = window.setTimeout(() => setSaved(loadGames()), 0);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -82,11 +82,15 @@ function SetupScreen({ onStart }: { onStart: (game: GameState) => void }) {
       setError('모든 플레이어의 이름을 입력해 주세요.');
       return;
     }
-    if (saved && !window.confirm('저장된 게임을 덮어쓰고 새 게임을 시작할까요?')) return;
     const seed = Math.floor(Date.now() % 2_147_483_647);
-    onStart(createGame(names.slice(0, count), COLORS.slice(0, count), seed));
+    onStart(createGame(names.slice(0, count), COLORS.slice(0, count), seed), null);
   };
   const chooseCount = (value: 3 | 4) => { setCount(value); tone(true); };
+  const removeSave = (slot: SaveSlot) => {
+    if (!window.confirm(`${slot}번 저장을 지울까요? 삭제한 게임은 되돌릴 수 없습니다.`)) return;
+    clearGame(slot);
+    setSaved(loadGames());
+  };
 
   return (
     <main className="welcome-shell">
@@ -110,10 +114,12 @@ function SetupScreen({ onStart }: { onStart: (game: GameState) => void }) {
         </div>
         {error && <p className="error-note" role="alert">{error}</p>}
         <button className="primary-button" type="button" onClick={start}>무작위 시작 플레이어로 출항 <span aria-hidden="true">→</span></button>
-        {saved && <button className="resume-button" type="button" onClick={() => onStart(saved)}><span>저장된 게임 이어하기</span><small>{saved.round}라운드 · {saved.players.map((player) => player.name).join(', ')}</small></button>}
+        <section className="save-slots" aria-label="저장된 게임 2개">
+          {SAVE_SLOTS.map((slot) => { const savedGame=saved[slot-1]; return <article key={slot} className={`save-slot-card${savedGame?' occupied':' empty'}`}><div className="save-slot-title"><span>{slot}</span><div><b>{slot}번 저장</b><small>{savedGame?`${savedGame.round}라운드 · ${savedGame.players.map((player)=>player.name).join(', ')}`:'비어 있음'}</small></div></div>{savedGame?<div className="save-slot-actions"><button type="button" onClick={()=>onStart(savedGame,slot)}>이어하기</button><button type="button" className="save-slot-delete" onClick={()=>removeSave(slot)}>지우기</button></div>:<p>게임 중 오른쪽 위의 ‘저장하기’에서 선택할 수 있어요.</p>}</article>; })}
+        </section>
         <button className="text-button" type="button" onClick={() => importRef.current?.click()}>JSON 저장 파일 불러오기</button>
-        <input ref={importRef} type="file" accept="application/json" className="sr-only" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { onStart(await importGame(file)); } catch (reason) { setError(reason instanceof Error ? reason.message : '파일을 읽지 못했습니다.'); } }} />
-        <div className="offline-note"><span aria-hidden="true">✓</span> 인터넷 없이 자동 저장되며, 초기 배치는 플레이어별로 안내됩니다</div>
+        <input ref={importRef} type="file" accept="application/json" className="sr-only" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { onStart(await importGame(file), null); } catch (reason) { setError(reason instanceof Error ? reason.message : '파일을 읽지 못했습니다.'); } }} />
+        <div className="offline-note"><span aria-hidden="true">✓</span> 저장 위치를 고른 뒤에는 해당 슬롯에 진행 상황이 자동 반영됩니다</div>
       </section>
       {help && <HelpModal close={() => setHelp(false)} />}
     </main>
@@ -174,7 +180,6 @@ function GameBoard({ game, buildMode, act }: { game: GameState; buildMode: Build
           return <g key={vertex.id} transform={`translate(${vertex.x} ${vertex.y})`} className={available ? 'vertex available' : 'vertex'} onClick={() => clickVertex(vertex.id)} onKeyDown={(event) => { if (available && (event.key === 'Enter' || event.key === ' ')) clickVertex(vertex.id); }} role={available?'button':undefined} aria-label={available ? (buildMode==='city'?'이 마을을 도시로 확장':'이 교차점에 마을 놓기') : undefined} tabIndex={available?0:undefined}>{available && <circle r="15" className="vertex-option" />}{building?.type === 'settlement' && <path d="M-12 12V-3L0-14 12-3V12Z" className="building" style={{ fill: owner?.color }} />}{building?.type === 'city' && <path d="M-15 12V-5L-5-14 4-5V-10H15V12Z" className="building city-piece" style={{ fill: owner?.color }} />}</g>;
         })}
       </svg>
-      <div className="zoom-note">두 손가락으로 브라우저 화면을 확대할 수 있어요</div>
     </div>
   );
 }
@@ -185,8 +190,8 @@ function PhaseGuide({ game }: { game: GameState }) {
   return <div className="phase-guide"><span className="player-token" style={{background:player.color}}>{player.name.slice(0,1)}</span><div className="phase-copy"><b>{player.name}님의 {content[0]}</b><span>{content[1]}</span></div>{game.dice&&<div className="phase-dice" aria-label={`주사위 결과 ${game.dice[0]} 더하기 ${game.dice[1]}은 ${game.dice[0]+game.dice[1]}`}><DicePair dice={game.dice} compact/><strong>= {game.dice[0]+game.dice[1]}</strong></div>}</div>;
 }
 
-function ScoreStrip({ game }: { game: GameState }) {
-  return <div className="score-strip" aria-label="플레이어 공개 현황">{game.players.map((player) => <div key={player.id} className={player.id===game.currentPlayerId?'score-player current':'score-player'}><span className="score-color" style={{background:player.color}}>{player.name.slice(0,1)}</span><div><b>{player.name}</b><small>공개 {scorePlayer(game,player.id)}점 · 자원 {bagTotal(player.resources)}장</small></div>{game.longestRoadOwner===player.id&&<em title="최장 교역로">길 +2</em>}{game.largestArmyOwner===player.id&&<em title="최대 기사단">기사 +2</em>}</div>)}</div>;
+function ScoreStrip({ game, onInspect }: { game: GameState; onInspect: (playerId: string) => void }) {
+  return <div className="score-strip" aria-label="플레이어 공개 현황">{game.players.map((player) => <button type="button" key={player.id} className={player.id===game.currentPlayerId?'score-player current':'score-player'} onClick={()=>onInspect(player.id)} aria-label={`${player.name}님의 자원과 현황 보기`}><span className="score-color" style={{background:player.color}}>{player.name.slice(0,1)}</span><span className="score-copy"><b>{player.name}</b><small>공개 {scorePlayer(game,player.id)}점 · 자원 {bagTotal(player.resources)}장</small></span>{game.longestRoadOwner===player.id&&<em title="최장 교역로">길 +2</em>}{game.largestArmyOwner===player.id&&<em title="최대 기사단">기사 +2</em>}</button>)}</div>;
 }
 
 function BuildPanel({ game, mode, setMode }: { game: GameState; mode: BuildMode; setMode: (mode: BuildMode) => void }) {
@@ -235,20 +240,35 @@ function HelpModal({ close }: { close: () => void }) {
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="help-title"><div className="help-sheet"><button className="close-button" onClick={close} aria-label="게임 설명 닫기">×</button><p className="step-label">처음부터 배우는 카탄</p><h2 id="help-title">이 순서대로 하면 어렵지 않아요</h2><p className="help-lead">주사위로 자원을 얻고, 서로 거래하며 길과 마을을 넓혀 <b>자기 차례에 10점</b>을 먼저 만들면 승리합니다.</p><div className="help-grid detailed"><section className="help-wide"><b><span>1</span> 게임 시작과 초기 배치</b><ol><li>화면에 표시된 순서대로 마을 1개와 연결된 길 1개를 놓습니다.</li><li>모두 한 번 놓으면 순서를 거꾸로 바꿔 마을과 길을 한 번 더 놓습니다.</li><li>두 번째 마을 주변의 땅에서 시작 자원을 받습니다.</li><li>마을끼리는 최소 두 칸 떨어져야 합니다.</li></ol></section><section><b><span>2</span> 내 차례</b><ol><li>주사위 2개를 굴립니다.</li><li>합계 숫자가 적힌 땅 주변의 마을·도시가 자원을 생산합니다.</li><li>원하는 만큼 거래·건설·개발 카드 사용을 합니다.</li><li>끝나면 ‘차례 마치기’를 누릅니다.</li></ol></section><section><b><span>3</span> 자원 얻기</b><p>숲은 목재, 구릉은 벽돌, 목초지는 양모, 농경지는 곡물, 산지는 광석을 줍니다.</p><p>마을은 1장, 도시는 2장을 받습니다. 도둑이 있는 땅은 생산하지 않습니다.</p></section><section><b><span>4</span> 건설 비용</b><ul className="cost-rules"><li><strong>길</strong> 목재 1 + 벽돌 1</li><li><strong>마을</strong> 목재·벽돌·양모·곡물 각 1</li><li><strong>도시</strong> 곡물 2 + 광석 3</li><li><strong>개발 카드</strong> 양모·곡물·광석 각 1</li></ul><p>새 길은 내 길이나 건물에 이어야 하며, 새 마을은 내 길과 연결된 빈 교차점에 놓습니다.</p></section><section><b><span>5</span> 거래</b><p>다른 플레이어에게 자원 1장을 제안하고 원하는 자원 1장을 요청할 수 있습니다.</p><p>은행은 기본 4:1이며, 항구를 가진 경우 3:1 또는 해당 자원 2:1로 더 유리하게 교환합니다.</p></section><section><b><span>6</span> 주사위 7과 도둑</b><p>자원 8장 이상인 플레이어는 절반을 버립니다. 현재 플레이어는 도둑을 다른 땅으로 옮기고, 그 주변 상대에게서 무작위 자원 1장을 가져옵니다.</p></section><section><b><span>7</span> 점수와 승리</b><p>마을 1점 · 도시 2점 · 승점 카드 1점입니다. 길 5개 이상으로 가장 긴 연결을 만들면 ‘최장 교역로’ 2점, 기사 3장 이상을 가장 많이 사용하면 ‘최대 기사단’ 2점을 받습니다.</p></section><section><b><span>8</span> 개발 카드</b><p>기사는 도둑을 옮기고, 도로 건설은 길 2개를 무료로 놓습니다. 풍요의 해는 자원 2장, 독점은 선택한 자원을 모두 가져옵니다. 구매한 카드는 다음 차례부터 사용할 수 있습니다.</p></section></div><div className="help-tip"><b>게임 중 헷갈리면</b><span>화면 오른쪽 위의 ‘게임 설명’을 언제든 다시 누르세요. 현재 게임은 그대로 유지됩니다.</span></div><button className="primary-button help-done" onClick={close}>설명 확인하고 게임으로 돌아가기</button></div></div>;
 }
 
-function SettingsModal({ game, act, onExit, onImport, close }: { game: GameState; act: (action: GameAction) => void; onExit: () => void; onImport: (game: GameState) => void; close: () => void }) {
+function SaveModal({ activeSlot, onSave, close }: { activeSlot: SaveSlot | null; onSave: (slot: SaveSlot) => void; close: () => void }) {
+  const [selected,setSelected]=useState<SaveSlot>(activeSlot??1);
+  const saved=useMemo(()=>loadGames(),[]);
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="save-title"><div className="settings-sheet save-sheet"><button className="close-button" onClick={close} aria-label="저장 창 닫기">×</button><p className="step-label">게임 저장</p><h2 id="save-title">어디에 저장할까요?</h2><p className="muted">저장 위치를 한 번 정하면 이후 진행 상황도 같은 곳에 자동으로 반영됩니다.</p><div className="save-choice-grid">{SAVE_SLOTS.map((slot)=>{const savedGame=saved[slot-1];return <button type="button" key={slot} className={selected===slot?'save-choice selected':'save-choice'} aria-pressed={selected===slot} onClick={()=>setSelected(slot)}><span>{slot}</span><div><b>{slot}번 저장</b><small>{savedGame?`${savedGame.round}라운드 · ${savedGame.players.map((player)=>player.name).join(', ')}`:'비어 있음'}</small></div>{activeSlot===slot&&<em>현재 저장</em>}</button>})}</div>{saved[selected-1]&&activeSlot!==selected&&<p className="save-overwrite-note">선택한 곳의 기존 게임을 현재 게임으로 덮어씁니다.</p>}<div className="decision-buttons save-decisions"><button className="secondary-button" type="button" onClick={close}>저장하지 않기</button><button className="primary-button" type="button" onClick={()=>onSave(selected)}>{saved[selected-1]?'덮어써서 저장':'이곳에 저장'}</button></div></div></div>;
+}
+
+function PlayerStatusModal({ game, playerId, close }: { game: GameState; playerId: string; close: () => void }) {
+  const player=game.players.find((entry)=>entry.id===playerId)!;
+  const [revealed,setRevealed]=useState(playerId===game.currentPlayerId);
+  const settlements=Object.values(game.buildings).filter((building)=>building.playerId===player.id&&building.type==='settlement').length;
+  const cities=Object.values(game.buildings).filter((building)=>building.playerId===player.id&&building.type==='city').length;
+  if(!revealed)return <div className="modal-backdrop player-status-backdrop" role="dialog" aria-modal="true" aria-labelledby="player-private-title"><div className="player-private-gate"><button className="close-button" onClick={close} aria-label="플레이어 현황 닫기">×</button><span className="big-token" style={{background:player.color}}>{player.name.slice(0,1)}</span><p className="step-label">비공개 현황 확인</p><h2 id="player-private-title">{player.name}님에게 기기를 건네주세요</h2><p>자원과 개발 카드는 본인만 확인해 주세요.</p><button className="primary-button" type="button" onClick={()=>setRevealed(true)}>{player.name}입니다 · 현황 열기</button></div></div>;
+  return <div className="modal-backdrop player-status-backdrop" role="dialog" aria-modal="true" aria-labelledby="player-status-title"><div className="player-status-sheet"><button className="close-button" onClick={close} aria-label="플레이어 현황 닫기">×</button><div className="player-status-heading"><span className="big-token" style={{background:player.color}}>{player.name.slice(0,1)}</span><div><p className="step-label">개인 현황</p><h2 id="player-status-title">{player.name}님의 자원</h2><small>실제 {scorePlayer(game,player.id,true)}점 · 공개 {scorePlayer(game,player.id)}점</small></div></div><div className="status-resource-grid">{RESOURCES.map((resource)=><ResourcePill key={resource} resource={resource} amount={player.resources[resource]}/>)}</div><div className="status-stat-grid"><span><b>{player.roads.length}</b>놓은 길</span><span><b>{settlements}</b>마을</span><span><b>{cities}</b>도시</span><span><b>{longestRoadLength(game,player.id)}</b>최장 길</span><span><b>{player.usedKnights}</b>사용 기사</span><span><b>{player.devCards.filter((card)=>!card.played).length}</b>보유 카드</span></div><section className="status-dev-cards"><b>개발 카드</b>{player.devCards.filter((card)=>!card.played).length?<div>{player.devCards.filter((card)=>!card.played).map((card)=><span key={card.id}>{DEV_LABELS[card.type]}</span>)}</div>:<p>보유한 개발 카드가 없습니다.</p>}</section><button className="primary-button status-close" type="button" onClick={close}>확인 완료</button></div></div>;
+}
+
+function SettingsModal({ game, activeSlot, act, onExit, onImport, close }: { game: GameState; activeSlot: SaveSlot | null; act: (action: GameAction) => void; onExit: () => void; onImport: (game: GameState) => void; close: () => void }) {
   const input=useRef<HTMLInputElement>(null); const [error,setError]=useState('');
-  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="설정"><div className="settings-sheet"><button className="close-button" onClick={close} aria-label="닫기">×</button><p className="step-label">게임 설정</p><h2>저장과 편의 기능</h2><button className="settings-row" onClick={()=>act({type:'TOGGLE_SOUND'})}><span>효과음</span><b>{game.sound?'켜짐':'꺼짐'}</b></button><button className="settings-row" onClick={()=>exportGame(game)}><span>게임 상태 내보내기</span><b>JSON ↓</b></button><button className="settings-row" onClick={()=>input.current?.click()}><span>게임 상태 가져오기</span><b>JSON ↑</b></button><input ref={input} className="sr-only" type="file" accept="application/json" onChange={async(e)=>{const file=e.target.files?.[0];if(!file)return;try{onImport(await importGame(file));close()}catch(reason){setError(reason instanceof Error?reason.message:'불러오지 못했습니다.')}}}/>{error&&<p className="error-note">{error}</p>}<button className="settings-row" onClick={()=>{close();onExit()}}><span>저장하고 시작 화면으로</span><b>나가기</b></button><button className="settings-row danger" onClick={()=>{if(window.confirm('현재 게임을 지우고 설정 화면으로 돌아갈까요?')){clearGame();onExit();}}}><span>게임 초기화</span><b>모두 지우기</b></button><p className="autosave-note">모든 행동은 이 기기에 자동 저장됩니다.</p></div></div>;
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="설정"><div className="settings-sheet"><button className="close-button" onClick={close} aria-label="닫기">×</button><p className="step-label">게임 설정</p><h2>저장과 편의 기능</h2><button className="settings-row" onClick={()=>act({type:'TOGGLE_SOUND'})}><span>효과음</span><b>{game.sound?'켜짐':'꺼짐'}</b></button><button className="settings-row" onClick={()=>exportGame(game)}><span>게임 상태 내보내기</span><b>JSON ↓</b></button><button className="settings-row" onClick={()=>input.current?.click()}><span>게임 상태 가져오기</span><b>JSON ↑</b></button><input ref={input} className="sr-only" type="file" accept="application/json" onChange={async(e)=>{const file=e.target.files?.[0];if(!file)return;try{onImport(await importGame(file));close()}catch(reason){setError(reason instanceof Error?reason.message:'불러오지 못했습니다.')}}}/>{error&&<p className="error-note">{error}</p>}<button className="settings-row" onClick={()=>{close();onExit()}}><span>시작 화면으로</span><b>나가기</b></button><p className="autosave-note">{activeSlot?`${activeSlot}번 저장에 진행 상황이 자동 반영되고 있습니다.`:'아직 저장 위치를 선택하지 않았습니다.'}</p></div></div>;
 }
 
 export default function GameApp() {
-  const [game,setGame]=useState<GameState|null>(null); const [panel,setPanel]=useState<'build'|'trade'|'cards'|'log'>('build'); const [buildMode,setBuildMode]=useState<BuildMode>(null); const [help,setHelp]=useState(false); const [settings,setSettings]=useState(false);
+  const [game,setGame]=useState<GameState|null>(null); const [activeSlot,setActiveSlot]=useState<SaveSlot|null>(null); const [panel,setPanel]=useState<'build'|'trade'|'cards'|'log'>('build'); const [buildMode,setBuildMode]=useState<BuildMode>(null); const [help,setHelp]=useState(false); const [settings,setSettings]=useState(false); const [saveOpen,setSaveOpen]=useState(false); const [inspectPlayerId,setInspectPlayerId]=useState<string|null>(null);
   const [rolling,setRolling]=useState(false); const [animatedDice,setAnimatedDice]=useState<[number|null,number|null]>([null,null]); const [rollResult,setRollResult]=useState<[number,number]|null>(null);
   const [playerPanelCollapsed,setPlayerPanelCollapsed]=useState(false);
   const [robberNotice,setRobberNotice]=useState<{message:string;victimName:string;resource:Resource}|null>(null);
   const rollInterval=useRef<number|null>(null); const rollTimeouts=useRef<number[]>([]);
   const robberNoticeTimeout=useRef<number|null>(null);
   const pendingSteal=useRef<{existingLogIds:Set<string>;victimName:string}|null>(null);
-  useEffect(()=>{if(game)saveGame(game)},[game]);
+  useEffect(()=>{if(game&&activeSlot)saveGame(game,activeSlot)},[game,activeSlot]);
   useEffect(()=>{
     const pending=pendingSteal.current;
     if(!game||!pending)return;
@@ -264,7 +284,7 @@ export default function GameApp() {
   useEffect(()=>()=>{if(rollInterval.current!==null)window.clearInterval(rollInterval.current);rollTimeouts.current.forEach((timer)=>window.clearTimeout(timer));if(robberNoticeTimeout.current!==null)window.clearTimeout(robberNoticeTimeout.current);},[]);
   const resetTurnUi=()=>{if(rollInterval.current!==null){window.clearInterval(rollInterval.current);rollInterval.current=null}rollTimeouts.current.forEach((timer)=>window.clearTimeout(timer));rollTimeouts.current=[];if(robberNoticeTimeout.current!==null){window.clearTimeout(robberNoticeTimeout.current);robberNoticeTimeout.current=null}pendingSteal.current=null;setRobberNotice(null);setRolling(false);setAnimatedDice([null,null]);setRollResult(null)};
   const act=(action:GameAction,sound:'tap'|'dice'|'build'='tap')=>setGame((current)=>{if(!current)return current;const next=reduceGame(current,action);if(next!==current)tone(current.sound,sound);return next;});
-  if(!game)return <SetupScreen onStart={setGame}/>;
+  if(!game)return <SetupScreen onStart={(nextGame,slot)=>{setActiveSlot(slot);setGame(nextGame)}}/>;
   const setupHandoff=game.hidden&&(game.phase.startsWith('setup')||(game.phase==='pre-roll'&&game.setupIndex>=game.setupSequence.length&&game.turnNumber===1));
   if(setupHandoff)return <main className="game-shell"><Handoff game={game} act={act}/></main>;
   if(game.phase==='discard')return <main className="game-shell"><DiscardOverlay game={game} act={act}/></main>;
@@ -275,8 +295,8 @@ export default function GameApp() {
   const steal=(victimId:string)=>{const victim=game.players.find((candidate)=>candidate.id===victimId);pendingSteal.current={existingLogIds:new Set(game.log.map((entry)=>entry.id)),victimName:victim?.name??'상대'};act({type:'STEAL',victimId,randomValue:Math.random()})};
   const visibleLogs=game.log.filter((entry)=>!entry.privateFor||entry.privateFor.includes(game.currentPlayerId));
   return <main className="game-shell">
-    <header className="game-header"><div className="compact-brand"><span>⬡</span><b>카탄</b></div><div className="round-label">{game.round} 라운드 {game.dice&&<span className="dice-mini"><DicePair dice={game.dice} compact/><b>{game.dice[0]+game.dice[1]}</b></span>}</div><div className="header-actions"><button className="help-header-button" onClick={()=>setHelp(true)}>게임 설명</button><button onClick={()=>setSettings(true)}>설정</button></div></header>
-    <ScoreStrip game={game}/><PhaseGuide game={game}/>
+    <header className="game-header"><div className="compact-brand"><span>⬡</span><b>카탄</b></div><div className="round-label">{game.round} 라운드 {game.dice&&<span className="dice-mini"><DicePair dice={game.dice} compact/><b>{game.dice[0]+game.dice[1]}</b></span>}</div><div className="header-actions"><button className="save-header-button" onClick={()=>setSaveOpen(true)}>저장하기{activeSlot&&<small>{activeSlot}번</small>}</button><button className="help-header-button" onClick={()=>setHelp(true)}>게임 설명</button><button onClick={()=>setSettings(true)}>설정</button></div></header>
+    <ScoreStrip game={game} onInspect={setInspectPlayerId}/><PhaseGuide game={game}/>
     <div className={`game-layout${playerPanelCollapsed?' panel-collapsed':''}`}>
       <section className="board-column">
         <GameBoard game={game} buildMode={buildMode} act={act}/>
@@ -293,7 +313,7 @@ export default function GameApp() {
     </div>
     {rollResult&&<div className="dice-result-pop" role="status" aria-live="assertive"><DicePair dice={rollResult}/><div><strong>{rollResult[0]+rollResult[1]}</strong><span>이 나왔습니다!</span></div></div>}
     {robberNotice&&<div className="robber-result-pop" role="status" aria-live="assertive"><span className={`robber-resource resource-${robberNotice.resource}`} aria-hidden="true">{RESOURCE_ICONS[robberNotice.resource]}</span><div><small>도둑이 가져온 자원</small><strong>{robberNotice.victimName}님에게서 {robberNotice.message}</strong><span>기록 탭에서도 다시 확인할 수 있어요.</span></div><button type="button" aria-label="도둑 자원 알림 닫기" onClick={()=>setRobberNotice(null)}>×</button></div>}
-    {game.phase==='victory'&&<div className="victory-overlay"><div className="victory-card"><span className="victory-mark">⬡</span><p className="step-label">개척 완료</p><h2>{player.name}님이 섬을 완성했습니다!</h2><p>총 {scorePlayer(game,player.id,true)}점 · {game.round}라운드</p><button className="primary-button" onClick={()=>{clearGame();resetTurnUi();setGame(null)}}>새 모험 시작하기</button></div></div>}
-    {game.pendingTrade&&<TradeDecision game={game} act={act}/>} {help&&<HelpModal close={()=>setHelp(false)}/>} {settings&&<SettingsModal game={game} act={act} onExit={()=>{resetTurnUi();setGame(null)}} onImport={(imported)=>{resetTurnUi();setPanel('build');setBuildMode(null);setGame(imported)}} close={()=>setSettings(false)}/>} 
+    {game.phase==='victory'&&<div className="victory-overlay"><div className="victory-card"><span className="victory-mark">⬡</span><p className="step-label">개척 완료</p><h2>{player.name}님이 섬을 완성했습니다!</h2><p>총 {scorePlayer(game,player.id,true)}점 · {game.round}라운드</p><button className="primary-button" onClick={()=>{if(activeSlot)clearGame(activeSlot);resetTurnUi();setActiveSlot(null);setGame(null)}}>새 모험 시작하기</button></div></div>}
+    {game.pendingTrade&&<TradeDecision game={game} act={act}/>} {help&&<HelpModal close={()=>setHelp(false)}/>} {saveOpen&&<SaveModal activeSlot={activeSlot} onSave={(slot)=>{saveGame(game,slot);setActiveSlot(slot);setSaveOpen(false)}} close={()=>setSaveOpen(false)}/>} {inspectPlayerId&&<PlayerStatusModal game={game} playerId={inspectPlayerId} close={()=>setInspectPlayerId(null)}/>} {settings&&<SettingsModal game={game} activeSlot={activeSlot} act={act} onExit={()=>{resetTurnUi();setActiveSlot(null);setGame(null)}} onImport={(imported)=>{resetTurnUi();setPanel('build');setBuildMode(null);setActiveSlot(null);setGame(imported)}} close={()=>setSettings(false)}/>}
   </main>;
 }

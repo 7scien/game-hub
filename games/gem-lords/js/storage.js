@@ -4,6 +4,7 @@ import {
   STORAGE_KEY,
 } from './config.js';
 import { isValidSavedGame } from './game.js';
+import { CARDS } from './data/cards.js';
 import { PATRONS } from './data/patrons.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -21,6 +22,27 @@ function refreshPatrons(state) {
   return state;
 }
 
+function refreshCards(state) {
+  const latestCards = new Map(CARDS.map((card) => [card.id, card]));
+  const refreshCard = (card) => {
+    const latest = latestCards.get(card?.id);
+    return latest ? { ...latest, cost: { ...latest.cost } } : card;
+  };
+  for (const tier of [1, 2, 3]) {
+    state.decks[tier] = Array.isArray(state.decks[tier]) ? state.decks[tier].map(refreshCard) : [];
+    state.market[tier] = Array.isArray(state.market[tier]) ? state.market[tier].map(refreshCard) : [];
+  }
+  state.players.forEach((player) => {
+    player.purchased = Array.isArray(player.purchased) ? player.purchased.map(refreshCard) : [];
+    player.reserved = Array.isArray(player.reserved) ? player.reserved.map(refreshCard) : [];
+  });
+  return state;
+}
+
+function refreshGameData(state) {
+  return refreshCards(refreshPatrons(state));
+}
+
 export function emptySaveSlots() {
   return Array.from({ length: MAX_SAVE_SLOTS }, () => null);
 }
@@ -30,7 +52,7 @@ export function normalizeSaveSlots(value) {
   if (!Array.isArray(value)) return slots;
   for (let index = 0; index < MAX_SAVE_SLOTS; index += 1) {
     const candidate = value[index];
-    if (isValidSavedGame(candidate)) slots[index] = refreshPatrons(clone(candidate));
+    if (isValidSavedGame(candidate)) slots[index] = refreshGameData(clone(candidate));
   }
   return slots;
 }
@@ -44,7 +66,7 @@ export function loadSaveSlots(storage = globalThis.localStorage) {
     const legacy = JSON.parse(storage.getItem(STORAGE_KEY));
     const slots = emptySaveSlots();
     if (isValidSavedGame(legacy)) {
-      slots[0] = refreshPatrons(clone(legacy));
+      slots[0] = refreshGameData(clone(legacy));
       storage.setItem(SAVE_SLOTS_KEY, JSON.stringify(slots));
       storage.removeItem(STORAGE_KEY);
     }

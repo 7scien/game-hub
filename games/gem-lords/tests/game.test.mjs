@@ -59,11 +59,15 @@ test('저장 슬롯은 세 개를 유지하고 기존 단일 저장을 1번 슬�
     removeItem: (key) => values.delete(key),
   };
   const legacy = createGame(2, fixedRandom, ['기존 1', '기존 2']);
+  const refreshedCardId = legacy.market[1][0].id;
+  legacy.market[1][0].victoryPoints = 99;
+  legacy.market[1][0].cost = zeroCost();
   storage.setItem(STORAGE_KEY, JSON.stringify(legacy));
 
   const migrated = loadSaveSlots(storage);
   assert.equal(migrated.length, MAX_SAVE_SLOTS);
   assert.equal(migrated[0].players[0].name, '기존 1');
+  assert.deepEqual(migrated[0].market[1][0], CARDS.find((card) => card.id === refreshedCardId));
   assert.equal(storage.getItem(STORAGE_KEY), null);
   assert.ok(storage.getItem(SAVE_SLOTS_KEY));
 
@@ -88,8 +92,34 @@ test('2–4인 게임은 색상별 7개와 황금 5개, 인원수+1개의 귀족
 test('개발 카드 90장과 귀족 타일 10장이 지정된 단계·점수 분포를 정확히 따른다', () => {
   const expected = {
     1: { total: 40, points: { 0: 35, 1: 5 } },
-    2: { total: 30, points: { 0: 10, 1: 5, 2: 10, 3: 5 } },
-    3: { total: 20, points: { 3: 10, 4: 6, 5: 4 } },
+    2: { total: 30, points: { 1: 10, 2: 15, 3: 5 } },
+    3: { total: 20, points: { 3: 5, 4: 10, 5: 5 } },
+  };
+  const costShapes = {
+    1: {
+      3: 0,
+      4: 1,
+      '2+1': 0,
+      '2+2': 0,
+      '3+1+1': 0,
+      '2+2+1': 0,
+      '1+1+1+1': 0,
+      '2+1+1+1': 0,
+    },
+    2: {
+      5: 2,
+      6: 3,
+      '5+3': 2,
+      '4+2+1': 2,
+      '3+2+2': 1,
+      '3+3+2': 1,
+    },
+    3: {
+      7: 4,
+      '7+3': 5,
+      '6+3+3': 4,
+      '5+3+3+3': 3,
+    },
   };
 
   assert.equal(CARDS.length, 90);
@@ -118,10 +148,27 @@ test('개발 카드 90장과 귀족 타일 10장이 지정된 단계·점수 분
   for (const [tier, distribution] of Object.entries(expected)) {
     const cards = CARDS.filter((card) => card.tier === Number(tier));
     assert.equal(cards.length, distribution.total);
+    for (const color of COLORS) {
+      assert.equal(cards.filter((card) => card.permanentBonusColor === color).length, distribution.total / COLORS.length);
+    }
     for (const [points, count] of Object.entries(distribution.points)) {
       assert.equal(cards.filter((card) => card.victoryPoints === Number(points)).length, count);
     }
   }
+
+  const costShape = (card) => Object.values(card.cost)
+    .filter((amount) => amount > 0)
+    .sort((a, b) => b - a)
+    .join('+');
+  for (const [tier, shapes] of Object.entries(costShapes)) {
+    const cards = CARDS.filter((card) => card.tier === Number(tier));
+    for (const [shape, points] of Object.entries(shapes)) {
+      const matching = cards.filter((card) => costShape(card) === shape);
+      assert.equal(matching.length, 5);
+      assert.equal(matching.every((card) => card.victoryPoints === points), true);
+    }
+  }
+  assert.equal(CARDS.some((card) => card.tier === 3 && costShape(card) === '3+3+3+3'), false);
 });
 
 test('서로 다른 보석 3개를 가져오면 공급과 플레이어 보유량이 갱신된다', () => {

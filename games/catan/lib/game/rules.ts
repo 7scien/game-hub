@@ -28,6 +28,10 @@ export type GameAction =
   | { type: 'RESOLVE_TRADE'; accept: boolean }
   | { type: 'TOGGLE_SOUND' };
 
+export function getDiceTotal(dice: readonly [number, number]) {
+  return dice[0] + dice[1];
+}
+
 const playerColors = ['#c65343', '#287a72', '#d49a32', '#6552a0'];
 
 export function createGame(names: string[], colors = playerColors, seed = Date.now()): GameState {
@@ -301,7 +305,9 @@ export function reduceGame(state: GameState, action: GameAction): GameState {
     if (action.dice.some((die) => die < 1 || die > 6 || !Number.isInteger(die))) return state;
     const next = structuredClone(state);
     next.dice = action.dice;
-    const total = action.dice[0] + action.dice[1];
+    // Each die is only a part of one roll. Production is resolved exactly once
+    // against the sum, never once per individual die.
+    const total = getDiceTotal(action.dice);
     addLog(next, `${currentPlayer(next).name}님이 ${total}을 굴렸습니다.`);
     if (total === 7) {
       next.discardQueue = next.players.filter((player) => requiredDiscardCount(player) > 0).map((player) => player.id);
