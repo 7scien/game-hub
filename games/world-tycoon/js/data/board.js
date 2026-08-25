@@ -30,8 +30,8 @@ export const BOARD_TILES = [
 ];
 
 export const REGION_STYLES = {
-  asia:{name:'아시아',color:'#36d6c2'},
-  africa:{name:'아프리카',color:'#ffbc5b'},
-  europe:{name:'유럽',color:'#9a8cff'},
-  america:{name:'아메리카',color:'#ff6d91'},
+  asia:{name:'아시아',color:'#d93b43'},
+  africa:{name:'아프리카',color:'#f2b632'},
+  europe:{name:'유럽',color:'#2377c8'},
+  america:{name:'아메리카',color:'#242726'},
 };

@@ -17,15 +17,22 @@ function buildingMarkup(tile){
 function tokenMarkup(players,index){
   return `<span class="tile-tokens">${players.filter(player=>!player.bankrupt&&player.position===index).map((player,tokenIndex)=>`<i class="player-token token-${tokenIndex}" style="--token:${player.color}" title="${escapeHtml(player.name)}"><b>${player.token}</b></i>`).join('')}</span>`;
 }
+function tileSide(index){
+  if([0,7,14,21].includes(index))return 'corner';
+  if(index<7)return 'bottom';if(index<14)return 'left';if(index<21)return 'top';return 'right';
+}
 function boardMarkup(state){
   const board=state?.board??createBoard();const players=state?.players??[];
   return `<div class="board-grid">${board.map((tile,index)=>{
     const position=boardPosition(index);const region=regionMeta(tile.region);const owner=state?.players.find(player=>player.id===tile.ownerId);
-    return `<article class="board-tile tile-${tile.type}${tile.buildingLevel===4?' landmark':''}" style="--row:${position.row};--column:${position.column};--region:${region.color};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}">
-      <span class="tile-band"></span><span class="owner-strip"></span>${buildingMarkup(tile)}<b class="tile-icon" aria-hidden="true">${tile.icon}</b><strong>${escapeHtml(tile.name)}</strong><small>${tilePrice(tile)}</small>${tokenMarkup(players,index)}
+    const side=tileSide(index);
+    return `<article class="board-tile tile-${tile.type} side-${side}${side==='corner'?' corner':''}${tile.buildingLevel===4?' landmark':''}" style="--row:${position.row};--column:${position.column};--region:${region.color};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}">
+      <span class="tile-band"></span><span class="owner-strip"></span>${buildingMarkup(tile)}<span class="tile-face"><b class="tile-icon" aria-hidden="true">${tile.icon}</b><strong>${escapeHtml(tile.name)}</strong><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
     </article>`;
   }).join('')}
     <div class="board-center">
+      <span class="center-card-deck" aria-hidden="true"><i></i><b>WORLD<br>NEWS</b></span>
+      <span class="center-station" aria-hidden="true"><i></i><b>✦</b></span>
       <p>WORLD TRAVEL · CITY INVESTMENT</p><h1>WORLD<br><em>TYCOON</em></h1>
       <div class="route-orbit" aria-hidden="true"><i></i><i></i><i></i><span>✈</span></div>
       ${state?centerStatus(state):'<p class="board-tagline">세계를 돌며 도시의 가치를 키우세요</p>'}
