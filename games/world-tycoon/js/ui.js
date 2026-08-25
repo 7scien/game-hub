@@ -1,5 +1,5 @@
 import {boardPosition,createBoard} from './board.js';
-import {getCurrentPlayer,getNetWorth,getTradeableAssets} from './game.js';
+import {SPECIAL_CARD_INFO,getCurrentPlayer,getNetWorth,getTradeableAssets} from './game.js';
 import {PHASES,RULES,formatMoney,regionMeta} from './rules.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
@@ -8,10 +8,11 @@ const phaseLabel={
   [PHASES.BUY_DECISION]:'인수 결정',[PHASES.BUILD_DECISION]:'도시 개발',[PHASES.TRADE]:'플레이어 거래',[PHASES.ASSET_MANAGEMENT]:'자산 정리',[PHASES.END_TURN]:'턴 마무리',[PHASES.GAME_OVER]:'게임 종료',
 };
 
-function tilePrice(tile){return tile.purchasePrice?`₩${formatMoney(tile.purchasePrice)}`:tile.type==='event'?'KEY CARD':tile.type==='tax'?`−${formatMoney(tile.amount)}`:tile.type.toUpperCase()}
+function tilePrice(tile){return tile.purchasePrice?formatMoney(tile.purchasePrice):tile.type==='event'?'KEY CARD':tile.type==='tax'?`−${formatMoney(tile.amount)}`:tile.type.toUpperCase()}
+function buildingLabel(level){return ['대지','별장','별장 2채','빌딩','호텔'][level]??`Lv${level}`}
 function buildingMarkup(tile){
   if(tile.type!=='city'||!tile.ownerId)return '';
-  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)return '<span class="landmark-mark" title="랜드마크">★</span>';
+  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)return '<span class="landmark-mark" title="호텔">★</span>';
   return `<span class="building-pips" aria-label="건물 레벨 ${tile.buildingLevel}">${Array.from({length:tile.buildingLevel},()=>'<i></i>').join('')}</span>`;
 }
 function tokenMarkup(players,index){
@@ -36,7 +37,7 @@ function boardMarkup(state){
     <div class="board-center">
       <span class="center-card-deck" aria-hidden="true"><i></i><b>GOLDEN<br>KEY</b></span>
       <span class="center-station" aria-hidden="true"><i></i><b>✦</b></span>
-      <p>WORLD TRAVEL · CITY INVESTMENT</p><h1>WORLD<br><em>TYCOON</em></h1>
+      <h1>WORLD<br><em>TYCOON</em></h1>
       <div class="route-orbit" aria-hidden="true"><i></i><i></i><i></i><span>✈</span></div>
       ${state?centerStatus(state):'<p class="board-tagline">세계를 돌며 도시의 가치를 키우세요</p>'}
     </div>
@@ -82,21 +83,26 @@ function decisionPanel(state){
   if(state.phase===PHASES.BUY_DECISION)return `<div class="asset-decision" style="--region:${regionMeta(tile.region).color}"><span class="decision-icon">${tile.icon}</span><p>${tile.type==='city'?regionMeta(tile.region).name:'특별 시설'}</p><h3>${escapeHtml(tile.name)}</h3><dl><div><dt>인수 가격</dt><dd>${formatMoney(tile.purchasePrice)}</dd></div><div><dt>기본 통행료</dt><dd>${formatMoney(tile.baseRent)}</dd></div></dl><button class="primary-button" type="button" data-action="buy-tile" ${player.money<tile.purchasePrice?'disabled':''}>인수하기 <span>−${formatMoney(tile.purchasePrice)}</span></button><button class="secondary-button wide" type="button" data-action="decline-decision">이번에는 지나가기</button></div>`;
   if(state.phase===PHASES.BUILD_DECISION){
     const maxed=tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL;const cost=maxed?0:tile.buildingCosts[tile.buildingLevel];
-    return `<div class="asset-decision build" style="--region:${regionMeta(tile.region).color}"><span class="decision-icon">${maxed?'★':'▥'}</span><p>${regionMeta(tile.region).name} · Lv${tile.buildingLevel}</p><h3>${escapeHtml(tile.name)} 개발</h3>${maxed?'<div class="landmark-complete">랜드마크 완성</div>':`<dl><div><dt>건설 비용</dt><dd>${formatMoney(cost)}</dd></div><div><dt>다음 통행료</dt><dd>${formatMoney(tile.rentByLevel[tile.buildingLevel+1])}</dd></div></dl><button class="primary-button" type="button" data-action="build-tile" ${player.money<cost?'disabled':''}>Lv${tile.buildingLevel+1} 건설 <span>−${formatMoney(cost)}</span></button>`}<button class="secondary-button wide" type="button" data-action="decline-decision">건설하지 않기</button></div>`;
+    return `<div class="asset-decision build" style="--region:${regionMeta(tile.region).color}"><span class="decision-icon">${maxed?'★':'▥'}</span><p>${regionMeta(tile.region).name} · ${buildingLabel(tile.buildingLevel)}</p><h3>${escapeHtml(tile.name)} 개발</h3>${maxed?'<div class="landmark-complete">호텔 완성</div>':`<dl><div><dt>건설 비용</dt><dd>${formatMoney(cost)}</dd></div><div><dt>다음 통행료</dt><dd>${formatMoney(tile.rentByLevel[tile.buildingLevel+1])}</dd></div></dl><button class="primary-button" type="button" data-action="build-tile" ${player.money<cost?'disabled':''}>${buildingLabel(tile.buildingLevel+1)} 건설 <span>−${formatMoney(cost)}</span></button>`}<button class="secondary-button wide" type="button" data-action="decline-decision">건설하지 않기</button></div>`;
   }
   if(state.phase===PHASES.ASSET_MANAGEMENT)return debtPanel(state);
-  if(state.phase===PHASES.END_TURN)return `<div class="action-copy end-turn"><span class="action-kicker">TURN COMPLETE</span><h3>턴을 마칩니다</h3><p>${state.rolledDouble?'더블이면 한 번 더 여행할 수 있어요.':'다음 플레이어에게 기기를 넘겨주세요.'}</p></div><div class="dice-row">${die(state.dice[0])}${die(state.dice[1])}<b>${state.rollTotal||'—'}</b></div><button class="primary-button" type="button" data-action="end-turn">턴 종료 <span>→</span></button>`;
+  if(state.phase===PHASES.END_TURN)return `<div class="action-copy end-turn"><span class="action-kicker">TURN COMPLETE</span><h3>턴을 마칩니다</h3><p>${state.rolledDouble?'더블이면 한 번 더 여행할 수 있어요.':'다음 차례로 바로 이어집니다.'}</p></div><div class="dice-row">${die(state.dice[0])}${die(state.dice[1])}<b>${state.rollTotal||'—'}</b></div><button class="primary-button" type="button" data-action="end-turn">턴 종료 <span>→</span></button>`;
   return `<div class="rolling-state"><h3>${phaseLabel[state.phase]}</h3></div>`;
 }
 
 function debtPanel(state){
-  const player=getCurrentPlayer(state);const debt=state.pendingDebt;const assets=state.board.filter(tile=>tile.ownerId===player.id);
-  return `<div class="debt-panel"><span class="action-kicker warning">PAYMENT DUE</span><h3>${escapeHtml(debt.reason)}</h3><p class="debt-total">필요 ${formatMoney(debt.amount)} <small>현재 ${formatMoney(player.money)}</small></p><div class="liquidation-list">${assets.length?assets.map(tile=>`<article><span><b>${escapeHtml(tile.name)}</b><small>${tile.type==='city'?`건물 Lv${tile.buildingLevel}`:'특별 시설'}</small></span><span>${tile.buildingLevel>0?`<button type="button" data-action="sell-building" data-tile="${tile.id}">건물 +${formatMoney(tile.buildingCosts[tile.buildingLevel-1]*RULES.SELL_BUILDING_RATE)}</button>`:`<button type="button" data-action="sell-asset" data-tile="${tile.id}">매각 +${formatMoney(tile.purchasePrice*RULES.SELL_PROPERTY_RATE)}</button>`}</span></article>`).join(''):'<p class="empty-copy">매각할 자산이 없습니다.</p>'}</div><button class="primary-button" type="button" data-action="settle-debt" ${player.money<debt.amount?'disabled':''}>${formatMoney(debt.amount)} 지불 <span>→</span></button><button class="danger-button" type="button" data-action="declare-bankruptcy">파산 선언</button></div>`;
+  const player=getCurrentPlayer(state);const debt=state.pendingDebt;const assets=state.board.filter(tile=>tile.ownerId===player.id);const cards=player.specialCards||[];
+  const assetRows=assets.map(tile=>`<article><span><b>${escapeHtml(tile.name)}</b><small>${tile.type==='city'?buildingLabel(tile.buildingLevel):'탈것'}</small></span><span>${tile.buildingLevel>0?`<button type="button" data-action="sell-building" data-tile="${tile.id}">건물 +${formatMoney(tile.buildingCosts[tile.buildingLevel-1]*RULES.SELL_BUILDING_RATE)}</button>`:`<button type="button" data-action="sell-asset" data-tile="${tile.id}">매각 +${formatMoney(tile.purchasePrice*RULES.SELL_PROPERTY_RATE)}</button>`}</span></article>`);
+  const cardRows=cards.map(cardId=>{const card=SPECIAL_CARD_INFO[cardId];return `<article><span><b>${card.icon} ${escapeHtml(card.name)}</b><small>보관 중인 황금열쇠</small></span><span><button type="button" data-action="sell-special-card" data-card="${cardId}">매각 +${formatMoney(card.sellPrice)}</button></span></article>`});
+  return `<div class="debt-panel"><span class="action-kicker warning">PAYMENT DUE</span><h3>${escapeHtml(debt.reason)}</h3><p class="debt-total">필요 ${formatMoney(debt.amount)} <small>현재 ${formatMoney(player.money)}</small></p><div class="liquidation-list">${assetRows.length||cardRows.length?[...assetRows,...cardRows].join(''):'<p class="empty-copy">매각할 자산이 없습니다.</p>'}</div><button class="primary-button" type="button" data-action="settle-debt" ${player.money<debt.amount?'disabled':''}>${formatMoney(debt.amount)} 지불 <span>→</span></button><button class="danger-button" type="button" data-action="declare-bankruptcy">파산 선언</button></div>`;
 }
 
 function currentAssets(state){
-  const player=getCurrentPlayer(state);const assets=state.board.filter(tile=>tile.ownerId===player.id);
-  return `<section class="asset-summary"><div class="section-label"><span>MY PORTFOLIO</span><b>${assets.length}</b></div><div class="asset-chips">${assets.length?assets.map(tile=>`<span style="--asset:${regionMeta(tile.region).color}"><i>${tile.icon}</i>${escapeHtml(tile.name)}${tile.type==='city'?` · Lv${tile.buildingLevel}`:''}</span>`).join(''):'<p>아직 보유한 도시가 없습니다.</p>'}</div></section>`;
+  const player=getCurrentPlayer(state);const assets=state.board.filter(tile=>tile.ownerId===player.id);const cards=player.specialCards||[];
+  const canSellCard=[PHASES.WAITING_FOR_ROLL,PHASES.END_TURN,PHASES.ASSET_MANAGEMENT].includes(state.phase);
+  const assetsMarkup=assets.map(tile=>`<span style="--asset:${regionMeta(tile.region).color}"><i>${tile.icon}</i>${escapeHtml(tile.name)}${tile.type==='city'?` · ${buildingLabel(tile.buildingLevel)}`:''}</span>`).join('');
+  const cardsMarkup=cards.map(cardId=>{const card=SPECIAL_CARD_INFO[cardId];return `<span class="special-card-chip" style="--asset:#ffd95c"><i>${card.icon}</i>${escapeHtml(card.name)}<button type="button" data-action="sell-special-card" data-card="${cardId}" title="${formatMoney(card.sellPrice)}에 매각" ${canSellCard?'':'disabled'}>매각</button></span>`}).join('');
+  return `<section class="asset-summary"><div class="section-label"><span>MY PORTFOLIO</span><b>${assets.length+cards.length}</b></div><div class="asset-chips">${assetsMarkup||cardsMarkup?assetsMarkup+cardsMarkup:'<p>아직 보유한 자산이 없습니다.</p>'}</div></section>`;
 }
 
 function activity(state){return `<section class="activity-log"><div class="section-label"><span>TRAVEL LOG</span></div>${state.log.slice(0,4).map(entry=>`<p>${escapeHtml(entry.message)}</p>`).join('')}</section>`}
@@ -112,10 +118,10 @@ function tradeModal(state){
   const proposer=getCurrentPlayer(state);const others=state.players.filter(player=>player.id!==proposer.id&&!player.bankrupt);const trade=state.trade;
   if(trade.stage==='review'){
     const partner=state.players.find(player=>player.id===trade.partnerId);const offered=state.board.find(tile=>tile.id===trade.offerAssetId);const requested=state.board.find(tile=>tile.id===trade.requestAssetId);
-    return `<div class="modal-backdrop" role="dialog" aria-modal="true"><section class="trade-card"><p class="eyebrow">HAND THE DEVICE TO</p><h2>${escapeHtml(partner.name)}</h2><p class="trade-intro">${escapeHtml(proposer.name)}의 거래 제안입니다.</p><div class="trade-review"><article><span>받는 것</span><b>${trade.offerCash?`${formatMoney(trade.offerCash)} 현금`:''}${trade.offerCash&&offered?' + ':''}${offered?escapeHtml(offered.name):''}</b></article><i>⇄</i><article><span>주는 것</span><b>${trade.requestCash?`${formatMoney(trade.requestCash)} 현금`:''}${trade.requestCash&&requested?' + ':''}${requested?escapeHtml(requested.name):''}</b></article></div><button class="primary-button" type="button" data-action="accept-trade">거래 수락 <span>✓</span></button><button class="secondary-button wide" type="button" data-action="reject-trade">거래 거절</button></section></div>`;
+    return `<div class="modal-backdrop" role="dialog" aria-modal="true"><section class="trade-card"><p class="eyebrow">TRADE REVIEW</p><h2>${escapeHtml(partner.name)}</h2><p class="trade-intro">${escapeHtml(proposer.name)}의 거래 제안입니다.</p><div class="trade-review"><article><span>받는 것</span><b>${trade.offerCash?`${formatMoney(trade.offerCash)} 현금`:''}${trade.offerCash&&offered?' + ':''}${offered?escapeHtml(offered.name):''}</b></article><i>⇄</i><article><span>주는 것</span><b>${trade.requestCash?`${formatMoney(trade.requestCash)} 현금`:''}${trade.requestCash&&requested?' + ':''}${requested?escapeHtml(requested.name):''}</b></article></div><button class="primary-button" type="button" data-action="accept-trade">거래 수락 <span>✓</span></button><button class="secondary-button wide" type="button" data-action="reject-trade">거래 거절</button></section></div>`;
   }
   const otherAssets=others.flatMap(player=>getTradeableAssets(state,player.id).map(tile=>({...tile,ownerName:player.name})));
-  return `<div class="modal-backdrop" role="dialog" aria-modal="true"><form class="trade-card" data-trade-form><p class="eyebrow">PLAYER TRADE</p><h2>자산 거래 제안</h2><label>거래 상대<select name="partnerId">${others.map(player=>`<option value="${player.id}">${escapeHtml(player.name)}</option>`).join('')}</select></label><div class="trade-columns"><fieldset><legend>내가 주는 것</legend><label>현금<input type="number" name="offerCash" min="0" max="${proposer.money}" step="10" value="0"></label><label>자산<select name="offerAssetId">${optionAssets(getTradeableAssets(state,proposer.id))}</select></label></fieldset><fieldset><legend>내가 받는 것</legend><label>현금<input type="number" name="requestCash" min="0" step="10" value="0"></label><label>자산<select name="requestAssetId"><option value="">자산 없음</option>${otherAssets.map(tile=>`<option value="${tile.id}">${escapeHtml(tile.ownerName)} · ${escapeHtml(tile.name)}</option>`).join('')}</select></label></fieldset></div><p class="trade-note">건물이 있는 도시는 먼저 건물을 정리해야 거래할 수 있습니다.</p><button class="primary-button" type="submit">제안하기 <span>→</span></button><button class="secondary-button wide" type="button" data-action="cancel-trade">취소</button></form></div>`;
+  return `<div class="modal-backdrop" role="dialog" aria-modal="true"><form class="trade-card" data-trade-form><p class="eyebrow">PLAYER TRADE</p><h2>자산 거래 제안</h2><label>거래 상대<select name="partnerId">${others.map(player=>`<option value="${player.id}">${escapeHtml(player.name)}</option>`).join('')}</select></label><div class="trade-columns"><fieldset><legend>내가 주는 것</legend><label>현금<input type="number" name="offerCash" min="0" max="${proposer.money}" step="10000" value="0"></label><label>자산<select name="offerAssetId">${optionAssets(getTradeableAssets(state,proposer.id))}</select></label></fieldset><fieldset><legend>내가 받는 것</legend><label>현금<input type="number" name="requestCash" min="0" step="10000" value="0"></label><label>자산<select name="requestAssetId"><option value="">자산 없음</option>${otherAssets.map(tile=>`<option value="${tile.id}">${escapeHtml(tile.ownerName)} · ${escapeHtml(tile.name)}</option>`).join('')}</select></label></fieldset></div><p class="trade-note">건물이 있는 도시는 먼저 건물을 정리해야 거래할 수 있습니다.</p><button class="primary-button" type="submit">제안하기 <span>→</span></button><button class="secondary-button wide" type="button" data-action="cancel-trade">취소</button></form></div>`;
 }
 
 function gameOverModal(state){
@@ -131,10 +137,10 @@ export function renderGame(root,state){
 
 export function renderHelp(){
   return `<div class="modal-backdrop free-modal" role="dialog" aria-modal="true"><section class="help-card"><button class="modal-close" type="button" data-action="close-free-modal" aria-label="닫기">×</button><p class="eyebrow">HOW TO PLAY</p><h2>World Tycoon 가이드</h2><div class="help-grid">${[
-    ['🎲','주사위','주사위 2개의 합만큼 이동합니다. 더블이면 보너스 턴을 얻고, 3연속 더블이면 무인도에서 한 턴 쉽니다.'],
-    ['◈','도시 구매','소유자가 없는 도시에 도착하면 표시된 가격으로 인수할 수 있습니다.'],['▥','건물','자기 도시에 도착하면 Lv4 랜드마크까지 한 단계씩 개발할 수 있습니다.'],
-    ['₩','통행료','상대 도시나 시설에 도착하면 레벨과 지역 완성 보너스를 반영한 통행료를 냅니다.'],['◆','황금열쇠','황금열쇠는 돈, 이동, 할인, 대기 등 여행의 변수를 만듭니다.'],
-    ['✈','특별 시설','콩코드여객기·퀸 엘리자베스호·콜럼비아호를 함께 모을수록 이용료가 크게 오릅니다.'],['⇄','거래','주사위를 굴리기 전에 현금·도시·시설을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
+    ['🎲','주사위','주사위 2개의 합만큼 이동합니다. 더블이면 보너스 턴을 얻고, 3연속 더블이면 무인도로 갑니다.'],
+    ['◈','도시 구매','소유자가 없는 도시에 도착하면 표시된 가격으로 인수할 수 있습니다.'],['▥','건물','자기 도시에 도착하면 별장 2채, 빌딩, 호텔 순서로 한 단계씩 개발할 수 있습니다.'],
+    ['₩','통행료','상대 도시나 탈것에 도착하면 표시된 통행료를 냅니다. 제주도·부산·서울은 건물을 지을 수 없고 통행료가 고정입니다.'],['◆','황금열쇠','클래식 대형판 30장 구성입니다. 우대권과 특수무전기는 보관하거나 은행에 팔 수 있습니다.'],
+    ['✈','탈것','콩코드여객기·퀸 엘리자베스호·콜럼비아호는 건물 없이 고정 이용료를 받습니다.'],['⇄','거래','주사위를 굴리기 전에 현금·도시·탈것을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
     ['!','파산','현금이 부족하면 건물과 자산을 반값에 정리합니다. 모두 정리해도 못 내면 파산합니다.'],['♛','승리','완전 게임은 마지막 생존자가, 시간제 게임은 종료 시 순자산 1위가 승리합니다.']
   ].map(([icon,title,copy])=>`<article><i>${icon}</i><span><b>${title}</b><p>${copy}</p></span></article>`).join('')}</div></section></div>`;
 }
@@ -143,8 +149,5 @@ export function renderMenu(){return `<div class="modal-backdrop free-modal" role
 
 export function showFreeModal(markup){document.querySelector('#modal-root')?.replaceChildren(document.createRange().createContextualFragment(markup))}
 export function closeFreeModal(){document.querySelector('#modal-root')?.replaceChildren()}
-export function showTurnOverlay(player){
-  const overlay=document.createElement('div');overlay.className='turn-overlay';overlay.innerHTML=`<span style="--player-color:${player.color}">${player.token}</span><p>NEXT PLAYER</p><h2>${escapeHtml(player.name)} TURN</h2><small>기기를 넘겨주세요</small>`;document.body.append(overlay);requestAnimationFrame(()=>overlay.classList.add('show'));setTimeout(()=>{overlay.classList.remove('show');setTimeout(()=>overlay.remove(),220)},1050);
-}
 export function toast(message){const element=document.createElement('div');element.className='toast';element.textContent=message;document.body.append(element);requestAnimationFrame(()=>element.classList.add('show'));setTimeout(()=>{element.classList.remove('show');setTimeout(()=>element.remove(),200)},2300)}
 export function updateTimer(state){const timer=document.querySelector('[data-timer]');if(timer)timer.textContent=timerLabel(state)}

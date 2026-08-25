@@ -1,10 +1,10 @@
 import {
   buildCurrentTile,buyCurrentTile,cancelTrade,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
-  endTurn,getCurrentPlayer,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,settleDebt,updateClock,
+  endTurn,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,
 } from './game.js';
 import {clearGame,loadGame,saveGame} from './storage.js';
 import {
-  closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showTurnOverlay,toast,updateTimer,
+  closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
@@ -18,7 +18,7 @@ function commit(action,{rerender=true}={}){
 
 function startGame(form){
   const data=new FormData(form);const names=Array.from({length:playerCount},(_,index)=>data.get(`player-${index}`));const mode=data.get('mode')||'30';
-  state=createGame(playerCount,{mode,names});savedGame=null;persist();render();showTurnOverlay(getCurrentPlayer(state));
+  state=createGame(playerCount,{mode,names});savedGame=null;persist();render();
 }
 
 async function handleRoll(){
@@ -29,7 +29,7 @@ async function handleRoll(){
 
 function handleEndTurn(){
   const result=commit(()=>endTurn(state));if(!result)return;
-  if(result.playerChanged)showTurnOverlay(getCurrentPlayer(state));else toast('더블! 한 번 더 굴리세요.');
+  if(result.bonusTurn)toast('더블! 한 번 더 굴리세요.');
 }
 
 document.addEventListener('submit',event=>{
@@ -45,7 +45,7 @@ document.addEventListener('click',event=>{
   if(action==='choose-player-count'){
     playerCount=Number(target.dataset.players);document.querySelectorAll('[data-action="choose-player-count"]').forEach(button=>button.classList.toggle('active',button===target));document.querySelectorAll('[data-name-field]').forEach(field=>field.classList.toggle('hidden',Number(field.dataset.nameField)>=playerCount));return;
   }
-  if(action==='continue-game'){state=savedGame;savedGame=null;persist();render();showTurnOverlay(getCurrentPlayer(state));return}
+  if(action==='continue-game'){state=savedGame;savedGame=null;persist();render();return}
   if(action==='new-game'||action==='new-game-from-finish'){if(state)clearGame();state=null;savedGame=null;setup=true;render();return}
   if(action==='open-help'){showFreeModal(renderHelp());return}
   if(action==='open-menu'){showFreeModal(renderMenu());return}
@@ -60,6 +60,7 @@ document.addEventListener('click',event=>{
   if(action==='dismiss-notice'){commit(()=>dismissNotice(state));return}
   if(action==='sell-building'){commit(()=>sellBuilding(state,target.dataset.tile));return}
   if(action==='sell-asset'){commit(()=>sellAsset(state,target.dataset.tile));return}
+  if(action==='sell-special-card'){commit(()=>sellSpecialCard(state,target.dataset.card));return}
   if(action==='settle-debt'){commit(()=>settleDebt(state));return}
   if(action==='declare-bankruptcy'){commit(()=>declareBankruptcy(state));return}
   if(action==='open-trade'){commit(()=>openTrade(state));return}

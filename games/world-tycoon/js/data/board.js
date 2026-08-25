@@ -9,7 +9,7 @@ export const BOARD_TILES = [
   {id:'golden-key-2',type:'event',name:'황금열쇠',englishName:'GOLDEN KEY',imageKey:'golden-key',icon:'◆'},
   {id:'cairo',type:'city',name:'카이로',englishName:'CAIRO',propertyId:'cairo',bandColor:'#d91f2b',icon:'△'},
   {id:'istanbul',type:'city',name:'이스탄불',englishName:'ISTANBUL',propertyId:'istanbul',bandColor:'#d91f2b',icon:'◐'},
-  {id:'deserted-island',type:'wait',name:'무인도',englishName:'DESERTED ISLAND',imageKey:'deserted-island',turns:1,icon:'☂'},
+  {id:'deserted-island',type:'wait',name:'무인도',englishName:'DESERTED ISLAND',imageKey:'deserted-island',turns:3,icon:'☂'},
   {id:'athens',type:'city',name:'아테네',englishName:'ATHENS',propertyId:'athens',bandColor:'#171b18',icon:'♢'},
   {id:'golden-key-3',type:'event',name:'황금열쇠',englishName:'GOLDEN KEY',imageKey:'golden-key',icon:'◆'},
   {id:'copenhagen',type:'city',name:'코펜하겐',englishName:'COPENHAGEN',propertyId:'copenhagen',bandColor:'#171b18',icon:'◇'},
@@ -19,10 +19,10 @@ export const BOARD_TILES = [
   {id:'golden-key-4',type:'event',name:'황금열쇠',englishName:'GOLDEN KEY',imageKey:'golden-key',icon:'◆'},
   {id:'berlin',type:'city',name:'베를린',englishName:'BERLIN',propertyId:'berlin',bandColor:'#171b18',icon:'▥'},
   {id:'montreal',type:'city',name:'몬트리올',englishName:'MONTREAL',propertyId:'montreal',bandColor:'#171b18',icon:'◉'},
-  {id:'social-welfare-corner',type:'bonus',name:'사회복지기금',englishName:'SOCIAL WELFARE FUND',imageKey:'social-welfare',amount:100,icon:'+'},
+  {id:'social-welfare-corner',type:'bonus',name:'사회복지기금',englishName:'SOCIAL WELFARE FUND',imageKey:'social-welfare',icon:'+'},
   {id:'buenos-aires',type:'city',name:'부에노스 아이레스',englishName:'BUENOS AIRES',propertyId:'buenos-aires',bandColor:'#8b4a2f',icon:'☀'},
   {id:'golden-key-5',type:'event',name:'황금열쇠',englishName:'GOLDEN KEY',imageKey:'golden-key',icon:'◆'},
-  {id:'sao-paulo',type:'city',name:'상파올로',englishName:'SAO PAULO',propertyId:'sao-paulo',bandColor:'#8b4a2f',icon:'✺'},
+  {id:'sao-paulo',type:'city',name:'상파울루',englishName:'SAO PAULO',propertyId:'sao-paulo',bandColor:'#8b4a2f',icon:'✺'},
   {id:'sydney',type:'city',name:'시드니',englishName:'SYDNEY',propertyId:'sydney',bandColor:'#8b4a2f',icon:'◒'},
   {id:'busan',type:'city',name:'부산',englishName:'BUSAN',propertyId:'busan',imageKey:'busan',icon:'≈'},
   {id:'hawaii',type:'city',name:'하와이',englishName:'HAWAII',propertyId:'hawaii',bandColor:'#8b4a2f',icon:'☀'},
@@ -37,8 +37,8 @@ export const BOARD_TILES = [
   {id:'golden-key-6',type:'event',name:'황금열쇠',englishName:'GOLDEN KEY',imageKey:'golden-key',icon:'◆'},
   {id:'london',type:'city',name:'런던',englishName:'LONDON',propertyId:'london',bandColor:'#171b18',icon:'♜'},
   {id:'new-york',type:'city',name:'뉴욕',englishName:'NEW YORK',propertyId:'new-york',bandColor:'#171b18',icon:'▥'},
-  {id:'social-welfare-tax',type:'tax',name:'사회복지기금',englishName:'SOCIAL WELFARE FUND',imageKey:'social-welfare',amount:150,icon:'−'},
-  {id:'seoul-olympic',type:'city',name:'서울올림픽',englishName:'SEOUL OLYMPICS',propertyId:'seoul-olympic',imageKey:'seoul-olympics',icon:'◉'},
+  {id:'social-welfare-tax',type:'tax',name:'사회복지기금',englishName:'SOCIAL WELFARE FUND',imageKey:'social-welfare',amount:150000,icon:'−'},
+  {id:'seoul-olympic',type:'city',name:'서울',englishName:'SEOUL',propertyId:'seoul-olympic',imageKey:'seoul-olympics',icon:'◉'},
 ];
 
 export const REGION_STYLES = {

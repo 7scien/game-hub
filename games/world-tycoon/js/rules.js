@@ -7,15 +7,19 @@ export const PHASES={
 };
 
 export const RULES={
-  STARTING_MONEY:1500,PASS_START_BONUS:200,MAX_BUILDING_LEVEL:4,GROUP_COMPLETION_MULTIPLIER:1.5,
+  STARTING_MONEY:2930000,PASS_START_BONUS:200000,MAX_BUILDING_LEVEL:4,GROUP_COMPLETION_MULTIPLIER:1.5,
   SELL_PROPERTY_RATE:.5,SELL_BUILDING_RATE:.5,BONUS_TURN_ON_DOUBLE:true,MAX_CONSECUTIVE_DOUBLES:3,
-  FACILITY_MULTIPLIERS:[0,1,2,4,7],AUTOSAVE_KEY:'world-tycoon-save-v2',SAVE_VERSION:2,
+  FACILITY_MULTIPLIERS:[0,1,1,1,1],AUTOSAVE_KEY:'world-tycoon-save-v3',SAVE_VERSION:3,
 };
 
 export const PLAYER_COLORS=['#ff5d7d','#4ed6ff','#ffd65a','#8c7bff'];
 export const PLAYER_TOKENS=['●','◆','▲','■'];
 
-export function formatMoney(amount){return Math.round(amount).toLocaleString('ko-KR')}
+export function formatMoney(amount){
+  const value=Math.round(Number(amount)||0);const sign=value<0?'−':'';const absolute=Math.abs(value);
+  if(absolute>=10000&&absolute%10000===0)return `${sign}${absolute/10000}만 원`;
+  return `${sign}${absolute.toLocaleString('ko-KR')}원`;
+}
 
 export function ownsRegion(state,ownerId,region){
   const cities=state.board.filter(tile=>tile.type==='city'&&tile.region===region);
@@ -25,14 +29,11 @@ export function ownsRegion(state,ownerId,region){
 export function calculateRent(state,tile,visitor){
   if(tile.type==='city'){
     let rent=tile.rentByLevel[tile.buildingLevel]??tile.baseRent;
-    if(ownsRegion(state,tile.ownerId,tile.region))rent*=RULES.GROUP_COMPLETION_MULTIPLIER;
-    if(visitor?.rentDiscountCharges>0)rent*=visitor.rentDiscountRate??.5;
+    if(tile.buildable!==false&&ownsRegion(state,tile.ownerId,tile.region))rent*=RULES.GROUP_COMPLETION_MULTIPLIER;
     return Math.round(rent);
   }
   if(tile.type==='facility'){
-    const count=state.board.filter(item=>item.type==='facility'&&item.kind===tile.kind&&item.ownerId===tile.ownerId).length;
-    let rent=tile.baseRent*(RULES.FACILITY_MULTIPLIERS[count]??count*2);
-    if(visitor?.rentDiscountCharges>0)rent*=visitor.rentDiscountRate??.5;
+    let rent=tile.baseRent;
     return Math.round(rent);
   }
   return 0;
