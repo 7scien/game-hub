@@ -11,6 +11,7 @@ const TERRAINS: Terrain[] = [
 const NUMBERS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
 const PORTS: PortType[] = ['generic', 'generic', 'generic', 'generic', 'wood', 'brick', 'wool', 'grain', 'ore'];
 const HEX_SIZE = 72;
+const DIRECTIONS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]] as const;
 
 export function seededRandom(seed: number) {
   let value = seed >>> 0;
@@ -34,14 +35,37 @@ export function shuffle<T>(items: readonly T[], random: () => number): T[] {
 
 const pointKey = (x: number, y: number) => `${Math.round(x * 100)},${Math.round(y * 100)}`;
 const edgeKey = (a: string, b: string) => [a, b].sort().join('|');
+const coordKey = (q: number, r: number) => `${q},${r}`;
+
+function hasTerrainTriple(terrains: Map<string, Terrain>) {
+  for (const [coord, terrain] of terrains) {
+    if (terrain === 'desert') continue;
+    const [q, r] = coord.split(',').map(Number);
+    const matchingNeighbors = DIRECTIONS.filter(([dq, dr]) => terrains.get(coordKey(q + dq, r + dr)) === terrain).length;
+    if (matchingNeighbors >= 2) return true;
+  }
+  return false;
+}
+
+function balancedTerrains(random: () => number) {
+  const centerKey = coordKey(0, 0);
+  const outerCoords = COORDS.filter(([q, r]) => q !== 0 || r !== 0);
+  const resourceTerrains = TERRAINS.filter((terrain) => terrain !== 'desert');
+  for (let attempt = 0; attempt < 2_000; attempt += 1) {
+    const shuffled = shuffle(resourceTerrains, random);
+    const mapping = new Map<string, Terrain>([[centerKey, 'desert']]);
+    outerCoords.forEach(([q, r], index) => mapping.set(coordKey(q, r), shuffled[index]));
+    if (!hasTerrainTriple(mapping)) return mapping;
+  }
+  throw new Error('서로 뭉치지 않는 지형 배치를 생성하지 못했습니다.');
+}
 
 function hasAdjacentHighNumbers(numbers: Map<string, number>) {
-  const directions = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
   for (const [coord, number] of numbers) {
     if (number !== 6 && number !== 8) continue;
     const [q, r] = coord.split(',').map(Number);
-    if (directions.some(([dq, dr]) => {
-      const neighbor = numbers.get(`${q + dq},${r + dr}`);
+    if (DIRECTIONS.some(([dq, dr]) => {
+      const neighbor = numbers.get(coordKey(q + dq, r + dr));
       return neighbor === 6 || neighbor === 8;
     })) return true;
   }
@@ -59,16 +83,16 @@ function balancedNumbers(nonDesert: readonly (readonly [number, number])[], rand
 
 export function createBoard(seed: number): Board {
   const random = seededRandom(seed);
-  const terrains = shuffle(TERRAINS, random);
-  const nonDesertCoords = COORDS.filter((_, index) => terrains[index] !== 'desert');
+  const terrainMap = balancedTerrains(random);
+  const nonDesertCoords = COORDS.filter(([q, r]) => q !== 0 || r !== 0);
   const numberMap = balancedNumbers(nonDesertCoords, random);
   const vertices: Record<string, Vertex> = {};
   const edges: Record<string, Edge> = {};
 
-  const tiles: Tile[] = COORDS.map(([q, r], index) => {
+  const tiles: Tile[] = COORDS.map(([q, r]) => {
     const x = HEX_SIZE * Math.sqrt(3) * (q + r / 2);
     const y = HEX_SIZE * 1.5 * r;
-    const terrain = terrains[index];
+    const terrain = terrainMap.get(coordKey(q, r))!;
     const id = `t:${q},${r}`;
     const vertexIds = Array.from({ length: 6 }, (_, corner) => {
       const angle = (Math.PI / 180) * (60 * corner - 30);

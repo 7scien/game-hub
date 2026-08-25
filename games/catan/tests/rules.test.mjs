@@ -26,11 +26,30 @@ for (const name of ['types', 'board', 'rules', 'storage']) {
 }
 
 const require = createRequire(import.meta.url);
+const { createBoard } = require(join(compiledDirectory, 'board.js'));
 const { createGame, getDiceTotal, reduceGame } = require(join(compiledDirectory, 'rules.js'));
 const { RESOURCES } = require(join(compiledDirectory, 'types.js'));
 const { clearGame, LEGACY_SAVE_KEY, loadGames, saveGame } = require(join(compiledDirectory, 'storage.js'));
 
 const totalResources = (player) => RESOURCES.reduce((total, resource) => total + player.resources[resource], 0);
+
+test('사막은 중앙에 놓이고 같은 자원 타일은 세 개 이상 뭉치지 않는다', () => {
+  const directions=[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+  const expected={forest:4,pasture:4,field:4,hill:3,mountain:3,desert:1};
+  for(let seed=1;seed<=250;seed+=1){
+    const board=createBoard(seed);
+    const center=board.tiles.find((tile)=>tile.q===0&&tile.r===0);
+    assert.equal(center.terrain,'desert',`seed ${seed}: 사막이 중앙이어야 한다`);
+    const counts=Object.fromEntries(Object.keys(expected).map((terrain)=>[terrain,board.tiles.filter((tile)=>tile.terrain===terrain).length]));
+    assert.deepEqual(counts,expected,`seed ${seed}: 실제 카탄의 지형 개수를 유지해야 한다`);
+    const terrainAt=new Map(board.tiles.map((tile)=>[`${tile.q},${tile.r}`,tile.terrain]));
+    for(const tile of board.tiles){
+      if(tile.terrain==='desert')continue;
+      const sameNeighbors=directions.filter(([dq,dr])=>terrainAt.get(`${tile.q+dq},${tile.r+dr}`)===tile.terrain).length;
+      assert.ok(sameNeighbors<=1,`seed ${seed}: ${tile.terrain} 타일 세 개가 연결되면 안 된다`);
+    }
+  }
+});
 
 test('1과 3이 나오면 합계 4 타일만 생산한다', () => {
   const game = createGame(['가', '나', '다'], undefined, 20260825);
