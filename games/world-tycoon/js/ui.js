@@ -9,14 +9,15 @@ const phaseLabel={
 };
 
 function tilePrice(tile){return tile.purchasePrice?formatMoney(tile.purchasePrice):tile.type==='event'?'KEY CARD':tile.type==='tax'?`−${formatMoney(tile.amount)}`:tile.type.toUpperCase()}
-function buildingLabel(level){return ['대지','별장','별장 2채','빌딩','호텔'][level]??`Lv${level}`}
+function buildingLabel(level){return ['땅','별장','빌딩','호텔'][level]??'땅'}
 function buildingMarkup(tile){
   if(tile.type!=='city'||!tile.ownerId)return '';
-  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)return '<span class="landmark-mark" title="호텔">★</span>';
-  return `<span class="building-pips" aria-label="건물 레벨 ${tile.buildingLevel}">${Array.from({length:tile.buildingLevel},()=>'<i></i>').join('')}</span>`;
+  const label=buildingLabel(tile.buildingLevel);
+  if(tile.buildingLevel===0)return '<span class="tile-building-label land-label">땅</span>';
+  return `<span class="tile-building building-${tile.buildingLevel===1?'villa':tile.buildingLevel===2?'tower':'hotel'}" role="img" aria-label="${label}"><i></i>${tile.buildingLevel===RULES.MAX_BUILDING_LEVEL?'<b>H</b>':''}</span><span class="tile-building-label">${label}</span>`;
 }
 function tokenMarkup(players,index){
-  return `<span class="tile-tokens">${players.filter(player=>!player.bankrupt&&player.position===index).map((player,tokenIndex)=>`<i class="player-token token-${tokenIndex}" style="--token:${player.color}" title="${escapeHtml(player.name)}"><b>${player.token}</b></i>`).join('')}</span>`;
+  return `<span class="tile-tokens">${players.filter(player=>!player.bankrupt&&player.position===index).map((player,tokenIndex)=>`<i class="player-token token-${tokenIndex}" data-player-token="${player.id}" style="--token:${player.color}" title="${escapeHtml(player.name)}"><b>${player.token}</b></i>`).join('')}</span>`;
 }
 function tileArtwork(tile){
   return tile.imageKey?`<span class="tile-art tile-art-${tile.imageKey}" role="img" aria-label="${escapeHtml(tile.name)} 그림"></span>`:`<b class="tile-icon" aria-hidden="true">${tile.icon}</b>`;
@@ -30,12 +31,14 @@ function boardMarkup(state){
   return `<div class="board-grid">${board.map((tile,index)=>{
     const position=boardPosition(index);const region=regionMeta(tile.region);const owner=state?.players.find(player=>player.id===tile.ownerId);
     const side=tileSide(index);
-    return `<article class="board-tile tile-${tile.type} side-${side}${side==='corner'?' corner':''}${tile.buildingLevel===4?' landmark':''}" style="--row:${position.row};--column:${position.column};--region:${region.color};--band:${tile.bandColor||'transparent'};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}">
+    return `<article class="board-tile tile-${tile.type} side-${side}${side==='corner'?' corner':''}${tile.buildingLevel===RULES.MAX_BUILDING_LEVEL?' landmark':''}" data-tile-index="${index}" style="--row:${position.row};--column:${position.column};--region:${region.color};--band:${tile.bandColor||'transparent'};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}">
       ${tile.bandColor?'<span class="tile-band"></span>':''}<span class="owner-strip"></span>${buildingMarkup(tile)}<span class="tile-face">${tileArtwork(tile)}<strong>${escapeHtml(tile.name)}</strong><span class="tile-en">${escapeHtml(tile.englishName)}</span><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
     </article>`;
   }).join('')}
     <div class="board-center">
-      <span class="center-card-deck" aria-hidden="true"><i></i><b>GOLDEN<br>KEY</b></span>
+      <span class="center-card-deck" role="img" aria-label="가운데에 쌓아 둔 황금열쇠 카드 ${state?Math.max(0,state.eventDeck.length-state.eventCursor):30}장">
+        <i class="deck-card deck-card-back"></i><i class="deck-card deck-card-middle"></i><span class="deck-card deck-card-top"><b>◆</b><strong>황금열쇠</strong><small>GOLDEN KEY</small></span><em>${state?Math.max(0,state.eventDeck.length-state.eventCursor):30}장</em>
+      </span>
       <span class="center-station" aria-hidden="true"><i></i><b>✦</b></span>
       <h1>WORLD<br><em>TYCOON</em></h1>
       <div class="route-orbit" aria-hidden="true"><i></i><i></i><i></i><span>✈</span></div>
@@ -109,7 +112,8 @@ function activity(state){return `<section class="activity-log"><div class="secti
 
 function noticeModal(state){
   if(!state.notice)return '';
-  return `<div class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="notice-title"><section class="notice-card tone-${state.notice.tone}"><span class="notice-symbol">${state.notice.tone==='event'?'◆':state.notice.tone==='landmark'?'★':state.notice.tone==='danger'?'!':'✦'}</span><p class="eyebrow">${state.notice.tone==='event'?'GOLDEN KEY':'TRAVEL UPDATE'}</p><h2 id="notice-title">${escapeHtml(state.notice.title)}</h2><p>${escapeHtml(state.notice.message)}</p><button class="primary-button" type="button" data-action="dismiss-notice">확인 <span>→</span></button></section></div>`;
+  const golden=state.notice.source==='golden-key';
+  return `<div class="modal-backdrop${golden?' golden-key-backdrop':''}" role="dialog" aria-modal="true" aria-labelledby="notice-title"><section class="notice-card tone-${state.notice.tone}${golden?' golden-key-draw-card':''}"><span class="notice-symbol">${golden?'◆':state.notice.tone==='landmark'?'★':state.notice.tone==='danger'?'!':'✦'}</span><p class="eyebrow">${golden?'GOLDEN KEY':'TRAVEL UPDATE'}</p><h2 id="notice-title">${escapeHtml(state.notice.title)}</h2><p>${escapeHtml(state.notice.message)}</p><button class="primary-button" type="button" data-action="dismiss-notice">확인 <span>→</span></button></section></div>`;
 }
 
 function optionAssets(assets){return `<option value="">자산 없음</option>${assets.map(tile=>`<option value="${tile.id}">${escapeHtml(tile.name)}</option>`).join('')}`}
@@ -133,12 +137,13 @@ function gameOverModal(state){
 export function renderGame(root,state){
   const player=getCurrentPlayer(state);
   root.innerHTML=`<main class="in-game"><header class="game-topbar"><div class="game-brand"><span>WT</span><b>WORLD TYCOON</b></div><div class="game-meta"><span>${modeLabel(state.mode)}</span><b data-timer>${timerLabel(state)}</b><span>TURN ${state.turnNumber}</span></div><div class="utility-actions"><button type="button" data-action="open-help" aria-label="게임 방법">?</button><button type="button" data-action="open-menu" aria-label="게임 메뉴">☰</button></div></header>${playerStrip(state)}<div class="play-layout"><section class="board-panel">${boardMarkup(state)}</section><aside class="control-panel turn-panel" style="--player-color:${player.color}"><div class="current-player"><span class="current-token">${player.token}</span><div><small>CURRENT PLAYER</small><h2>${escapeHtml(player.name)}</h2></div><strong>${formatMoney(player.money)}<small>보유 현금</small></strong></div><div class="phase-pill">${phaseLabel[state.phase]}</div><section class="turn-actions">${decisionPanel(state)}</section>${currentAssets(state)}${activity(state)}</aside></div></main><div id="modal-root">${noticeModal(state)||tradeModal(state)||gameOverModal(state)}</div>`;
+  if(state.notice?.source==='golden-key')animateGoldenKeyDraw(root);
 }
 
 export function renderHelp(){
   return `<div class="modal-backdrop free-modal" role="dialog" aria-modal="true"><section class="help-card"><button class="modal-close" type="button" data-action="close-free-modal" aria-label="닫기">×</button><p class="eyebrow">HOW TO PLAY</p><h2>World Tycoon 가이드</h2><div class="help-grid">${[
     ['🎲','주사위','주사위 2개의 합만큼 이동합니다. 더블이면 보너스 턴을 얻고, 3연속 더블이면 무인도로 갑니다.'],
-    ['◈','도시 구매','소유자가 없는 도시에 도착하면 표시된 가격으로 인수할 수 있습니다.'],['▥','건물','자기 도시에 도착하면 별장 2채, 빌딩, 호텔 순서로 한 단계씩 개발할 수 있습니다.'],
+    ['◈','도시 구매','소유자가 없는 도시에 도착하면 표시된 가격으로 인수할 수 있습니다.'],['▥','건물','자기 도시에 도착하면 별장, 빌딩, 호텔 순서로 한 단계씩 개발할 수 있습니다.'],
     ['₩','통행료','상대 도시나 탈것에 도착하면 표시된 통행료를 냅니다. 제주도·부산·서울은 건물을 지을 수 없고 통행료가 고정입니다.'],['◆','황금열쇠','클래식 대형판 30장 구성입니다. 우대권과 특수무전기는 보관하거나 은행에 팔 수 있습니다.'],
     ['✈','탈것','콩코드여객기·퀸 엘리자베스호·콜럼비아호는 건물 없이 고정 이용료를 받습니다.'],['⇄','거래','주사위를 굴리기 전에 현금·도시·탈것을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
     ['!','파산','현금이 부족하면 건물과 자산을 반값에 정리합니다. 모두 정리해도 못 내면 파산합니다.'],['♛','승리','완전 게임은 마지막 생존자가, 시간제 게임은 종료 시 순자산 1위가 승리합니다.']
@@ -151,3 +156,28 @@ export function showFreeModal(markup){document.querySelector('#modal-root')?.rep
 export function closeFreeModal(){document.querySelector('#modal-root')?.replaceChildren()}
 export function toast(message){const element=document.createElement('div');element.className='toast';element.textContent=message;document.body.append(element);requestAnimationFrame(()=>element.classList.add('show'));setTimeout(()=>{element.classList.remove('show');setTimeout(()=>element.remove(),200)},2300)}
 export function updateTimer(state){const timer=document.querySelector('[data-timer]');if(timer)timer.textContent=timerLabel(state)}
+
+function animateGoldenKeyDraw(root){
+  if(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  requestAnimationFrame(()=>{const deck=root.querySelector('.center-card-deck');const card=root.querySelector('.golden-key-draw-card');const backdrop=root.querySelector('.golden-key-backdrop');if(!deck||!card)return;
+    const from=deck.getBoundingClientRect();const to=card.getBoundingClientRect();const dx=from.left+from.width/2-(to.left+to.width/2);const dy=from.top+from.height/2-(to.top+to.height/2);
+    backdrop?.animate([{backgroundColor:'transparent',backdropFilter:'blur(0)'},{backgroundColor:'#020912d9',backdropFilter:'blur(9px)'}],{duration:560,easing:'ease-out'});
+    card.animate([{opacity:.2,transform:`translate(${dx}px,${dy}px) scale(.16) rotate(-25deg)`},{opacity:1,transform:'translate(0,0) scale(1.04) rotate(1deg)',offset:.82},{opacity:1,transform:'translate(0,0) scale(1) rotate(0)'}],{duration:680,easing:'cubic-bezier(.2,.8,.2,1)'});
+  });
+}
+
+export function captureTokenRect(playerId){
+  const token=document.querySelector(`[data-player-token="${playerId}"]`);if(!token)return null;const rect=token.getBoundingClientRect();return {left:rect.left,top:rect.top,width:rect.width,height:rect.height};
+}
+
+export async function animateTokenStep(playerId,fromRect){
+  const token=document.querySelector(`[data-player-token="${playerId}"]`);if(!token||!fromRect||globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
+  const to=token.getBoundingClientRect();const dx=fromRect.left+fromRect.width/2-(to.left+to.width/2);const dy=fromRect.top+fromRect.height/2-(to.top+to.height/2);
+  try{await token.animate([{transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.92)`,filter:'brightness(1)'},{transform:'translate(-50%,-50%) scale(1.14)',filter:'brightness(1.35)',offset:.78},{transform:'translate(-50%,-50%) scale(1)',filter:'brightness(1)'}],{duration:270,easing:'cubic-bezier(.2,.75,.25,1)'}).finished}catch{}
+}
+
+export function showMoneyFeedback(feedback){
+  if(!feedback)return;document.querySelector('.money-feedback')?.remove();const element=document.createElement('div');element.className=`money-feedback tone-${feedback.tone||'info'}`;
+  const sign=feedback.amount>0?'+':'−';element.innerHTML=`<small>${escapeHtml(feedback.title)}</small><strong>${sign}${formatMoney(Math.abs(feedback.amount))}</strong><span>${escapeHtml(feedback.message)}</span>`;document.body.append(element);
+  requestAnimationFrame(()=>element.classList.add('show'));setTimeout(()=>{element.classList.remove('show');setTimeout(()=>element.remove(),260)},1900);
+}

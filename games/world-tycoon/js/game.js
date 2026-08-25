@@ -5,7 +5,8 @@ import {PHASES,PLAYER_COLORS,PLAYER_TOKENS,RULES,buildingValue,calculateRent,for
 const clone=value=>JSON.parse(JSON.stringify(value));
 const currentPlayer=state=>state.players[state.currentPlayerIndex];
 const addLog=(state,message)=>{state.log.unshift({id:`log-${state.sequence++}`,message});state.log=state.log.slice(0,10)};
-const notice=(state,title,message,tone='info')=>{state.notice={id:`notice-${state.sequence++}`,title,message,tone}};
+const notice=(state,title,message,tone='info',source=null)=>{state.notice={id:`notice-${state.sequence++}`,title,message,tone,source}};
+const cashFeedback=(state,title,amount,message,tone)=>{state.feedback={id:`feedback-${state.sequence++}`,title,amount,message,tone}};
 const shuffled=(items,rng)=>items.map(item=>({item,sort:rng()})).sort((a,b)=>a.sort-b.sort).map(entry=>entry.item);
 
 export const SPECIAL_CARD_INFO={
@@ -26,8 +27,8 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random}={}){
   const minutes=mode==='full'?null:Number(mode);
   const state={
     version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
-    phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,pendingAction:null,pendingDebt:null,
-    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,trade:null,notice:null,log:[],sequence:1,
+    phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,pendingMovement:null,pendingAction:null,pendingDebt:null,
+    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,trade:null,notice:null,feedback:null,log:[],sequence:1,
     timer:{remainingSeconds:minutes===null?null:minutes*60},winnerIds:[],finishedReason:null,
   };
   addLog(state,`${players[0].name}의 여행이 시작되었습니다.`);
@@ -46,6 +47,7 @@ export function rollDice(state,rng=Math.random){
 
 function passStart(state,player,count=1){
   const reward=RULES.PASS_START_BONUS*count;player.money+=reward;addLog(state,`${player.name}이 출발 지점을 통과해 ${formatMoney(reward)}을 받았습니다.`);
+  cashFeedback(state,'월급 지급',reward,'출발지를 통과했습니다.','success');
 }
 
 function moveBy(state,steps,{collectPassBonus=true}={}){
@@ -66,9 +68,22 @@ export function completeRoll(state){
   if(state.consecutiveDoubles>=RULES.MAX_CONSECUTIVE_DOUBLES){
     player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=Math.max(player.skipTurns,3);
     notice(state,'연속 더블!',`${RULES.MAX_CONSECUTIVE_DOUBLES}번 연속 더블로 무인도로 이동합니다.`,'warning');
-    addLog(state,`${player.name}이 연속 더블로 무인도로 이동했습니다.`);state.phase=PHASES.END_TURN;return;
+    addLog(state,`${player.name}이 연속 더블로 무인도로 이동했습니다.`);state.pendingMovement=null;state.phase=PHASES.END_TURN;return;
   }
-  moveBy(state,state.rollTotal);addLog(state,`${player.name}이 ${state.rollTotal}칸 이동했습니다.`);state.phase=PHASES.RESOLVING_TILE;resolveTile(state);
+  state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};
+}
+
+export function advanceMovement(state){
+  requirePhase(state,PHASES.MOVING);const movement=state.pendingMovement;
+  if(!movement||movement.playerId!==currentPlayer(state).id||movement.remaining<1)throw new Error('진행 중인 이동이 없습니다.');
+  moveBy(state,1);movement.remaining-=1;if(movement.remaining===0)state.phase=PHASES.RESOLVING_TILE;
+  return {remaining:movement.remaining,position:currentPlayer(state).position};
+}
+
+export function finishMovement(state){
+  requirePhase(state,PHASES.RESOLVING_TILE);const movement=state.pendingMovement;
+  if(!movement)throw new Error('완료할 이동이 없습니다.');
+  addLog(state,`${currentPlayer(state).name}이 ${movement.total}칸 이동했습니다.`);state.pendingMovement=null;resolveTile(state);
 }
 
 function drawEvent(state){
@@ -92,7 +107,9 @@ function completeDebtPayment(state,debt){
   if(debt.recipientId){const target=state.players.find(player=>player.id===debt.recipientId);if(target&&!target.bankrupt)target.money+=debt.amount}
   if(debt.recipientIds)debt.recipientIds.forEach(id=>{const target=state.players.find(player=>player.id===id);if(target&&!target.bankrupt)target.money+=debt.shareAmount});
   if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+debt.amount;
-  addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);state.pendingDebt=null;continueAfterPayment(state,debt.afterPayment);
+  addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
+  const title=debt.recipientId?'통행료 지불':debt.fundDeposit?'사회복지기금 납부':'현금 지불';
+  cashFeedback(state,title,-debt.amount,debt.reason,'danger');state.pendingDebt=null;continueAfterPayment(state,debt.afterPayment);
 }
 
 function prepareDebt(state,{amount,recipientId=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null}){
@@ -109,8 +126,8 @@ function prepareDebt(state,{amount,recipientId=null,recipientIds=null,shareAmoun
 
 function buildingFeeAmount(state,playerId,rates){
   return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===playerId&&tile.buildingLevel>0).reduce((sum,tile)=>{
-    if(tile.buildingLevel<=2)return sum+rates.villa*tile.buildingLevel;
-    if(tile.buildingLevel===3)return sum+rates.building;
+    if(tile.buildingLevel===1)return sum+rates.villa;
+    if(tile.buildingLevel===2)return sum+rates.building;
     return sum+rates.hotel;
   },0);
 }
@@ -132,7 +149,7 @@ function travelRoute(state,effect){
 
 function applyEvent(state,card){
   const player=currentPlayer(state);const effect=card.effect;
-  notice(state,card.title,card.text,'event');addLog(state,`${player.name}: ${card.title}`);
+  notice(state,card.title,card.text,'event','golden-key');addLog(state,`${player.name}: ${card.title}`);
   if(effect.type==='cash'){
     if(effect.amount>=0){player.money+=effect.amount;finishSimpleTile(state)}else prepareDebt(state,{amount:-effect.amount,reason:card.title});
     return;
@@ -193,7 +210,7 @@ export function buildCurrentTile(state){
   if(tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');
   if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 호텔이 완성되었습니다.');
   const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');
-  player.money-=cost;tile.buildingLevel+=1;addLog(state,`${player.name}이 ${tile.name}을 Lv${tile.buildingLevel}로 개발했습니다.`);
+  player.money-=cost;tile.buildingLevel+=1;const buildingName=['땅','별장','빌딩','호텔'][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName}을 건설했습니다.`);
   if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'호텔 완성!',`${tile.name}에 최고 등급 호텔이 완성되었습니다.`,'landmark');
   finishSimpleTile(state);
 }
@@ -241,7 +258,7 @@ export function declareBankruptcy(state){
 
 function nextActiveIndex(state,from){let next=from;do{next=(next+1)%state.players.length}while(state.players[next].bankrupt);return next}
 function prepareTurn(state){
-  const player=currentPlayer(state);state.pendingAction=null;state.pendingDebt=null;state.rolledDouble=false;state.rollTotal=0;
+  const player=currentPlayer(state);state.pendingMovement=null;state.pendingAction=null;state.pendingDebt=null;state.rolledDouble=false;state.rollTotal=0;
   if(player.skipTurns>0&&removeSpecialCard(player,'island-escape')){player.skipTurns=0;state.phase=PHASES.WAITING_FOR_ROLL;notice(state,'무인도 탈출',`${player.name}이 특수무전기를 사용해 바로 탈출했습니다.`,'success');addLog(state,`${player.name}이 무인도 탈출용 특수무전기를 사용했습니다.`)}
   else if(player.skipTurns>0){player.skipTurns-=1;state.phase=PHASES.END_TURN;notice(state,'대기 중',`${player.name}은 이번 턴을 쉽니다.`,'warning');addLog(state,`${player.name}이 한 턴 쉽니다.`)}else state.phase=PHASES.WAITING_FOR_ROLL;
 }

@@ -1,17 +1,20 @@
 import {
-  buildCurrentTile,buyCurrentTile,cancelTrade,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
-  endTurn,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,
+  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
+  endTurn,finishMovement,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,
 } from './game.js';
 import {clearGame,loadGame,saveGame} from './storage.js';
+import {PHASES} from './rules.js';
 import {
-  closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,toast,updateTimer,
+  animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
 let state=null;let savedGame=loadGame();let setup=Boolean(!savedGame);let playerCount=2;let actionLocked=false;let clockTicks=0;
 
 function persist(){if(state?.status==='playing')saveGame(state);else if(state?.status==='finished')clearGame()}
-function render(){if(state)renderGame(root,state);else renderStart(root,{savedGame,setup,playerCount})}
+function render(){
+  if(state){const feedback=state.feedback;state.feedback=null;renderGame(root,state);if(feedback){showMoneyFeedback(feedback);persist()}}else renderStart(root,{savedGame,setup,playerCount});
+}
 function commit(action,{rerender=true}={}){
   try{const result=action();persist();if(rerender)render();return result}catch(error){toast(error.message||'행동을 완료하지 못했습니다.');return null}
 }
@@ -23,8 +26,12 @@ function startGame(form){
 
 async function handleRoll(){
   if(actionLocked)return;actionLocked=true;
-  const rolled=commit(()=>rollDice(state));if(!rolled){actionLocked=false;return}
-  await new Promise(resolve=>setTimeout(resolve,720));commit(()=>completeRoll(state));actionLocked=false;
+  try{
+    const rolled=commit(()=>rollDice(state));if(!rolled)return;
+    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));commit(()=>completeRoll(state));
+    while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await new Promise(resolve=>setTimeout(resolve,55))}
+    if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)commit(()=>finishMovement(state));
+  }finally{actionLocked=false}
 }
 
 function handleEndTurn(){

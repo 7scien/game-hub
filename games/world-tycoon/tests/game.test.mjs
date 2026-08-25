@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildCurrentTile,buyCurrentTile,completeRoll,createGame,declareBankruptcy,endTurn,getNetWorth,openTrade,
+  advanceMovement,buildCurrentTile,buyCurrentTile,completeRoll,createGame,declareBankruptcy,endTurn,finishMovement,getNetWorth,openTrade,
   proposeTrade,resolveTile,resolveTrade,rollDice,sellSpecialCard,updateClock,
 } from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
@@ -9,6 +9,7 @@ import {PHASES,RULES,calculateRent,formatMoney} from '../js/rules.js';
 import {isValidSavedGame,loadGame,saveGame} from '../js/storage.js';
 
 const rngFor=(...values)=>{let index=0;return ()=>values[index++]??.1};
+const finishDiceMovement=state=>{completeRoll(state);while(state.phase===PHASES.MOVING)advanceMovement(state);if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)finishMovement(state)};
 
 test('2~4인 게임을 원화 경제와 데이터 기반 보드로 생성한다',()=>{
   for(const count of [2,3,4]){
@@ -63,17 +64,18 @@ test('황금열쇠와 특별 칸은 생성된 일러스트를 연결한다',()=>
 
 test('출발점을 통과하면 20만 원을 받고 도착한 도시를 살 수 있다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=39;
-  rollDice(state,rngFor(0,.01));completeRoll(state);
+  rollDice(state,rngFor(0,.01));finishDiceMovement(state);
   assert.equal(player.position,1);assert.equal(player.money,RULES.STARTING_MONEY+200000);assert.equal(state.phase,PHASES.BUY_DECISION);
+  assert.deepEqual({title:state.feedback.title,amount:state.feedback.amount},{title:'월급 지급',amount:200000});
   buyCurrentTile(state);assert.equal(state.board[1].ownerId,player.id);assert.ok(player.ownedProperties.includes('taipei'));
 });
 
-test('건설 가능한 도시는 Lv4까지 개발되고 고정 통행료 도시는 건설하지 않는다',()=>{
+test('건설 가능한 도시는 별장·빌딩·호텔 3단계로 개발되고 고정 통행료 도시는 건설하지 않는다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const tile=state.board[1];tile.ownerId=state.players[0].id;state.players[0].ownedProperties.push(tile.id);state.players[0].money=10000000;
-  for(let level=1;level<=4;level++){
+  for(let level=1;level<=3;level++){
     state.phase=PHASES.BUILD_DECISION;state.pendingAction={type:'build',tileIndex:1};buildCurrentTile(state);assert.equal(tile.buildingLevel,level);
   }
-  assert.equal(calculateRent(state,tile,state.players[1]),tile.rentByLevel[4]);assert.equal(state.notice.title,'호텔 완성!');
+  assert.equal(calculateRent(state,tile,state.players[1]),tile.rentByLevel[3]);assert.equal(state.notice.title,'호텔 완성!');
   const jeju=state.board.find(item=>item.id==='jeju');jeju.ownerId=state.players[0].id;state.players[0].ownedProperties.push(jeju.id);state.players[0].position=jeju.index;resolveTile(state);assert.equal(state.phase,PHASES.END_TURN);
 });
 
@@ -89,6 +91,13 @@ test('상대 도시에 도착하면 통행료가 자동 정산된다',()=>{
   tile.ownerId=owner.id;owner.ownedProperties.push(tile.id);state.currentPlayerIndex=1;visitor.position=tile.index;
   const expected=calculateRent(state,tile,visitor);const ownerBefore=owner.money;resolveTile(state);
   assert.equal(visitor.money,RULES.STARTING_MONEY-expected);assert.equal(owner.money,ownerBefore+expected);assert.equal(state.phase,PHASES.END_TURN);
+  assert.deepEqual({title:state.feedback.title,amount:state.feedback.amount},{title:'통행료 지불',amount:-expected});
+});
+
+test('주사위 합만큼 말을 한 칸씩 순서대로 이동한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});rollDice(state,rngFor(.4,.4));completeRoll(state);assert.equal(state.rollTotal,6);assert.equal(state.players[0].position,0);
+  for(let step=1;step<=6;step++){advanceMovement(state);assert.equal(state.players[0].position,step);assert.equal(state.pendingMovement.remaining,6-step)}
+  assert.equal(state.phase,PHASES.RESOLVING_TILE);finishMovement(state);assert.equal(state.phase,PHASES.BUY_DECISION);
 });
 
 test('클래식 대형판 황금열쇠 30장 구성을 사용한다',()=>{
@@ -112,9 +121,9 @@ test('우대권은 통행료를 한 번 면제하고 특수카드는 정가에 �
 
 test('건물 유지비와 사회복지기금을 원화로 처리한다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];const taipei=state.board.find(tile=>tile.id==='taipei');taipei.ownerId=player.id;taipei.buildingLevel=2;player.ownedProperties.push(taipei.id);
-  player.position=2;state.eventDeck=['income-tax'];state.eventCursor=0;resolveTile(state);assert.equal(player.money,RULES.STARTING_MONEY-60000);
-  player.position=38;resolveTile(state);assert.equal(state.welfareFund,150000);assert.equal(player.money,RULES.STARTING_MONEY-210000);
-  player.position=20;resolveTile(state);assert.equal(state.welfareFund,0);assert.equal(player.money,RULES.STARTING_MONEY-60000);
+  player.position=2;state.eventDeck=['income-tax'];state.eventCursor=0;resolveTile(state);assert.equal(player.money,RULES.STARTING_MONEY-100000);
+  player.position=38;resolveTile(state);assert.equal(state.welfareFund,150000);assert.equal(player.money,RULES.STARTING_MONEY-250000);
+  player.position=20;resolveTile(state);assert.equal(state.welfareFund,0);assert.equal(player.money,RULES.STARTING_MONEY-100000);
 });
 
 test('건물 없는 자산과 현금을 플레이어끼리 거래한다',()=>{
@@ -125,7 +134,7 @@ test('건물 없는 자산과 현금을 플레이어끼리 거래한다',()=>{
 
 test('지불 능력이 없으면 파산하고 마지막 플레이어가 승리한다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const owner=state.players[0];const debtor=state.players[1];const tile=state.board.find(item=>item.id==='new-york');
-  tile.ownerId=owner.id;tile.buildingLevel=4;owner.ownedProperties.push(tile.id);state.currentPlayerIndex=1;debtor.position=tile.index;debtor.money=0;
+  tile.ownerId=owner.id;tile.buildingLevel=3;owner.ownedProperties.push(tile.id);state.currentPlayerIndex=1;debtor.position=tile.index;debtor.money=0;
   resolveTile(state);assert.equal(state.phase,PHASES.ASSET_MANAGEMENT);declareBankruptcy(state);
   assert.equal(debtor.bankrupt,true);assert.equal(state.status,'finished');assert.deepEqual(state.winnerIds,[owner.id]);
 });
@@ -136,7 +145,7 @@ test('시간 제한 종료 시 순자산으로 승자를 결정한다',()=>{
 });
 
 test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
-  const state=createGame(2,{mode:'full',rng:()=>.2});rollDice(state,rngFor(0,0));completeRoll(state);
+  const state=createGame(2,{mode:'full',rng:()=>.2});rollDice(state,rngFor(0,0));finishDiceMovement(state);
   if(state.phase===PHASES.BUY_DECISION)state.phase=PHASES.END_TURN;
   const result=endTurn(state);assert.equal(result.bonusTurn,true);assert.equal(state.currentPlayerIndex,0);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
 });
@@ -144,5 +153,5 @@ test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
 test('게임 상태는 새 저장 형식으로 저장하고 불러올 수 있다',()=>{
   const values=new Map();const storage={setItem:(key,value)=>values.set(key,value),getItem:key=>values.get(key)??null,removeItem:key=>values.delete(key)};
   const state=createGame(4,{mode:'45',rng:()=>.2});assert.equal(saveGame(state,storage),true);const loaded=loadGame(storage);
-  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,3);assert.equal(loaded.players.length,4);assert.equal(loaded.timer.remainingSeconds,2700);
+  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,4);assert.equal(loaded.players.length,4);assert.equal(loaded.timer.remainingSeconds,2700);
 });
