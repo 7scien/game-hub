@@ -17,6 +17,9 @@ function buildingMarkup(tile){
 function tokenMarkup(players,index){
   return `<span class="tile-tokens">${players.filter(player=>!player.bankrupt&&player.position===index).map((player,tokenIndex)=>`<i class="player-token token-${tokenIndex}" style="--token:${player.color}" title="${escapeHtml(player.name)}"><b>${player.token}</b></i>`).join('')}</span>`;
 }
+function tileArtwork(tile){
+  return tile.imageKey?`<span class="tile-art tile-art-${tile.imageKey}" role="img" aria-label="${escapeHtml(tile.name)} 그림"></span>`:`<b class="tile-icon" aria-hidden="true">${tile.icon}</b>`;
+}
 function tileSide(index){
   if([0,10,20,30].includes(index))return 'corner';
   if(index<10)return 'bottom';if(index<20)return 'left';if(index<30)return 'top';return 'right';
@@ -27,7 +30,7 @@ function boardMarkup(state){
     const position=boardPosition(index);const region=regionMeta(tile.region);const owner=state?.players.find(player=>player.id===tile.ownerId);
     const side=tileSide(index);
     return `<article class="board-tile tile-${tile.type} side-${side}${side==='corner'?' corner':''}${tile.buildingLevel===4?' landmark':''}" style="--row:${position.row};--column:${position.column};--region:${region.color};--band:${tile.bandColor||'transparent'};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}">
-      ${tile.bandColor?'<span class="tile-band"></span>':''}<span class="owner-strip"></span>${buildingMarkup(tile)}<span class="tile-face"><b class="tile-icon" aria-hidden="true">${tile.icon}</b><strong>${escapeHtml(tile.name)}</strong><span class="tile-en">${escapeHtml(tile.englishName)}</span><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
+      ${tile.bandColor?'<span class="tile-band"></span>':''}<span class="owner-strip"></span>${buildingMarkup(tile)}<span class="tile-face">${tileArtwork(tile)}<strong>${escapeHtml(tile.name)}</strong><span class="tile-en">${escapeHtml(tile.englishName)}</span><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
     </article>`;
   }).join('')}
     <div class="board-center">

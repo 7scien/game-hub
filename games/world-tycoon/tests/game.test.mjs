@@ -37,6 +37,16 @@ test('색깔띠는 지정된 칸과 변의 색만 사용한다',()=>{
   assert.equal(board.filter(tile=>tile.bandColor).length,23);
 });
 
+test('황금열쇠와 특별 칸은 생성된 일러스트를 연결한다',()=>{
+  const board=createGame(2,{mode:'full',rng:()=>.2}).board;
+  assert.ok(board.filter(tile=>tile.type==='event').every(tile=>tile.imageKey==='golden-key'));
+  assert.deepEqual(Object.fromEntries(board.filter(tile=>tile.imageKey&&tile.type!=='event').map(tile=>[tile.id,tile.imageKey])),{
+    jeju:'jeju','deserted-island':'deserted-island',concorde:'concorde','social-welfare-corner':'social-welfare',
+    busan:'busan','queen-elizabeth':'queen-elizabeth','space-travel':'space-travel',columbia:'columbia',
+    'social-welfare-tax':'social-welfare','seoul-olympic':'seoul-olympics',
+  });
+});
+
 test('출발점을 통과하면 보너스를 받고 도착한 도시를 살 수 있다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=39;
   rollDice(state,rngFor(0,.01));completeRoll(state);
