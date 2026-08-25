@@ -28,6 +28,15 @@ test('보드는 요청한 40칸 순서와 한·영문 이름을 사용한다',()
   assert.ok(state.board.every(tile=>tile.englishName));
 });
 
+test('색깔띠는 지정된 칸과 변의 색만 사용한다',()=>{
+  const board=createGame(2,{mode:'full',rng:()=>.2}).board;
+  const bands=color=>board.filter(tile=>tile.bandColor===color).map(tile=>tile.id);
+  assert.deepEqual(bands('#d91f2b'),['taipei','hong-kong','manila','singapore','cairo','istanbul']);
+  assert.deepEqual(bands('#8b4a2f'),['buenos-aires','sao-paulo','sydney','hawaii','lisbon','madrid']);
+  assert.deepEqual(bands('#171b18'),['athens','copenhagen','stockholm','zurich','berlin','montreal','tokyo','paris','rome','london','new-york']);
+  assert.equal(board.filter(tile=>tile.bandColor).length,23);
+});
+
 test('출발점을 통과하면 보너스를 받고 도착한 도시를 살 수 있다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=39;
   rollDice(state,rngFor(0,.01));completeRoll(state);
