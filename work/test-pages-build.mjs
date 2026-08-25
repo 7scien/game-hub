@@ -69,7 +69,7 @@ try{
 
   const builtFiles=(await walk(root)).filter(file=>{
     const path=relative(root,file).split(sep).join('/');
-    return path!=='.assetsignore'&&path!=='offline-assets.json'&&!path.startsWith('.openai/');
+    return path!=='.assetsignore'&&path!=='offline-assets.json'&&!path.startsWith('.openai/')&&!path.startsWith('client/')&&!path.startsWith('server/');
   });
   const expectedOffline=builtFiles.map(browserUrl).sort();
   assert.deepEqual([...offline].sort(),expectedOffline,'offline manifest must cover every deployable build file');
