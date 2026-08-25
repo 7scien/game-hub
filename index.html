@@ -2,63 +2,42 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="theme-color" content="#12162a">
-  <meta name="description" content="한 화면에서 두 사람이 함께 즐기는 오프라인 로컬 파티 게임">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#15182f">
+  <meta name="description" content="한 번 설치하고 여러 로컬 웹게임을 오프라인으로 즐기는 Game Hub">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="DUO PARTY">
-  <title>DUO PARTY — Push Arena</title>
+  <meta name="apple-mobile-web-app-title" content="Game Hub">
+  <title>GAME HUB — Offline Arcade</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/hub.css">
 </head>
 <body>
-  <main id="app" aria-label="DUO PARTY local multiplayer game">
-    <canvas id="game" aria-label="Push Arena game field"></canvas>
-    <header id="hud" class="hidden" aria-live="polite">
-      <div class="player-score p1"><span>P1</span><strong id="p1-wins">0</strong></div>
-      <div class="round"><strong id="round-label">ROUND 1 / 8</strong><span id="game-timer">45</span></div>
-      <div class="player-score p2"><strong id="p2-wins">0</strong><span>P2</span></div>
+  <main class="hub-shell">
+    <header class="topbar">
+      <a class="hub-logo" href="./" aria-label="Game Hub 홈"><span aria-hidden="true">GH</span><strong>GAME HUB</strong></a>
+      <div class="top-actions"><span id="offline-status" class="offline-status" role="status">오프라인 준비 확인 중</span><button id="install-button" class="install-button" type="button">앱 설치</button></div>
     </header>
-    <div id="ring-score" class="hidden"><span class="blue" id="p1-ring">0</span><i>RING OUT</i><span class="red" id="p2-ring">0</span></div>
-    <section id="combat-hud" class="hidden" aria-label="넉백 게이지">
-      <div class="damage-card p1-damage"><div><b>P1 KNOCKBACK</b><strong id="p1-damage">0%</strong></div><i><span id="p1-damage-fill"></span></i></div>
-      <div class="damage-card p2-damage"><div><b>P2 KNOCKBACK</b><strong id="p2-damage">0%</strong></div><i><span id="p2-damage-fill"></span></i></div>
-    </section>
-    <div id="event-banner" class="event-banner hidden"><small>ARENA EVENT</small><strong id="event-name"></strong></div>
-    <section id="overlay" class="overlay">
-      <div class="brand">DUO <em>PARTY</em></div>
-      <h1 id="overlay-title">PUSH ARENA</h1>
-      <p id="overlay-copy">아이템과 아레나 변화를 이용해 상대를 밀어내세요!</p>
-      <div class="rule-chips"><span>넉백 누적</span><span>3종 아이템</span><span>15초마다 이벤트</span></div>
-      <button id="start-button" type="button">게임 시작</button>
-      <button id="pwa-install" class="install-button hidden" type="button">기기에 설치</button>
-      <span id="offline-status" class="offline-status">오프라인 준비 확인 중</span>
-      <p class="key-help">P1: WASD · Space 대시 · Q 아이템 &nbsp;|&nbsp; P2: 방향키 · Enter 대시 · / 아이템</p>
-    </section>
-    <section id="install-sheet" class="install-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="install-title">
-      <div>
-        <small>OFFLINE WEB APP</small>
-        <h2 id="install-title">iPad에 DUO PARTY 설치</h2>
-        <ol><li>Safari 아래/위 메뉴에서 <b>공유</b> 버튼을 누르세요.</li><li><b>홈 화면에 추가</b>를 선택하세요.</li><li>오른쪽 위의 <b>추가</b>를 누르면 끝!</li></ol>
-        <p id="install-note">설치 후에는 Wi‑Fi 없이 홈 화면에서 바로 실행할 수 있어요.</p>
-        <button id="install-close" type="button">확인</button>
+    <section class="hero" aria-labelledby="hub-title">
+      <div class="hero-copy">
+        <p class="eyebrow">ONE APP · MANY GAMES</p>
+        <h1 id="hub-title">한 번 설치하고,<br><em>같이 플레이.</em></h1>
+        <p>한 대의 스마트폰이나 태블릿으로 즐기는 게임을 한곳에 모았습니다. 설치 후에는 인터넷 없이 바로 시작할 수 있어요.</p>
+        <div class="hero-badges" aria-label="Game Hub 특징"><span>오프라인 플레이</span><span>태블릿 최적화</span><span>게임별 독립 실행</span></div>
       </div>
+      <div class="hero-orbit" aria-hidden="true"><i class="orbit-one">⬡</i><i class="orbit-two">●</i><i class="orbit-three">◆</i><b>PLAY<br>TOGETHER</b></div>
     </section>
-    <div id="countdown" class="countdown hidden" aria-live="assertive"></div>
-    <div id="orientation-tip"><strong>화면을 가로로 돌려주세요</strong><span>DUO PARTY는 가로 화면에서 가장 재미있어요.</span></div>
-    <section id="controls" class="controls hidden" aria-label="터치 조작">
-      <div class="side left" data-player="0">
-        <div class="joystick" data-joystick="0"><div class="stick"></div></div>
-        <div class="action-cluster"><button class="item-button" data-item="0" aria-label="Player 1 item"><b>ITEM</b><span>–</span></button><button class="dash blue-dash" data-dash="0" aria-label="Player 1 dash"><span>DASH</span><i></i></button></div>
-      </div>
-      <div class="side right" data-player="1">
-        <div class="action-cluster mirrored"><button class="dash red-dash" data-dash="1" aria-label="Player 2 dash"><span>DASH</span><i></i></button><button class="item-button" data-item="1" aria-label="Player 2 item"><b>ITEM</b><span>–</span></button></div>
-        <div class="joystick" data-joystick="1"><div class="stick"></div></div>
-      </div>
+    <section class="library" aria-labelledby="library-title">
+      <div class="section-heading"><div><p>GAME LIBRARY</p><h2 id="library-title">오늘은 어떤 게임?</h2></div><span id="game-count"></span></div>
+      <div id="game-grid" class="game-grid"></div>
     </section>
+    <footer><strong>GAME HUB</strong><span>새 게임은 <code>games/게임이름/</code>에 추가할 수 있습니다.</span></footer>
   </main>
-  <script type="module" src="./js/app.js"></script>
+  <dialog id="install-dialog" class="install-dialog">
+    <form method="dialog"><span class="dialog-icon" aria-hidden="true">↓</span><p class="eyebrow">INSTALL GAME HUB</p><h2 id="install-title">홈 화면에 추가하기</h2><div id="install-steps" class="install-steps"></div><p class="install-note">처음 한 번 온라인에서 열어 오프라인 준비를 완료해야 합니다.</p><button value="close" type="submit">확인</button></form>
+  </dialog>
+  <noscript>Game Hub를 실행하려면 JavaScript를 켜주세요.</noscript>
+  <script type="module" src="./js/hub.js"></script>
 </body>
 </html>

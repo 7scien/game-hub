@@ -3,7 +3,7 @@ globalThis.matchMedia=()=>({matches:false});
 Object.defineProperty(globalThis,'navigator',{value:{vibrate(){}}});
 globalThis.window={dispatchEvent(){}};
 globalThis.CustomEvent=class{constructor(type,init){this.type=type;this.detail=init?.detail}};
-const {PushArena}=await import('../js/games/push-arena.js');
+const {PushArena}=await import('../games/duo-party/js/games/push-arena.js');
 const canvas={getContext(){return{}},getBoundingClientRect(){return{width:800,height:400}},width:0,height:0};
 const input={get(){return{x:0,y:0,dash:false,item:false}}};
 const audio={tone(){},dash(){},hit(){},score(){},item(){},event(){},hazard(){}};
