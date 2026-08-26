@@ -10,3 +10,5 @@
 .theme-gem::before{background:linear-gradient(145deg,#173d69,#2d1d4d)}
 .theme-world::before{background:radial-gradient(circle at 78% 34%,#49e6c03b,transparent 28%),linear-gradient(145deg,#0c4a67,#0b213c 58%,#253264)}
 .theme-world .card-mark{color:#ffd95c;text-shadow:0 0 36px #49e6c055,0 15px 40px #0006}
+.theme-party-board::before{background:radial-gradient(circle at 76% 28%,#ffd86d55,transparent 26%),linear-gradient(145deg,#7139a2,#262f80 58%,#123650)}
+.theme-party-board .card-mark{color:#ffe27a;text-shadow:0 0 34px #ffd86d99,0 15px 40px #0006}
