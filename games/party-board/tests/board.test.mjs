@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {advanceMovement,BOARD_RULES,createBoard,validateBoard} from '../src/domain/board.js';
 import {getTurnMilestones,salaryForCompletedLap} from '../src/domain/turns.js';
+import {buildBoardLayout,getPlayerPoint} from '../src/three/board-layout.js';
+import {isFastMovement,MOTION_STAGES,movementStepDuration} from '../src/three/movement-timing.js';
 
 test('generated boards satisfy every Phase 1 placement invariant',()=>{
   for(let seed=0;seed<750;seed+=1){
@@ -50,4 +52,35 @@ test('lap salary and global-turn milestones use the documented global clock',()=
   assert.equal(getTurnMilestones(9).spawnInitialStar,true);
   assert.equal(getTurnMilestones(21).spawnCompanion,true);
   assert.deepEqual(getTurnMilestones(60),{showResults:true,startPlaceholderMinigame:false,spawnInitialStar:false,spawnCompanion:false});
+});
+
+test('3D layout includes every regular and branch node with four complete branch paths',()=>{
+  const board=createBoard('three-layout');
+  const layout=buildBoardLayout(board);
+  const expectedNodes=60+board.branches.reduce((total,branch)=>total+branch.nodes.length,0);
+  assert.equal(layout.positions.size,expectedNodes);
+  assert.equal(layout.mainPath.length,60);
+  assert.equal(layout.branchPaths.length,4);
+  for(const branch of layout.branchPaths){
+    assert.ok(layout.positions.has(branch.splitId));
+    assert.ok(layout.positions.has(branch.mergeId));
+    assert.ok(branch.nodeIds.every(nodeId=>layout.positions.has(nodeId)));
+  }
+});
+
+test('3D player offsets separate four characters sharing a space',()=>{
+  const layout=buildBoardLayout(createBoard('player-offsets'));
+  const points=Array.from({length:4},(_,seat)=>getPlayerPoint(layout,'r0',seat));
+  assert.equal(new Set(points.map(point=>`${point.x},${point.z}`)).size,4);
+  assert.ok(points.every(point=>Number.isFinite(point.x)&&Number.isFinite(point.y)&&Number.isFinite(point.z)));
+});
+
+test('movement timing switches to fast mode only above 12 spaces and slows for landing',()=>{
+  assert.deepEqual(MOTION_STAGES,['idle','anticipation','move','slow_down','stop','reaction','idle']);
+  assert.equal(isFastMovement(12),false);
+  assert.equal(isFastMovement(13),true);
+  const cruise=movementStepDuration({totalSteps:13,stepIndex:0,pathLength:13});
+  const landing=movementStepDuration({totalSteps:13,stepIndex:12,pathLength:13});
+  assert.ok(cruise<movementStepDuration({totalSteps:8,stepIndex:0,pathLength:8}));
+  assert.ok(landing>cruise);
 });

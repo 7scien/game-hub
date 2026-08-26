@@ -1,8 +1,10 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {supabaseConfig} from '../config.js';
+import {advanceMovement,createBoard} from '../domain/board.js';
 import {roomService} from '../online/room-service.js';
 import {BoardPreview} from './BoardPreview.jsx';
 import {CHARACTERS,Character} from './characters.jsx';
+import {ThreeBoard} from './ThreeBoard.jsx';
 
 const emptyPresence=new Set();
 
@@ -16,6 +18,7 @@ export function App(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const resumeCode=roomService.getResumeCode();
+  const devBoardSnapshot=useMemo(()=>import.meta.env.DEV&&new URLSearchParams(location.search).has('board3d')?createBoardDemoSnapshot():null,[]);
 
   useEffect(()=>{
     if(!snapshot)return undefined;
@@ -39,6 +42,7 @@ export function App(){
     }catch(reason){setError(reason.message)}finally{setBusy(false)}
   };
 
+  if(devBoardSnapshot)return <GameFoundation snapshot={devBoardSnapshot} connection="SUBSCRIBED" canSave={false} onExit={()=>location.assign('./')} />;
   if(screen==='room'&&snapshot)return <RoomScreen snapshot={snapshot} presence={presence} connection={connection} busy={busy} error={error} onError={setError} onBusy={setBusy} onSnapshot={setSnapshot} onExit={()=>{setScreen('home');setSnapshot(null);setPresence(emptyPresence)}} />;
 
   return <main className="party-app">
@@ -100,13 +104,178 @@ function RoomScreen({snapshot,presence,connection,busy,error,onError,onBusy,onSn
 
 function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
   const state=snapshot.room.game_state||{};
-  const board=state.board;
-  return <main className="game-foundation">
-    <header className="game-hud"><div><small>GLOBAL TURN</small><strong>{String(snapshot.room.global_turn||1).padStart(2,'0')} <i>/ 60</i></strong></div><div className="room-chip">ROOM {snapshot.room.code}</div><span className={`live-state ${connection==='SUBSCRIBED'?'online':''}`}>● {connection==='SUBSCRIBED'?'SYNCED':'RECONNECTING'}</span></header>
-    <section className="game-stage"><BoardPreview board={board} compact/><div className="phase-card"><span>PHASE 1 FOUNDATION</span><h1>모든 플레이어가 같은 보드에 도착했어요!</h1><p>서버가 확정한 보드·플레이어 순서·20코인·빈 인벤토리 상태가 저장되었습니다. 다음 구현 슬라이스에서 주사위 명령과 단계별 이동을 이 화면에 연결합니다.</p><div className="placeholder-minigame"><b>MINIGAME PLACEHOLDER</b><span>6턴마다 이 패널을 거쳐 다음 턴으로 복귀</span></div><div className="foundation-actions">{canSave&&<button onClick={onSave}>저장하고 종료</button>}<button className="secondary" onClick={onExit}>시작 화면</button></div></div></section>
+  const fallbackBoard=useMemo(()=>createBoard(`fallback-${snapshot.room.code}`),[snapshot.room.code]);
+  const board=state.board?.spaces?.length===60?state.board:fallbackBoard;
+  const serverPlayers=useMemo(()=>normalizeGamePlayers(state,snapshot.players||[]),[state,snapshot.players]);
+  const currentPlayerId=state.currentPlayerId||serverPlayers[0]?.id||null;
+  const [previewPositions,setPreviewPositions]=useState(()=>Object.fromEntries(serverPlayers.map(player=>[player.id,player.positionId])));
+  const [motionStage,setMotionStage]=useState('idle');
+  const [moveCommand,setMoveCommand]=useState(null);
+  const [effectCommand,setEffectCommand]=useState(null);
+  const [isAnimating,setIsAnimating]=useState(false);
+  const [pendingChoice,setPendingChoice]=useState(null);
+  const [lastLanding,setLastLanding]=useState(currentPlayerId?serverPlayers.find(player=>player.id===currentPlayerId)?.positionId||'r0':'r0');
+  const tokenRef=useRef(0);
+
+  useEffect(()=>{
+    setPreviewPositions(Object.fromEntries(serverPlayers.map(player=>[player.id,player.positionId])));
+    setPendingChoice(null);setMoveCommand(null);setIsAnimating(false);setMotionStage('idle');
+    setLastLanding(serverPlayers.find(player=>player.id===currentPlayerId)?.positionId||'r0');
+  },[snapshot.room.state_version,serverPlayers,currentPlayerId]);
+
+  const displayPlayers=useMemo(()=>serverPlayers.map(player=>({...player,positionId:previewPositions[player.id]||player.positionId})),[serverPlayers,previewPositions]);
+  const currentPlayer=displayPlayers.find(player=>player.id===currentPlayerId)||displayPlayers[0];
+  const busy=isAnimating||Boolean(pendingChoice);
+
+  const queueMovement=useCallback((result,{totalSteps,reward})=>{
+    if(!currentPlayer)return;
+    if(!result.path.length){
+      if(result.status==='choice_required')setPendingChoice({branch:result.branch,remaining:result.remaining,totalSteps,reward});
+      return;
+    }
+    setIsAnimating(true);
+    setMoveCommand({
+      token:++tokenRef.current,
+      playerId:currentPlayer.id,
+      path:result.path,
+      totalSteps,
+      reward:result.status==='complete'?reward:null,
+      result,
+      deferredReward:reward,
+    });
+  },[currentPlayer]);
+
+  const startMovement=useCallback((steps,reward='coin')=>{
+    if(!currentPlayer||busy)return;
+    const startId=previewPositions[currentPlayer.id]||currentPlayer.positionId||'r0';
+    const result=advanceMovement(board,{startId,steps});
+    queueMovement(result,{totalSteps:steps,reward});
+  },[board,busy,currentPlayer,previewPositions,queueMovement]);
+
+  const startBranchDemo=useCallback(()=>{
+    if(!currentPlayer||busy)return;
+    const startId=previewPositions[currentPlayer.id]||currentPlayer.positionId||'r0';
+    startMovement(stepsToBranchDemo(board,startId),'star');
+  },[board,busy,currentPlayer,previewPositions,startMovement]);
+
+  const handleMoveComplete=useCallback(command=>{
+    const result=command.result;
+    setPreviewPositions(previous=>({...previous,[command.playerId]:result.currentId}));
+    setLastLanding(result.currentId);
+    setIsAnimating(false);
+    if(result.status==='choice_required')setPendingChoice({branch:result.branch,remaining:result.remaining,totalSteps:command.totalSteps,reward:command.deferredReward});
+    else setPendingChoice(null);
+  },[]);
+
+  const chooseBranch=useCallback(choice=>{
+    if(!pendingChoice||!currentPlayer)return;
+    const result=advanceMovement(board,{
+      startId:pendingChoice.branch.splitId,
+      steps:pendingChoice.remaining,
+      choices:{[pendingChoice.branch.id]:choice},
+    });
+    const context={totalSteps:pendingChoice.totalSteps,reward:pendingChoice.reward};
+    setPendingChoice(null);
+    queueMovement(result,context);
+  },[board,currentPlayer,pendingChoice,queueMovement]);
+
+  const previewEffect=useCallback(type=>{
+    if(!currentPlayer||isAnimating)return;
+    setEffectCommand({token:++tokenRef.current,playerId:currentPlayer.id,type});
+  },[currentPlayer,isAnimating]);
+
+  const stageLabel=MOTION_LABELS[motionStage]||motionStage;
+  const inventory=currentPlayer?.inventory||[];
+  return <main className="game-3d-shell">
+    <header className="game-hud game-hud-3d">
+      <div className="turn-readout"><small>GLOBAL TURN</small><strong>{String(snapshot.room.global_turn||1).padStart(2,'0')} <i>/ 60</i></strong></div>
+      <div className="current-turn"><span>NOW PLAYING</span><b>{currentPlayer?.displayName||'플레이어'}</b></div>
+      <div className="room-chip">ROOM {snapshot.room.code}</div>
+      <span className={`live-state ${connection==='SUBSCRIBED'?'online':''}`}>● {connection==='SUBSCRIBED'?'SYNCED':'RECONNECTING'}</span>
+    </header>
+    <section className="game-3d-viewport">
+      <ThreeBoard
+        board={board}
+        players={displayPlayers}
+        activePlayerId={currentPlayerId}
+        moveCommand={moveCommand}
+        effectCommand={effectCommand}
+        onMotionStage={setMotionStage}
+        onMoveComplete={handleMoveComplete}
+        className="game-board-canvas"
+        label="현재 온라인 게임 상태를 표시하는 3D 파티 보드"
+      />
+      <aside className="player-wallet" aria-label="현재 플레이어 정보">
+        <span className="player-wallet-character"><Character id={currentPlayer?.character||'slime'} small/></span>
+        <div><small>CURRENT PLAYER</small><b>{currentPlayer?.displayName||'플레이어'}</b><em>{CHARACTERS.find(character=>character.id===currentPlayer?.character)?.name||'캐릭터'}</em></div>
+        <dl><div><dt>COIN</dt><dd>● {currentPlayer?.coins??20}</dd></div><div><dt>STAR</dt><dd>★ {currentPlayer?.stars??0}</dd></div></dl>
+        <div className="inventory-strip" aria-label="인벤토리 6칸">{Array.from({length:6},(_,index)=><i key={index} className={inventory[index]?'filled':''}>{inventory[index]?'◆':'·'}</i>)}</div>
+      </aside>
+      <div className="board-legend-3d" aria-label="칸 종류"><span className="normal">일반</span><span className="special">특수</span><span className="event">이벤트</span><span className="trap">함정</span><span className="shop">상점</span></div>
+      <section className="movement-console" aria-label="3D 이동 연출 미리보기">
+        <div className="motion-status"><span className={motionStage!=='idle'?'active':''}/><div><small>ANIMATION STATE</small><b>{stageLabel}{moveCommand?.totalSteps>12&&motionStage!=='idle'?' · FAST':''}</b></div><em>도착 {lastLanding}</em></div>
+        <p>서버 상태를 바꾸지 않는 렌더링 미리보기입니다. 실제 주사위 판정은 다음 PHASE 1 서버 슬라이스에서 연결합니다.</p>
+        <div className="movement-buttons">
+          <button disabled={busy} onClick={()=>startMovement(8,'coin')}>8칸 이동</button>
+          <button disabled={busy} onClick={startBranchDemo}>갈림길 체험</button>
+          <button className="effect-button" disabled={isAnimating} onClick={()=>previewEffect('shield')}>보호권 연출</button>
+        </div>
+      </section>
+      {pendingChoice&&<section className="branch-choice" role="dialog" aria-modal="true" aria-label="갈림길 경로 선택">
+        <span>ROUTE CHOICE</span><h2>갈림길에 도착했어요</h2><p>여기서 잠시 멈췄습니다. 남은 <b>{pendingChoice.remaining}칸</b>을 어느 길로 이동할까요?</p>
+        <div><button onClick={()=>chooseBranch('main')}>정규길</button><button onClick={()=>chooseBranch('branch')}>별빛 샛길</button></div>
+      </section>}
+      <nav className="game-3d-actions" aria-label="게임 화면 메뉴">
+        <span>PHASE 1 · 3D RENDER SLICE</span>
+        {canSave&&<button onClick={onSave}>저장하고 종료</button>}
+        <button className="secondary" onClick={onExit}>시작 화면</button>
+      </nav>
+      <div className="player-ribbon">{displayPlayers.map((player,index)=><article key={player.id} className={player.id===currentPlayerId?'current':''}><span>P{index+1}</span><Character id={player.character||'slime'} small/><div><b>{player.displayName}</b><small>{player.positionId} · ● {player.coins} · ★ {player.stars}</small></div></article>)}</div>
+    </section>
   </main>;
 }
 
 function ConnectionPill({configured}){
   return <span className={`connection-pill ${configured?'ready':''}`}><i />{configured?'ONLINE READY':'SUPABASE SETUP'}</span>;
+}
+
+const MOTION_LABELS={idle:'IDLE',anticipation:'ANTICIPATION',move:'MOVE',slow_down:'SLOW DOWN',stop:'STOP',reaction:'REACTION'};
+
+function normalizeGamePlayers(state,roomPlayers){
+  const stored=Object.values(state.players||{});
+  const storedById=new Map(stored.map(player=>[player.userId,player]));
+  return roomPlayers.map((roomPlayer,index)=>{
+    const gamePlayer=storedById.get(roomPlayer.user_id)||stored[index]||{};
+    return {
+      id:roomPlayer.user_id||gamePlayer.userId||`player-${index}`,
+      seat:roomPlayer.seat??gamePlayer.seat??index,
+      displayName:gamePlayer.displayName||roomPlayer.display_name||`플레이어 ${index+1}`,
+      character:gamePlayer.character||roomPlayer.character||CHARACTERS[index%CHARACTERS.length].id,
+      coins:gamePlayer.coins??20,
+      stars:gamePlayer.stars??0,
+      inventory:Array.isArray(gamePlayer.inventory)?gamePlayer.inventory:[],
+      positionId:gamePlayer.positionId||'r0',
+    };
+  });
+}
+
+function stepsToBranchDemo(board,startId){
+  const startIndex=startId?.startsWith('r')?Number(startId.slice(1)):0;
+  const distances=(board.branches||[]).map(branch=>(Number(branch.splitId.slice(1))-startIndex+60)%60).map(distance=>distance||60).sort((a,b)=>a-b);
+  const target=distances.find(distance=>distance>=8)||distances[0]||8;
+  return target+5;
+}
+
+function createBoardDemoSnapshot(){
+  const characters=['ghost','mole','chick','slime'];
+  const ids=characters.map(character=>`demo-${character}`);
+  const players=ids.map((id,index)=>({user_id:id,seat:index,display_name:['별이','구름','노을','새벽'][index],character:characters[index]}));
+  const gamePlayers=Object.fromEntries(players.map((player,index)=>[player.user_id,{
+    userId:player.user_id,seat:index,displayName:player.display_name,character:player.character,
+    coins:20+index*3,stars:index===2?1:0,inventory:index===1?['demo-item']:[],positionId:`r${index*4}`,
+  }]));
+  return {
+    room:{id:'demo-room',code:'3DDEMO',host_user_id:ids[0],status:'active',global_turn:8,state_version:1,game_state:{board:createBoard('three-board-demo'),players:gamePlayers,currentPlayerId:ids[0],turnOrder:ids}},
+    players,current_user_id:ids[0],
+  };
 }
