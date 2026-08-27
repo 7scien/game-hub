@@ -4,6 +4,8 @@ import {advanceMovement,BOARD_LAYOUT_VERSION,createBoard} from '../domain/board.
 import {roomService} from '../online/room-service.js';
 import {BoardPreview} from './BoardPreview.jsx';
 import {CHARACTERS,Character} from './characters.jsx';
+import {PersonalInventory,PlayerStandings,SpaceIconLegend} from './GameHud.jsx';
+import {FinalWinnerPrototype,MiniGameFlow} from './PresentationOverlays.jsx';
 import {ThreeBoard} from './ThreeBoard.jsx';
 
 const emptyPresence=new Set();
@@ -115,6 +117,7 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
   const [isAnimating,setIsAnimating]=useState(false);
   const [pendingChoice,setPendingChoice]=useState(null);
   const [cameraMode,setCameraMode]=useState('follow');
+  const [presentation,setPresentation]=useState(()=>import.meta.env.DEV?new URLSearchParams(location.search).get('show'):null);
   const [lastLanding,setLastLanding]=useState(currentPlayerId?serverPlayers.find(player=>player.id===currentPlayerId)?.positionId||'r0':'r0');
   const tokenRef=useRef(0);
 
@@ -209,13 +212,9 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
         className="game-board-canvas"
         label="현재 온라인 게임 상태를 표시하는 3D 파티 보드"
       />
-      <aside className="player-wallet" aria-label="현재 플레이어 정보">
-        <span className="player-wallet-character"><Character id={currentPlayer?.character||'slime'} small/></span>
-        <div><small>CURRENT PLAYER</small><b>{currentPlayer?.displayName||'플레이어'}</b><em>{CHARACTERS.find(character=>character.id===currentPlayer?.character)?.name||'캐릭터'}</em></div>
-        <dl><div><dt>COIN</dt><dd>● {currentPlayer?.coins??20}</dd></div><div><dt>STAR</dt><dd>★ {currentPlayer?.stars??0}</dd></div></dl>
-        <div className="inventory-strip" aria-label="인벤토리 6칸">{Array.from({length:6},(_,index)=><i key={index} className={inventory[index]?'filled':''}>{inventory[index]?'◆':'·'}</i>)}</div>
-      </aside>
-      <div className="board-legend-3d" aria-label="칸 종류"><span className="normal">일반</span><span className="special">특수</span><span className="event">이벤트</span><span className="trap">함정</span><span className="shop">상점</span></div>
+      <PlayerStandings players={displayPlayers} currentPlayerId={currentPlayerId}/>
+      <SpaceIconLegend/>
+      <PersonalInventory player={{...currentPlayer,inventory}} motionStage={motionStage} disabled={busy}/>
       <section className="movement-console" aria-label="3D 이동 연출 미리보기">
         <div className="motion-status"><span className={motionStage!=='idle'?'active':''}/><div><small>ANIMATION STATE</small><b>{stageLabel}{moveCommand?.totalSteps>12&&motionStage==='move'?' · RUN':''}</b></div><em>도착 {lastLanding}</em></div>
         <p>캐릭터 뒤에서 길을 따라가는 렌더링 미리보기입니다. 서버 상태는 변경하지 않습니다.</p>
@@ -231,11 +230,14 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
       </section>}
       <nav className="game-3d-actions" aria-label="게임 화면 메뉴">
         <span>PHASE 1 · 3D RENDER SLICE</span>
-        {import.meta.env.DEV&&<button className="secondary" onClick={()=>setCameraMode(mode=>mode==='follow'?'overview':'follow')}>{cameraMode==='follow'?'디버그 전체 보기':'플레이어 추적'}</button>}
+        {import.meta.env.DEV&&<button onClick={()=>setPresentation('minigame')}>미니게임 연출</button>}
+        {import.meta.env.DEV&&<button onClick={()=>setPresentation('finale')}>최종 우승 연출</button>}
+        {import.meta.env.DEV&&<button className="secondary debug-camera-button" onClick={()=>setCameraMode(mode=>mode==='follow'?'overview':'follow')}>{cameraMode==='follow'?'디버그 전체 보기':'플레이어 추적'}</button>}
         {canSave&&<button onClick={onSave}>저장하고 종료</button>}
         <button className="secondary" onClick={onExit}>시작 화면</button>
       </nav>
-      <div className="player-ribbon">{displayPlayers.map((player,index)=><article key={player.id} className={player.id===currentPlayerId?'current':''}><span>P{index+1}</span><Character id={player.character||'slime'} small/><div><b>{player.displayName}</b><small>{player.positionId} · ● {player.coins} · ★ {player.stars}</small></div></article>)}</div>
+      {presentation==='minigame'&&<MiniGameFlow players={displayPlayers} currentPlayerId={currentPlayerId} onComplete={()=>setPresentation(null)}/>}
+      {presentation==='finale'&&<FinalWinnerPrototype players={displayPlayers} onClose={()=>setPresentation(null)}/>}
     </section>
   </main>;
 }

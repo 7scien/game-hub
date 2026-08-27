@@ -3,12 +3,14 @@ import {buildBoardLayout,getBranchDirections,getLayoutPoint,getNodeDirection,get
 import {isFastMovement,movementStepDuration,stageDuration} from './movement-timing.js';
 
 const TILE_STYLE={
-  normal:{top:0x3284e6,base:0xe9f2f0,icon:''},
-  special:{top:0x47c978,base:0xe9f2f0,icon:'!'},
-  event:{top:0x38bd6c,base:0xe9f2f0,icon:'?'},
-  trap:{top:0xef6262,base:0xe9f2f0,icon:'×'},
-  shop:{top:0xf4c84d,base:0xe9f2f0,icon:'₩'},
-  branch:{top:0x3284e6,base:0xe9f2f0,icon:''},
+  normal:{top:0x3284e6,base:0xe9f2f0,icon:'normal'},
+  special:{top:0x47c978,base:0xe9f2f0,icon:'special'},
+  event:{top:0x38bd6c,base:0xe9f2f0,icon:'event'},
+  trap:{top:0xef6262,base:0xe9f2f0,icon:'trap'},
+  shop:{top:0xf4c84d,base:0xe9f2f0,icon:'shop'},
+  star:{top:0xffd95a,base:0xfff3c0,icon:'star'},
+  companion:{top:0x9d78ed,base:0xf0eaff,icon:'companion'},
+  branch:{top:0x3284e6,base:0xe9f2f0,icon:'normal'},
 };
 
 const CHARACTER_COLORS={ghost:0xc9b8ff,mole:0xb97852,chick:0xffda56,slime:0x70dfbc};
@@ -334,10 +336,8 @@ export class PartyBoardScene{
     top.position.y=.26;top.castShadow=false;top.receiveShadow=true;
     group.add(base,top);
     if(style.icon){
-      const sprite=makeIconSprite(style.icon,node.kind==='trap'?'#fff4f7':'#172442');
-      sprite.position.y=.78;
-      sprite.scale.set(.56,.56,.56);
-      group.add(sprite);
+      const icon=makeTileIcon(style.icon,node.kind==='trap'?'#fff4f7':'#172442');
+      icon.position.y=.318;icon.rotation.x=-Math.PI/2;group.add(icon);
     }
     if(node.kind==='trap'){
       const spikeMaterial=new THREE.MeshStandardMaterial({color:0xffd6df,roughness:.7});
@@ -826,13 +826,45 @@ function movementHop(type,progress,fast){
   return ({ghost:.2,mole:.34,chick:.15,slime:.29}[type]||.2)*wave*multiplier;
 }
 
-function makeIconSprite(text,color){
-  const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
+function makeTileIcon(kind,color){
+  const canvas=document.createElement('canvas');canvas.width=192;canvas.height=192;
   const context=canvas.getContext('2d');
-  context.clearRect(0,0,128,128);context.font='900 76px system-ui';context.textAlign='center';context.textBaseline='middle';
-  context.shadowColor='rgba(255,255,255,.42)';context.shadowBlur=7;context.fillStyle=color;context.fillText(text,64,67);
-  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
-  return new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false}));
+  context.clearRect(0,0,192,192);context.strokeStyle=color;context.fillStyle=color;context.lineWidth=14;context.lineCap='round';context.lineJoin='round';
+  context.shadowColor='rgba(255,255,255,.32)';context.shadowBlur=8;
+  drawTileIcon(context,kind);
+  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(4,texture.anisotropy||1);
+  const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,toneMapped:false});
+  return new THREE.Mesh(new THREE.PlaneGeometry(.56,.56),material);
+}
+
+function drawTileIcon(context,kind){
+  if(kind==='normal'){
+    context.beginPath();context.moveTo(46,96);context.lineTo(130,96);context.moveTo(106,66);context.lineTo(138,96);context.lineTo(106,126);context.stroke();
+  }else if(kind==='special'){
+    context.strokeRect(48,79,96,65);context.beginPath();context.moveTo(96,79);context.lineTo(96,144);context.moveTo(40,79);context.lineTo(152,79);context.stroke();
+    context.beginPath();context.moveTo(95,75);context.bezierCurveTo(58,68,62,39,78,43);context.bezierCurveTo(91,46,96,64,96,75);context.bezierCurveTo(102,55,116,41,130,47);context.bezierCurveTo(145,54,134,73,97,77);context.stroke();
+  }else if(kind==='event'){
+    context.font='900 120px Nunito,system-ui';context.textAlign='center';context.textBaseline='middle';context.fillText('?',96,101);
+  }else if(kind==='trap'){
+    context.beginPath();context.moveTo(40,133);context.lineTo(58,75);context.lineTo(78,133);context.lineTo(98,62);context.lineTo(118,133);context.lineTo(138,75);context.lineTo(154,133);context.stroke();
+    context.beginPath();context.arc(76,54,7,0,Math.PI*2);context.arc(122,54,7,0,Math.PI*2);context.fill();
+  }else if(kind==='shop'){
+    context.beginPath();context.roundRect(48,69,96,79,12);context.stroke();context.beginPath();context.arc(96,72,27,Math.PI,0);context.stroke();context.fillRect(68,98,56,13);
+  }else if(kind==='star'){
+    starPath(context,96,96,55,24);context.fill();
+  }else{
+    context.beginPath();context.arc(96,67,25,0,Math.PI*2);context.fill();context.beginPath();context.arc(96,137,46,Math.PI,0);context.fill();
+  }
+}
+
+function starPath(context,x,y,outer,inner){
+  context.beginPath();
+  for(let index=0;index<10;index+=1){
+    const radius=index%2===0?outer:inner;const angle=-Math.PI/2+index*Math.PI/5;
+    const pointX=x+Math.cos(angle)*radius,pointY=y+Math.sin(angle)*radius;
+    if(index===0)context.moveTo(pointX,pointY);else context.lineTo(pointX,pointY);
+  }
+  context.closePath();
 }
 
 function createRewardEffect(type){
