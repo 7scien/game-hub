@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  advanceMovement,buildCurrentTile,buyCurrentTile,completeRoll,createGame,declareBankruptcy,endTurn,finishMovement,getNetWorth,openTrade,
+  advanceMovement,buildCurrentTile,buyCurrentTile,chooseSpaceTravelDestination,completeRoll,createGame,declareBankruptcy,endTurn,finishMovement,getNetWorth,openTrade,
   proposeTrade,resolveTile,resolveTrade,rollDice,sellSpecialCard,updateClock,
 } from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
@@ -16,6 +16,7 @@ test('2~4인 게임을 원화 경제와 데이터 기반 보드로 생성한다'
     const state=createGame(count,{mode:'30',rng:()=>.2});
     assert.equal(state.players.length,count);assert.equal(state.board.length,40);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
     assert.equal(state.timer.remainingSeconds,1800);assert.equal(state.players[0].money,2930000);assert.equal(state.welfareFund,0);
+    assert.ok(state.players.every(player=>player.token==='✈'));
   }
   assert.equal(formatMoney(50000),'5만 원');assert.equal(formatMoney(1000),'1,000원');
 });
@@ -98,6 +99,17 @@ test('주사위 합만큼 말을 한 칸씩 순서대로 이동한다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});rollDice(state,rngFor(.4,.4));completeRoll(state);assert.equal(state.rollTotal,6);assert.equal(state.players[0].position,0);
   for(let step=1;step<=6;step++){advanceMovement(state);assert.equal(state.players[0].position,step);assert.equal(state.pendingMovement.remaining,6-step)}
   assert.equal(state.phase,PHASES.RESOLVING_TILE);finishMovement(state);assert.equal(state.phase,PHASES.BUY_DECISION);
+});
+
+test('우주여행에서는 원하는 칸을 선택해 이동하고 도착 효과를 적용한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=30;resolveTile(state);
+  assert.equal(state.phase,PHASES.TRAVEL_DECISION);assert.equal(state.pendingAction.type,'space-travel');
+  chooseSpaceTravelDestination(state,37);assert.equal(player.position,37);assert.equal(state.board[37].id,'new-york');assert.equal(state.phase,PHASES.BUY_DECISION);
+});
+
+test('우주여행 초대권으로 도착해도 목적지를 선택한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});state.players[0].position=2;state.eventDeck=['space-invitation'];state.eventCursor=0;resolveTile(state);
+  assert.equal(state.players[0].position,30);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
 });
 
 test('클래식 대형판 황금열쇠 30장 구성을 사용한다',()=>{

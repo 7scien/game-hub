@@ -191,9 +191,18 @@ export function resolveTile(state,depth=0){
   if(tile.type==='tax'){prepareDebt(state,{amount:tile.amount,reason:tile.name,fundDeposit:tile.id==='social-welfare-tax'});return}
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
   if(tile.type==='wait'){player.skipTurns+=tile.turns;notice(state,tile.name,`다음 ${tile.turns}턴 동안 쉽니다.`,'warning');finishSimpleTile(state);return}
+  if(tile.id==='space-travel'){state.pendingAction={type:'space-travel',tileIndex:tile.index};state.phase=PHASES.TRAVEL_DECISION;addLog(state,`${player.name}이 우주여행 목적지를 선택합니다.`);return}
   if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
   finishSimpleTile(state);
+}
+
+export function chooseSpaceTravelDestination(state,targetIndex){
+  requirePhase(state,PHASES.TRAVEL_DECISION);const player=currentPlayer(state);const index=Number(targetIndex);const origin=state.board[player.position];const destination=state.board[index];
+  if(state.pendingAction?.type!=='space-travel'||origin?.id!=='space-travel')throw new Error('지금은 우주여행 목적지를 정할 수 없습니다.');
+  if(!Number.isInteger(index)||!destination||destination.id==='space-travel')throw new Error('이동할 칸을 선택하세요.');
+  moveTo(state,index);state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
+  return destination;
 }
 
 export function buyCurrentTile(state){

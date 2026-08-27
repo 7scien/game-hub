@@ -1,11 +1,11 @@
-import {PHASES,RULES} from './rules.js';
+import {PHASES,PLAYER_TOKENS,RULES} from './rules.js';
 
 export function isValidSavedGame(value){
   return Boolean(value&&value.version===RULES.SAVE_VERSION&&value.status==='playing'&&Array.isArray(value.players)&&[2,3,4].includes(value.players.length)&&Array.isArray(value.board)&&value.board.length===40&&Object.values(PHASES).includes(value.phase));
 }
 
 export function loadGame(storage=globalThis.localStorage){
-  try{const value=JSON.parse(storage.getItem(RULES.AUTOSAVE_KEY));return isValidSavedGame(value)?value:null}catch{return null}
+  try{const value=JSON.parse(storage.getItem(RULES.AUTOSAVE_KEY));if(!isValidSavedGame(value))return null;value.players.forEach((player,index)=>{player.token=PLAYER_TOKENS[index]});return value}catch{return null}
 }
 
 export function saveGame(state,storage=globalThis.localStorage){

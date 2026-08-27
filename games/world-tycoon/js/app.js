@@ -1,11 +1,11 @@
 import {
-  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
+  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
   endTurn,finishMovement,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,
 } from './game.js';
 import {clearGame,loadGame,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {
-  animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
+  animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
@@ -28,7 +28,7 @@ async function handleRoll(){
   if(actionLocked)return;actionLocked=true;
   try{
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
-    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));commit(()=>completeRoll(state));
+    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));await showDiceResult([...state.dice],state.rollTotal);commit(()=>completeRoll(state));
     while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await new Promise(resolve=>setTimeout(resolve,55))}
     if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)commit(()=>finishMovement(state));
   }finally{actionLocked=false}
@@ -62,6 +62,7 @@ document.addEventListener('click',event=>{
   if(action==='roll-dice'){handleRoll();return}
   if(action==='buy-tile'){commit(()=>buyCurrentTile(state));return}
   if(action==='build-tile'){commit(()=>buildCurrentTile(state));return}
+  if(action==='choose-space-destination'){const select=document.querySelector('[data-space-destination]');commit(()=>chooseSpaceTravelDestination(state,Number(select?.value)));return}
   if(action==='decline-decision'){commit(()=>declineDecision(state));return}
   if(action==='end-turn'){handleEndTurn();return}
   if(action==='dismiss-notice'){commit(()=>dismissNotice(state));return}

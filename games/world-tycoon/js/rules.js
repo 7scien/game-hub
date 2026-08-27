@@ -2,7 +2,7 @@ import {REGION_STYLES} from './data/board.js';
 
 export const PHASES={
   WAITING_FOR_ROLL:'WAITING_FOR_ROLL',ROLLING:'ROLLING',MOVING:'MOVING',RESOLVING_TILE:'RESOLVING_TILE',
-  BUY_DECISION:'BUY_DECISION',BUILD_DECISION:'BUILD_DECISION',TRADE:'TRADE',ASSET_MANAGEMENT:'ASSET_MANAGEMENT',
+  BUY_DECISION:'BUY_DECISION',BUILD_DECISION:'BUILD_DECISION',TRAVEL_DECISION:'TRAVEL_DECISION',TRADE:'TRADE',ASSET_MANAGEMENT:'ASSET_MANAGEMENT',
   END_TURN:'END_TURN',GAME_OVER:'GAME_OVER',
 };
 
@@ -13,7 +13,7 @@ export const RULES={
 };
 
 export const PLAYER_COLORS=['#ff5d7d','#4ed6ff','#ffd65a','#8c7bff'];
-export const PLAYER_TOKENS=['●','◆','▲','■'];
+export const PLAYER_TOKENS=['✈','✈','✈','✈'];
 
 export function formatMoney(amount){
   const value=Math.round(Number(amount)||0);const sign=value<0?'−':'';const absolute=Math.abs(value);

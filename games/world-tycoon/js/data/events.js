@@ -10,7 +10,7 @@ export const EVENT_CARDS = [
   {id:'go-island',category:'move',title:'무인도로 가시오',text:'폭풍우를 만났습니다. 월급 없이 무인도로 곧장 갑니다.',effect:{type:'moveTo',tileId:'deserted-island',collectPassBonus:false}},
   {id:'welfare-dividend',category:'move',title:'사회복지기금 배당',text:'사회복지기금 수령처로 가서 모인 기금을 받습니다.',effect:{type:'moveTo',tileId:'social-welfare-corner'}},
   {id:'world-tour',category:'move',title:'세계일주 초대권',text:'현재 위치에서 세계를 한 바퀴 돌고 월급과 모인 사회복지기금을 받습니다.',effect:{type:'worldTour'}},
-  {id:'space-invitation',category:'move',title:'우주여행 초대권',text:'콜럼비아호를 거쳐 우주여행으로 이동합니다. 우주여행료는 면제됩니다.',effect:{type:'moveTo',tileId:'space-travel',resolveTile:false}},
+  {id:'space-invitation',category:'move',title:'우주여행 초대권',text:'우주여행 칸으로 이동한 뒤 원하는 목적지를 선택합니다.',effect:{type:'moveTo',tileId:'space-travel'}},
 
   {id:'nobel-prize',category:'income',title:'노벨평화상 수상',text:'세계 평화에 공헌했습니다. 은행에서 30만 원을 받습니다.',effect:{type:'cash',amount:300000}},
   {id:'pension',category:'income',title:'연금 혜택',text:'은행에서 노후연금 5만 원을 받습니다.',effect:{type:'cash',amount:50000}},

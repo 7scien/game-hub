@@ -5,7 +5,7 @@ import {PHASES,RULES,formatMoney,regionMeta} from './rules.js';
 const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const phaseLabel={
   [PHASES.WAITING_FOR_ROLL]:'주사위를 굴릴 차례',[PHASES.ROLLING]:'주사위 굴리는 중',[PHASES.MOVING]:'이동 중',[PHASES.RESOLVING_TILE]:'도착지 확인 중',
-  [PHASES.BUY_DECISION]:'인수 결정',[PHASES.BUILD_DECISION]:'도시 개발',[PHASES.TRADE]:'플레이어 거래',[PHASES.ASSET_MANAGEMENT]:'자산 정리',[PHASES.END_TURN]:'턴 마무리',[PHASES.GAME_OVER]:'게임 종료',
+  [PHASES.BUY_DECISION]:'인수 결정',[PHASES.BUILD_DECISION]:'도시 개발',[PHASES.TRAVEL_DECISION]:'우주여행 목적지 선택',[PHASES.TRADE]:'플레이어 거래',[PHASES.ASSET_MANAGEMENT]:'자산 정리',[PHASES.END_TURN]:'턴 마무리',[PHASES.GAME_OVER]:'게임 종료',
 };
 
 function tilePrice(tile){return tile.purchasePrice?formatMoney(tile.purchasePrice):tile.type==='event'?'KEY CARD':tile.type==='tax'?`−${formatMoney(tile.amount)}`:tile.type.toUpperCase()}
@@ -88,6 +88,10 @@ function decisionPanel(state){
     const maxed=tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL;const cost=maxed?0:tile.buildingCosts[tile.buildingLevel];
     return `<div class="asset-decision build" style="--region:${regionMeta(tile.region).color}"><span class="decision-icon">${maxed?'★':'▥'}</span><p>${regionMeta(tile.region).name} · ${buildingLabel(tile.buildingLevel)}</p><h3>${escapeHtml(tile.name)} 개발</h3>${maxed?'<div class="landmark-complete">호텔 완성</div>':`<dl><div><dt>건설 비용</dt><dd>${formatMoney(cost)}</dd></div><div><dt>다음 통행료</dt><dd>${formatMoney(tile.rentByLevel[tile.buildingLevel+1])}</dd></div></dl><button class="primary-button" type="button" data-action="build-tile" ${player.money<cost?'disabled':''}>${buildingLabel(tile.buildingLevel+1)} 건설 <span>−${formatMoney(cost)}</span></button>`}<button class="secondary-button wide" type="button" data-action="decline-decision">건설하지 않기</button></div>`;
   }
+  if(state.phase===PHASES.TRAVEL_DECISION){
+    const destinations=state.board.filter(item=>item.id!=='space-travel');
+    return `<div class="travel-decision"><span class="action-kicker">SPACE TRAVEL</span><h3>어디로 이동할까요?</h3><p>원하는 칸을 고르면 즉시 이동하고 도착한 칸의 효과를 적용합니다.</p><label>목적지 선택<select data-space-destination>${destinations.map(item=>`<option value="${item.index}">${item.index}. ${escapeHtml(item.name)} · ${escapeHtml(item.englishName)}</option>`).join('')}</select></label><button class="primary-button" type="button" data-action="choose-space-destination">선택한 칸으로 이동 <span>↗</span></button></div>`;
+  }
   if(state.phase===PHASES.ASSET_MANAGEMENT)return debtPanel(state);
   if(state.phase===PHASES.END_TURN)return `<div class="action-copy end-turn"><span class="action-kicker">TURN COMPLETE</span><h3>턴을 마칩니다</h3><p>${state.rolledDouble?'더블이면 한 번 더 여행할 수 있어요.':'다음 차례로 바로 이어집니다.'}</p></div><div class="dice-row">${die(state.dice[0])}${die(state.dice[1])}<b>${state.rollTotal||'—'}</b></div><button class="primary-button" type="button" data-action="end-turn">턴 종료 <span>→</span></button>`;
   return `<div class="rolling-state"><h3>${phaseLabel[state.phase]}</h3></div>`;
@@ -145,7 +149,7 @@ export function renderHelp(){
     ['🎲','주사위','주사위 2개의 합만큼 이동합니다. 더블이면 보너스 턴을 얻고, 3연속 더블이면 무인도로 갑니다.'],
     ['◈','도시 구매','소유자가 없는 도시에 도착하면 표시된 가격으로 인수할 수 있습니다.'],['▥','건물','자기 도시에 도착하면 별장, 빌딩, 호텔 순서로 한 단계씩 개발할 수 있습니다.'],
     ['₩','통행료','상대 도시나 탈것에 도착하면 표시된 통행료를 냅니다. 제주도·부산·서울은 건물을 지을 수 없고 통행료가 고정입니다.'],['◆','황금열쇠','클래식 대형판 30장 구성입니다. 우대권과 특수무전기는 보관하거나 은행에 팔 수 있습니다.'],
-    ['✈','탈것','콩코드여객기·퀸 엘리자베스호·콜럼비아호는 건물 없이 고정 이용료를 받습니다.'],['⇄','거래','주사위를 굴리기 전에 현금·도시·탈것을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
+    ['✈','탈것','콩코드여객기·퀸 엘리자베스호·콜럼비아호는 건물 없이 고정 이용료를 받습니다. 우주여행에 도착하면 원하는 칸을 선택해 이동합니다.'],['⇄','거래','주사위를 굴리기 전에 현금·도시·탈것을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
     ['!','파산','현금이 부족하면 건물과 자산을 반값에 정리합니다. 모두 정리해도 못 내면 파산합니다.'],['♛','승리','완전 게임은 마지막 생존자가, 시간제 게임은 종료 시 순자산 1위가 승리합니다.']
   ].map(([icon,title,copy])=>`<article><i>${icon}</i><span><b>${title}</b><p>${copy}</p></span></article>`).join('')}</div></section></div>`;
 }
@@ -156,6 +160,12 @@ export function showFreeModal(markup){document.querySelector('#modal-root')?.rep
 export function closeFreeModal(){document.querySelector('#modal-root')?.replaceChildren()}
 export function toast(message){const element=document.createElement('div');element.className='toast';element.textContent=message;document.body.append(element);requestAnimationFrame(()=>element.classList.add('show'));setTimeout(()=>{element.classList.remove('show');setTimeout(()=>element.remove(),200)},2300)}
 export function updateTimer(state){const timer=document.querySelector('[data-timer]');if(timer)timer.textContent=timerLabel(state)}
+
+export function showDiceResult(dice,total){
+  document.querySelector('.dice-result-feedback')?.remove();const element=document.createElement('div');element.className='dice-result-feedback';element.setAttribute('role','status');element.setAttribute('aria-live','assertive');
+  element.innerHTML=`<small>DICE RESULT</small><div>${die(dice[0])}${die(dice[1])}</div><strong>${total}칸 이동</strong><span>${dice[0]} + ${dice[1]} = ${total}</span>`;document.body.append(element);requestAnimationFrame(()=>element.classList.add('show'));
+  return new Promise(resolve=>setTimeout(()=>{element.classList.remove('show');setTimeout(()=>{element.remove();resolve()},240)},1050));
+}
 
 function animateGoldenKeyDraw(root){
   if(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
