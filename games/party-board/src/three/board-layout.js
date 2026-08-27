@@ -1,11 +1,12 @@
-const MAIN_X_RADIUS=11.8;
-const MAIN_Z_RADIUS=8.2;
+const MAP_SCALE=1.3;
 
 export function buildBoardLayout(board){
   if(!board?.spaces?.length)throw new Error('A board with regular spaces is required');
   const positions=new Map();
+  const mainGuide=(board.layoutGuide||fallbackGuide()).map(([x,z])=>({x:x*MAP_SCALE,y:.34,z:z*MAP_SCALE}));
+  const mainPoints=samplePolyline(mainGuide,board.spaces.length,true);
   const mainPath=board.spaces.map((space,index)=>{
-    const point=regularPoint(index,board.spaces.length,space.kind);
+    const point=mainPoints[index];
     positions.set(space.id,{...point,id:space.id,kind:space.kind,path:'main'});
     return space.id;
   });
@@ -14,24 +15,25 @@ export function buildBoardLayout(board){
     const start=positions.get(branch.splitId);
     const end=positions.get(branch.mergeId);
     if(!start||!end)continue;
-    const midpoint={x:(start.x+end.x)/2,z:(start.z+end.z)/2};
-    const control={x:midpoint.x*.34,z:midpoint.z*.34};
+    const authoredGuide=(branch.guide||[]).map(([x,z],index)=>({
+      x:x*MAP_SCALE,
+      y:.38+Math.sin((index+1)/(branch.guide.length+1)*Math.PI)*.07,
+      z:z*MAP_SCALE,
+    }));
+    const sampled=samplePolyline([start,...authoredGuide,end],branch.nodes.length+2,false).slice(1,-1);
     const ids=[];
     branch.nodes.forEach((node,index)=>{
-      const t=(index+1)/(branch.nodes.length+1);
-      const arch=Math.sin(Math.PI*t);
-      const point={
-        x:quadratic(start.x,control.x,end.x,t),
-        y:Math.max(start.y,end.y)+.08+arch*.82,
-        z:quadratic(start.z,control.z,end.z,t),
-        id:node.id,
-        kind:node.kind||'branch',
-        path:branch.id,
-      };
-      positions.set(node.id,point);
+      const point=sampled[index];
+      positions.set(node.id,{...point,id:node.id,kind:node.kind,path:branch.id});
       ids.push(node.id);
     });
-    branchPaths.push({id:branch.id,splitId:branch.splitId,mergeId:branch.mergeId,nodeIds:ids});
+    branchPaths.push({
+      id:branch.id,
+      name:branch.name,
+      splitId:branch.splitId,
+      mergeId:branch.mergeId,
+      nodeIds:ids,
+    });
   }
   return {positions,mainPath,branchPaths,bounds:measureBounds(positions)};
 }
@@ -42,9 +44,9 @@ export function getLayoutPoint(layout,nodeId){
 
 export function getPlayerPoint(layout,nodeId,seat=0){
   const point=getLayoutPoint(layout,nodeId)||getLayoutPoint(layout,'r0')||{x:0,y:0,z:0};
-  const offsets=[[-.18,-.16],[.18,-.16],[-.18,.16],[.18,.16]];
+  const offsets=[[-.2,-.16],[.2,-.16],[-.2,.16],[.2,.16]];
   const [offsetX,offsetZ]=offsets[Math.abs(Number(seat)||0)%offsets.length];
-  return {x:point.x+offsetX,y:point.y+.58,z:point.z+offsetZ};
+  return {x:point.x+offsetX,y:point.y+.55,z:point.z+offsetZ};
 }
 
 export function getNodeDirection(layout,nodeId,preferredPath='auto'){
@@ -72,14 +74,32 @@ export function getBranchDirections(layout,branchId){
   };
 }
 
-function regularPoint(index,total,kind){
-  const angle=index/total*Math.PI*2-Math.PI/2;
-  const pulse=1+Math.sin(angle*3+.55)*.035+Math.cos(angle*5)*.018;
-  return {
-    x:Math.cos(angle)*MAIN_X_RADIUS*pulse,
-    y:.35+Math.sin(angle*2+.4)*.16+Math.cos(angle*4)*.07,
-    z:Math.sin(angle)*MAIN_Z_RADIUS*pulse,
-  };
+function samplePolyline(points,count,closed){
+  if(!points.length)return [];
+  const segments=[];
+  let totalLength=0;
+  const segmentCount=closed?points.length:points.length-1;
+  for(let index=0;index<segmentCount;index+=1){
+    const from=points[index];
+    const to=points[(index+1)%points.length];
+    const length=Math.hypot(to.x-from.x,to.z-from.z);
+    segments.push({from,to,length,start:totalLength});
+    totalLength+=length;
+  }
+  return Array.from({length:count},(_,index)=>{
+    const distance=closed?index/count*totalLength:index/(count-1)*totalLength;
+    const segment=segments.find(candidate=>distance<=candidate.start+candidate.length)||segments.at(-1);
+    const t=segment.length?(distance-segment.start)/segment.length:0;
+    return {
+      x:lerp(segment.from.x,segment.to.x,t),
+      y:lerp(segment.from.y,segment.to.y,t),
+      z:lerp(segment.from.z,segment.to.z,t),
+    };
+  });
+}
+
+function fallbackGuide(){
+  return [[-8,5],[-8,-5],[8,-5],[8,5]];
 }
 
 function normalizedDirection(from,to){
@@ -90,10 +110,7 @@ function normalizedDirection(from,to){
   return {x:x/length,y:0,z:z/length};
 }
 
-function quadratic(start,control,end,t){
-  const inverse=1-t;
-  return inverse*inverse*start+2*inverse*t*control+t*t*end;
-}
+function lerp(start,end,t){return start+(end-start)*t}
 
 function measureBounds(positions){
   const values=[...positions.values()];

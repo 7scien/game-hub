@@ -1,67 +1,92 @@
+export const BOARD_LAYOUT_VERSION='harbor-village-v1';
+
 export const BOARD_RULES=Object.freeze({
-  regularSpaces:60,
+  regularSpaces:68,
   branchCount:4,
-  branchMinLength:15,
-  branchMaxLength:20,
-  minimumSameKindDistance:7,
-  kindCounts:Object.freeze({normal:39,special:7,event:6,trap:5,shop:3}),
+  kindCounts:Object.freeze({normal:43,special:7,event:7,trap:7,shop:4}),
+  branchLengths:Object.freeze([7,6,6,7]),
 });
 
-const PLACEABLE_KINDS=['special','event','trap'];
+const KIND_POSITIONS=Object.freeze({
+  shop:[5,22,40,56],
+  trap:[11,20,30,38,48,59,65],
+  event:[2,15,26,35,45,54,63],
+  special:[8,18,28,33,43,52,61],
+});
+
+// Authored from the user's route sketch: west climb, north promenade,
+// large pier loop, middle crossing, south promenade, village loop, coast return.
+const MAIN_GUIDE=Object.freeze([
+  [-11,8],[-11,-7],[-3,-7],[3,-7],[6,-7],[8,-9],[11,-8],[12,-5],
+  [11,-2],[8,-1],[8,1],[4,1],[0,1],[-4,1],[-9,1],[-9,5],
+  [-5.5,6],[-2,6],[2,6],[6,6],[8,6],[10,7],[10,10],
+  [8,12],[5,11],[3,9],[0,11],[-4,10],[-8,9],[-11,8],
+]);
+
+const BRANCH_BLUEPRINTS=Object.freeze([
+  {
+    id:'village-crossing',name:'마을 세로길',splitId:'r15',mergeId:'r34',
+    guide:[[0,-5.3],[1.3,-3.2],[1.5,-1.5],[-.85,-1.2]],
+    kinds:['normal','special','normal','event','normal','normal','trap'],
+  },
+  {
+    id:'north-pier-loop',name:'부두 안쪽길',splitId:'r18',mergeId:'r27',
+    guide:[[5,-5.5],[7,-4.6],[7.4,-2.9],[8.2,-1.6]],
+    kinds:['normal','normal','event','normal','special','normal'],
+  },
+  {
+    id:'garden-cut',name:'정원 대각길',splitId:'r43',mergeId:'r63',
+    guide:[[-6.5,6.7],[-4.8,8.1],[-2.6,9.5]],
+    kinds:['normal','event','normal','special','normal','normal'],
+  },
+  {
+    id:'beach-village-loop',name:'해변 마을길',splitId:'r50',mergeId:'r59',
+    guide:[[6.7,6.8],[7.6,7.8],[7.3,9.7],[5.7,10.2],[4.3,9.6]],
+    kinds:['normal','trap','normal','event','normal','special','normal'],
+  },
+]);
 
 export function createBoard(seed='party-board'){
-  const random=createRandom(seed);
-  const spaces=Array.from({length:BOARD_RULES.regularSpaces},(_,index)=>({id:`r${index}`,index,kind:'normal'}));
-  const used=new Set();
-  const shopOffset=random.int(0,19);
-  for(const index of [shopOffset,shopOffset+20,shopOffset+40]){
-    spaces[index].kind='shop';
-    used.add(index);
-  }
-
-  for(const kind of PLACEABLE_KINDS){
-    const positions=placeKind({random,used,count:BOARD_RULES.kindCounts[kind]});
-    for(const index of positions){spaces[index].kind=kind;used.add(index)}
-  }
-
-  const splitOffset=random.int(0,14);
-  const branches=Array.from({length:BOARD_RULES.branchCount},(_,branchIndex)=>{
-    const splitIndex=(splitOffset+branchIndex*15)%BOARD_RULES.regularSpaces;
-    const mergeIndex=(splitIndex+random.int(5,10))%BOARD_RULES.regularSpaces;
-    const length=random.int(BOARD_RULES.branchMinLength,BOARD_RULES.branchMaxLength);
-    return {
-      id:`branch-${branchIndex+1}`,
-      splitId:`r${splitIndex}`,
-      mergeId:`r${mergeIndex}`,
-      nodes:Array.from({length},(_,nodeIndex)=>({
-        id:`b${branchIndex+1}-${nodeIndex+1}`,
-        index:nodeIndex,
-        kind:'branch',
-      })),
-    };
-  });
-
-  const board={seed:String(seed),startId:'r0',spaces,branches};
+  const spaces=Array.from({length:BOARD_RULES.regularSpaces},(_,index)=>({
+    id:`r${index}`,
+    index,
+    kind:kindAt(index),
+  }));
+  const branches=BRANCH_BLUEPRINTS.map((blueprint,branchIndex)=>({
+    id:blueprint.id,
+    name:blueprint.name,
+    splitId:blueprint.splitId,
+    mergeId:blueprint.mergeId,
+    guide:blueprint.guide.map(([x,z])=>[x,z]),
+    nodes:blueprint.kinds.map((kind,nodeIndex)=>({
+      id:`b${branchIndex+1}-${nodeIndex+1}`,
+      index:nodeIndex,
+      kind,
+    })),
+  }));
+  const board={
+    seed:String(seed),
+    layoutVersion:BOARD_LAYOUT_VERSION,
+    startId:'r0',
+    layoutGuide:MAIN_GUIDE.map(([x,z])=>[x,z]),
+    spaces,
+    branches,
+  };
   const errors=validateBoard(board);
-  if(errors.length)throw new Error(`Invalid generated board: ${errors.join('; ')}`);
+  if(errors.length)throw new Error(`Invalid authored board: ${errors.join('; ')}`);
   return board;
 }
 
-function placeKind({random,used,count}){
-  for(let attempt=0;attempt<500;attempt+=1){
-    const positions=[];
-    const candidates=random.shuffle(Array.from({length:BOARD_RULES.regularSpaces},(_,index)=>index).filter(index=>!used.has(index)));
-    for(const index of candidates){
-      if(positions.every(other=>circularDistance(index,other)>=BOARD_RULES.minimumSameKindDistance))positions.push(index);
-      if(positions.length===count)return positions;
-    }
-  }
-  throw new Error(`Unable to place ${count} board spaces with the requested spacing`);
+function kindAt(index){
+  for(const [kind,indices] of Object.entries(KIND_POSITIONS))if(indices.includes(index))return kind;
+  return 'normal';
 }
 
 export function validateBoard(board){
   const errors=[];
-  if(board.spaces?.length!==BOARD_RULES.regularSpaces)errors.push('regular board must contain 60 spaces');
+  if(board.layoutVersion!==BOARD_LAYOUT_VERSION)errors.push(`layout version must be ${BOARD_LAYOUT_VERSION}`);
+  if(board.spaces?.length!==BOARD_RULES.regularSpaces)errors.push(`authored route must contain ${BOARD_RULES.regularSpaces} regular spaces`);
+  if(!Array.isArray(board.layoutGuide)||board.layoutGuide.length<4)errors.push('authored route guide is missing');
   const ids=new Set();
   const counts={normal:0,special:0,event:0,trap:0,shop:0};
   for(const space of board.spaces||[]){
@@ -73,29 +98,14 @@ export function validateBoard(board){
   for(const [kind,expected] of Object.entries(BOARD_RULES.kindCounts)){
     if(counts[kind]!==expected)errors.push(`${kind} count must be ${expected}`);
   }
-
-  const shops=(board.spaces||[]).filter(space=>space.kind==='shop').map(space=>space.index).sort((a,b)=>a-b);
-  if(shops.length===3){
-    const gaps=shops.map((index,i)=>(shops[(i+1)%shops.length]-index+BOARD_RULES.regularSpaces)%BOARD_RULES.regularSpaces);
-    if(gaps.some(gap=>gap!==20))errors.push('shops must be exactly 20 spaces apart');
-  }
-
-  for(const kind of PLACEABLE_KINDS){
-    const positions=(board.spaces||[]).filter(space=>space.kind===kind).map(space=>space.index);
-    for(let i=0;i<positions.length;i+=1){
-      for(let j=i+1;j<positions.length;j+=1){
-        if(circularDistance(positions[i],positions[j])<BOARD_RULES.minimumSameKindDistance)errors.push(`${kind} spaces are too close: ${positions[i]}, ${positions[j]}`);
-      }
-    }
-  }
-
-  if(board.branches?.length!==BOARD_RULES.branchCount)errors.push('board must contain four branches');
+  if(board.branches?.length!==BOARD_RULES.branchCount)errors.push('authored route must contain four linked alternatives');
   const splitIds=new Set();
-  for(const branch of board.branches||[]){
+  for(const [branchIndex,branch] of (board.branches||[]).entries()){
     if(splitIds.has(branch.splitId))errors.push(`duplicate branch split ${branch.splitId}`);
     splitIds.add(branch.splitId);
-    if(!ids.has(branch.splitId)||!ids.has(branch.mergeId))errors.push(`${branch.id} must split from and merge into the regular path`);
-    if(branch.nodes.length<BOARD_RULES.branchMinLength||branch.nodes.length>BOARD_RULES.branchMaxLength)errors.push(`${branch.id} length must be 15–20`);
+    if(!ids.has(branch.splitId)||!ids.has(branch.mergeId))errors.push(`${branch.id} must split from and merge into the main route`);
+    if(branch.nodes.length!==BOARD_RULES.branchLengths[branchIndex])errors.push(`${branch.id} length must match the authored route`);
+    if(!Array.isArray(branch.guide)||!branch.guide.length)errors.push(`${branch.id} guide is missing`);
     for(const node of branch.nodes){
       if(ids.has(node.id))errors.push(`duplicate node id ${node.id}`);
       ids.add(node.id);
@@ -129,15 +139,15 @@ export function advanceMovement(board,{startId,steps,choices={}}){
     if(branchAtSplit){
       const choice=choices[branchAtSplit.id];
       if(!choice)return {status:'choice_required',currentId,path,remaining,laps,branch:branchAtSplit};
-      nextId=choice==='branch'?branchAtSplit.nodes[0].id:nextRegularId(currentId);
+      nextId=choice==='branch'?branchAtSplit.nodes[0].id:nextRegularId(board,currentId);
     }else{
       const branchWithNode=board.branches.find(branch=>branch.nodes.some(node=>node.id===currentId));
       if(branchWithNode){
         const index=branchWithNode.nodes.findIndex(node=>node.id===currentId);
         nextId=index===branchWithNode.nodes.length-1?branchWithNode.mergeId:branchWithNode.nodes[index+1].id;
-      }else nextId=nextRegularId(currentId);
+      }else nextId=nextRegularId(board,currentId);
     }
-    if(currentId!=='r0'&&nextId==='r0')laps+=1;
+    if(currentId!==board.startId&&nextId===board.startId)laps+=1;
     currentId=nextId;
     path.push(currentId);
     remaining-=1;
@@ -145,31 +155,6 @@ export function advanceMovement(board,{startId,steps,choices={}}){
   return {status:'complete',currentId,path,remaining,laps};
 }
 
-function nextRegularId(nodeId){
-  return `r${(Number(nodeId.slice(1))+1)%BOARD_RULES.regularSpaces}`;
-}
-
-function createRandom(seed){
-  let state=hashSeed(String(seed))||0x6d2b79f5;
-  const next=()=>{
-    state|=0;
-    state=(state+0x6d2b79f5)|0;
-    let value=Math.imul(state^(state>>>15),1|state);
-    value=(value+Math.imul(value^(value>>>7),61|value))^value;
-    return ((value^(value>>>14))>>>0)/4294967296;
-  };
-  return {
-    int(min,max){return Math.floor(next()*(max-min+1))+min},
-    shuffle(values){
-      const copy=[...values];
-      for(let i=copy.length-1;i>0;i-=1){const j=Math.floor(next()*(i+1));[copy[i],copy[j]]=[copy[j],copy[i]]}
-      return copy;
-    },
-  };
-}
-
-function hashSeed(value){
-  let hash=2166136261;
-  for(let i=0;i<value.length;i+=1){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619)}
-  return hash>>>0;
+function nextRegularId(board,nodeId){
+  return `r${(Number(nodeId.slice(1))+1)%board.spaces.length}`;
 }

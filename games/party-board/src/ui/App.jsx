@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {supabaseConfig} from '../config.js';
-import {advanceMovement,createBoard} from '../domain/board.js';
+import {advanceMovement,BOARD_LAYOUT_VERSION,createBoard} from '../domain/board.js';
 import {roomService} from '../online/room-service.js';
 import {BoardPreview} from './BoardPreview.jsx';
 import {CHARACTERS,Character} from './characters.jsx';
@@ -52,7 +52,7 @@ export function App(){
       <div className="landing-copy">
         <p className="eyebrow">ROLL · CHOOSE · LAUGH · REPEAT</p>
         <h1>친구 넷과<br/><em>별빛 한 바퀴!</em></h1>
-        <p className="lead">방 코드를 공유하고, 주사위를 굴려 60칸의 보드를 누비세요. 모든 결과는 하나의 온라인 게임 상태로 함께 움직입니다.</p>
+        <p className="lead">방 코드를 공유하고, 항구 마을의 석재길과 부두·정원·해변 지름길을 누비세요. 모든 결과는 하나의 온라인 게임 상태로 함께 움직입니다.</p>
         <div className="character-parade">{CHARACTERS.map(character=><div key={character.id}><Character id={character.id}/><b>{character.name}</b></div>)}</div>
       </div>
       <BoardPreview />
@@ -65,7 +65,7 @@ export function App(){
       {resumeCode&&<article className="resume-card"><span className="action-number">↻</span><div><small>SAVED ROOM</small><h2>이어하기</h2><p>마지막 방 <b>{resumeCode}</b>의 서버 저장 상태로 복귀합니다.</p></div><button disabled={!supabaseConfig.isConfigured||busy} onClick={()=>run(()=>roomService.resumeRoom())}>복귀</button></article>}
       {error&&<p className="error-message" role="alert">{error}</p>}
     </section>
-    <footer className="phase-strip"><span>PHASE 1</span><b>ROOMS</b><b>PRESENCE</b><b>RECONNECT</b><b>60-SPACE BOARD</b><b>GLOBAL TURNS</b></footer>
+    <footer className="phase-strip"><span>PHASE 1</span><b>ROOMS</b><b>PRESENCE</b><b>RECONNECT</b><b>AUTHORED ROUTE</b><b>GLOBAL TURNS</b></footer>
   </main>;
 }
 
@@ -105,7 +105,7 @@ function RoomScreen({snapshot,presence,connection,busy,error,onError,onBusy,onSn
 function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
   const state=snapshot.room.game_state||{};
   const fallbackBoard=useMemo(()=>createBoard(`fallback-${snapshot.room.code}`),[snapshot.room.code]);
-  const board=state.board?.spaces?.length===60?state.board:fallbackBoard;
+  const board=state.board?.layoutVersion===BOARD_LAYOUT_VERSION?state.board:fallbackBoard;
   const serverPlayers=useMemo(()=>normalizeGamePlayers(state,snapshot.players||[]),[state,snapshot.players]);
   const currentPlayerId=state.currentPlayerId||serverPlayers[0]?.id||null;
   const [previewPositions,setPreviewPositions]=useState(()=>Object.fromEntries(serverPlayers.map(player=>[player.id,player.positionId])));
@@ -227,7 +227,7 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
       </section>
       {pendingChoice&&<section className="branch-choice" role="dialog" aria-modal="true" aria-label="갈림길 경로 선택">
         <span>ROUTE CHOICE</span><h2>갈림길에 도착했어요</h2><p>여기서 잠시 멈췄습니다. 남은 <b>{pendingChoice.remaining}칸</b>을 어느 길로 이동할까요?</p>
-        <div><button onClick={()=>chooseBranch('main')}>정규길</button><button onClick={()=>chooseBranch('branch')}>별빛 샛길</button></div>
+        <div><button onClick={()=>chooseBranch('main')}>큰길 계속</button><button onClick={()=>chooseBranch('branch')}>{pendingChoice.branch.name||'지름길'}</button></div>
       </section>}
       <nav className="game-3d-actions" aria-label="게임 화면 메뉴">
         <span>PHASE 1 · 3D RENDER SLICE</span>
@@ -266,7 +266,8 @@ function normalizeGamePlayers(state,roomPlayers){
 
 function stepsToBranchDemo(board,startId){
   const startIndex=startId?.startsWith('r')?Number(startId.slice(1)):0;
-  const distances=(board.branches||[]).map(branch=>(Number(branch.splitId.slice(1))-startIndex+60)%60).map(distance=>distance||60).sort((a,b)=>a-b);
+  const routeLength=board.spaces.length;
+  const distances=(board.branches||[]).map(branch=>(Number(branch.splitId.slice(1))-startIndex+routeLength)%routeLength).map(distance=>distance||routeLength).sort((a,b)=>a-b);
   const target=distances.find(distance=>distance>=8)||distances[0]||8;
   return target+5;
 }

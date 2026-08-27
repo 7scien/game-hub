@@ -3,12 +3,12 @@ import {buildBoardLayout,getBranchDirections,getLayoutPoint,getNodeDirection,get
 import {isFastMovement,movementStepDuration,stageDuration} from './movement-timing.js';
 
 const TILE_STYLE={
-  normal:{top:0x78a9dd,base:0x315584,icon:''},
-  special:{top:0x72e4c3,base:0x257d72,icon:'!'},
-  event:{top:0xad8bf4,base:0x6045a5,icon:'?'},
-  trap:{top:0xff738f,base:0x9b2d53,icon:'×'},
-  shop:{top:0xffd45f,base:0xa66d24,icon:'₩'},
-  branch:{top:0x69d5ef,base:0x236a8e,icon:''},
+  normal:{top:0x3284e6,base:0xe9f2f0,icon:''},
+  special:{top:0x47c978,base:0xe9f2f0,icon:'!'},
+  event:{top:0x38bd6c,base:0xe9f2f0,icon:'?'},
+  trap:{top:0xef6262,base:0xe9f2f0,icon:'×'},
+  shop:{top:0xf4c84d,base:0xe9f2f0,icon:'₩'},
+  branch:{top:0x3284e6,base:0xe9f2f0,icon:''},
 };
 
 const CHARACTER_COLORS={ghost:0xc9b8ff,mole:0xb97852,chick:0xffda56,slime:0x70dfbc};
@@ -41,7 +41,7 @@ export class PartyBoardScene{
       this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio||1,this.isCompactDevice()?1.25:1.6));
       this.renderer.outputColorSpace=THREE.SRGBColorSpace;
       this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure=1.08;
+      this.renderer.toneMappingExposure=1.02;
       this.renderer.shadowMap.enabled=true;
       this.renderer.shadowMap.type=THREE.PCFShadowMap;
     }catch(error){
@@ -49,8 +49,8 @@ export class PartyBoardScene{
       return;
     }
     this.scene=new THREE.Scene();
-    this.scene.background=new THREE.Color(0x09152e);
-    this.scene.fog=new THREE.FogExp2(0x09152e,.018);
+    this.scene.background=new THREE.Color(0x91bccc);
+    this.scene.fog=new THREE.FogExp2(0x91bccc,.012);
     this.camera=new THREE.PerspectiveCamera(48,1,.1,120);
     this.camera.position.set(0,4.2,7);
     this.boardGroup=new THREE.Group();
@@ -71,37 +71,37 @@ export class PartyBoardScene{
   }
 
   addLighting(){
-    const hemisphere=new THREE.HemisphereLight(0xb9d9ff,0x1b1738,2.35);
-    const key=new THREE.DirectionalLight(0xffefcf,3.4);
-    key.position.set(8,18,11);
+    const hemisphere=new THREE.HemisphereLight(0xe6f8ff,0x56705b,2.7);
+    const key=new THREE.DirectionalLight(0xfff6d8,3.8);
+    key.position.set(-8,19,11);
     key.castShadow=true;
     key.shadow.mapSize.set(this.isCompactDevice()?1024:1536,this.isCompactDevice()?1024:1536);
     key.shadow.camera.left=-18;key.shadow.camera.right=18;key.shadow.camera.top=16;key.shadow.camera.bottom=-16;
-    const rim=new THREE.DirectionalLight(0x6fe4ff,1.45);
+    const rim=new THREE.DirectionalLight(0x9edfff,1.1);
     rim.position.set(-13,8,-9);
     this.scene.add(hemisphere,key,rim);
   }
 
   addSkyDust(){
-    const count=this.isCompactDevice()?90:150;
+    const count=this.isCompactDevice()?32:54;
     const positions=new Float32Array(count*3);
     for(let index=0;index<count;index+=1){
       const angle=index*2.39996;
-      const radius=13+(index%17)*.85;
+      const radius=15+(index%13)*.9;
       positions[index*3]=Math.cos(angle)*radius;
-      positions[index*3+1]=4+(index%11)*.72;
+      positions[index*3+1]=5+(index%8)*.8;
       positions[index*3+2]=Math.sin(angle)*radius;
     }
     const geometry=new THREE.BufferGeometry();
     geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
-    const material=new THREE.PointsMaterial({color:0xaeefff,size:.09,transparent:true,opacity:.62,sizeAttenuation:true});
+    const material=new THREE.PointsMaterial({color:0xffffff,size:.16,transparent:true,opacity:.28,sizeAttenuation:true});
     this.skyDust=new THREE.Points(geometry,material);
     this.scene.add(this.skyDust);
   }
 
   setBoard(board){
     if(!this.renderer||!board?.spaces?.length)return;
-    const signature=`${board.seed||'board'}:${board.spaces.length}:${board.branches?.length||0}`;
+    const signature=`${board.layoutVersion||'legacy'}:${board.seed||'board'}:${board.spaces.length}:${board.branches?.length||0}`;
     if(signature===this.boardSignature)return;
     this.boardSignature=signature;
     disposeChildren(this.boardGroup);
@@ -128,59 +128,57 @@ export class PartyBoardScene{
 
   createTerrain(){
     const water=new THREE.Mesh(
-      new THREE.CylinderGeometry(17.5,18.4,.45,48),
-      new THREE.MeshStandardMaterial({color:0x123c62,roughness:.46,metalness:.24}),
+      new THREE.PlaneGeometry(86,86),
+      new THREE.MeshStandardMaterial({color:0x4f9abd,roughness:.36,metalness:.12}),
     );
-    water.position.y=-1.35;
+    water.rotation.x=-Math.PI/2;
+    water.position.y=-1.24;
     water.receiveShadow=true;
     this.boardGroup.add(water);
     const island=new THREE.Mesh(
-      new THREE.CylinderGeometry(8.7,10.1,1.5,14),
-      new THREE.MeshStandardMaterial({color:0x2c8c78,roughness:.93,flatShading:true}),
+      new THREE.BoxGeometry(41,1.35,41),
+      new THREE.MeshStandardMaterial({color:0x526d61,roughness:1,flatShading:true}),
     );
-    island.position.y=-.94;
-    island.scale.x=1.22;
+    island.position.set(0,-.71,2.2);
     island.receiveShadow=true;
     island.castShadow=true;
     this.boardGroup.add(island);
     const islandTop=new THREE.Mesh(
-      new THREE.CylinderGeometry(8.5,8.8,.3,14),
-      new THREE.MeshStandardMaterial({color:0x5fbc78,roughness:1,flatShading:true}),
+      new THREE.BoxGeometry(40.2,.24,40.2),
+      new THREE.MeshStandardMaterial({color:0x6da862,roughness:1,flatShading:true}),
     );
-    islandTop.position.y=-.05;
-    islandTop.scale.x=1.22;
+    islandTop.position.set(0,.02,2.2);
     islandTop.receiveShadow=true;
     this.boardGroup.add(islandTop);
-    for(let index=0;index<16;index+=1){
-      const angle=index/16*Math.PI*2+.28;
-      const radius=2.3+(index%4)*.7;
-      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.09,.13,.55,6),new THREE.MeshStandardMaterial({color:0x815239,roughness:1}));
-      trunk.position.set(Math.cos(angle)*radius*1.18,.32,Math.sin(angle)*radius);
-      const crown=new THREE.Mesh(new THREE.ConeGeometry(.46,.95,7),new THREE.MeshStandardMaterial({color:index%2?0x57c69b:0x43a985,roughness:.9,flatShading:true}));
-      crown.position.copy(trunk.position);crown.position.y=.95;
-      trunk.castShadow=true;crown.castShadow=true;
-      this.boardGroup.add(trunk,crown);
+    const lawnMaterial=new THREE.MeshStandardMaterial({color:0x79b866,roughness:1});
+    const wallMaterial=new THREE.MeshStandardMaterial({color:0x71807b,roughness:.95,flatShading:true});
+    for(const [x,z,width,depth] of [[-5.8,-4.1,8.1,6.5],[3.5,-4.2,6.2,6.2],[-4.1,4.65,10.7,4.15],[5.9,4.65,6.4,4.15]]){
+      const lawn=new THREE.Mesh(new THREE.BoxGeometry(width,.22,depth),lawnMaterial);
+      lawn.position.set(x,.16,z);lawn.receiveShadow=true;this.boardGroup.add(lawn);
+      for(const [wallX,wallZ,wallW,wallD] of [[x,z-depth/2,width,.16],[x,z+depth/2,width,.16],[x-width/2,z,.16,depth],[x+width/2,z,.16,depth]]){
+        const wall=new THREE.Mesh(new THREE.BoxGeometry(wallW,.48,wallD),wallMaterial);
+        wall.position.set(wallX,.24,wallZ);wall.castShadow=true;wall.receiveShadow=true;this.boardGroup.add(wall);
+      }
     }
-    for(let index=0;index<12;index+=1){
-      const angle=index/12*Math.PI*2+.52;
-      const radius=6.3+(index%3)*.6;
-      const rock=new THREE.Mesh(
-        new THREE.DodecahedronGeometry(.22+(index%2)*.08,0),
-        new THREE.MeshStandardMaterial({color:index%2?0x68877e:0x7b9184,roughness:1,flatShading:true}),
-      );
-      rock.position.set(Math.cos(angle)*radius*1.2,.2,Math.sin(angle)*radius);
-      rock.rotation.set(index*.31,index*.18,index*.12);
-      rock.castShadow=true;
-      this.boardGroup.add(rock);
+    const shrubMaterial=new THREE.MeshStandardMaterial({color:0x337e45,roughness:1,flatShading:true});
+    const trunkMaterial=new THREE.MeshStandardMaterial({color:0x775543,roughness:1});
+    const plantSpots=[[-9.1,-3.9],[-6.5,-6],[-3.2,-2.9],[1.8,-6.1],[6,-3.4],[-8.1,4.6],[-4.6,5.4],[1.8,4.4],[7.4,4.2],[-7,10.7],[1.6,12.2],[9.9,11.8]];
+    for(const [index,[x,z]] of plantSpots.entries()){
+      if(index%3===0){
+        const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.1,.14,.62,6),trunkMaterial);
+        trunk.position.set(x,.58,z);
+        const crown=new THREE.Mesh(new THREE.DodecahedronGeometry(.48+(index%2)*.1,0),shrubMaterial);
+        crown.position.set(x,1.15,z);trunk.castShadow=true;crown.castShadow=true;this.boardGroup.add(trunk,crown);
+      }else{
+        const shrub=new THREE.Mesh(new THREE.DodecahedronGeometry(.3+(index%2)*.08,0),shrubMaterial);
+        shrub.scale.y=.72;shrub.position.set(x,.48,z);shrub.castShadow=true;this.boardGroup.add(shrub);
+      }
     }
-    const beacon=new THREE.Mesh(
-      new THREE.OctahedronGeometry(.72,0),
-      new THREE.MeshStandardMaterial({color:0xffe06e,emissive:0x8a5d16,emissiveIntensity:1.4,roughness:.35,flatShading:true}),
-    );
-    beacon.position.y=1.16;
-    beacon.castShadow=true;
-    beacon.userData.beacon=true;
-    this.boardGroup.add(beacon);
+    const ruinMaterial=new THREE.MeshStandardMaterial({color:0x87928c,roughness:1,flatShading:true});
+    for(const [x,z,height] of [[-1.8,-4.9,1.25],[.2,-4.9,.88],[5.2,-5.5,1.4],[-6.4,4.3,1.05]]){
+      const ruin=new THREE.Mesh(new THREE.BoxGeometry(.7,height,.72),ruinMaterial);
+      ruin.position.set(x,height/2+.25,z);ruin.rotation.y=(x+z)*.12;ruin.castShadow=true;this.boardGroup.add(ruin);
+    }
   }
 
   createRoadNetwork(){
@@ -204,40 +202,54 @@ export class PartyBoardScene{
 
   createRoad(points,{closed,branch}){
     const curve=createRouteCurve(points,closed);
+    const roadWidth=branch?2.05:2.3;
     const edge=new THREE.Mesh(
-      createRoadGeometry(curve,{width:branch?1.7:2.05,thickness:.3,closed,segments:Math.max(points.length*9,36),verticalOffset:-.1}),
-      new THREE.MeshStandardMaterial({color:branch?0x215d68:0x4a5261,roughness:.84,metalness:.08}),
+      createRoadGeometry(curve,{width:roadWidth+.34,thickness:.38,closed,segments:Math.max(points.length*8,36),verticalOffset:-.08}),
+      new THREE.MeshStandardMaterial({color:0x66726f,roughness:.92,metalness:.02}),
     );
     const surface=new THREE.Mesh(
-      createRoadGeometry(curve,{width:branch?1.42:1.75,thickness:.08,closed,segments:Math.max(points.length*9,36),verticalOffset:.13}),
-      new THREE.MeshStandardMaterial({color:branch?0x65bca9:0xc69a65,roughness:.76,metalness:.03}),
+      createRoadGeometry(curve,{width:roadWidth,thickness:.1,closed,segments:Math.max(points.length*8,36),verticalOffset:.17}),
+      new THREE.MeshStandardMaterial({color:branch?0xc1cbc5:0xcbd3cf,roughness:.88,metalness:.015}),
     );
     edge.castShadow=false;edge.receiveShadow=true;surface.receiveShadow=true;
     this.boardGroup.add(edge,surface);
-    const supportMaterial=new THREE.MeshStandardMaterial({color:0x55463d,roughness:1,flatShading:true});
-    const supportCount=branch?Math.max(6,Math.round(points.length*.45)):20;
-    for(let index=0;index<supportCount;index+=1){
-      const point=curve.getPoint((index+.5)/supportCount);
-      if(point.y<.35)continue;
-      const post=new THREE.Mesh(new THREE.CylinderGeometry(.07,.09,Math.max(.35,point.y+1.05),6),supportMaterial);
-      post.position.set(point.x,(point.y-1.05)/2,point.z);
-      post.castShadow=true;
-      this.boardGroup.add(post);
-    }
+    this.createPavingDetails(curve,{closed,count:Math.max(8,points.length*2),width:roadWidth,branch});
     return curve;
+  }
+
+  createPavingDetails(curve,{closed,count,width,branch}){
+    const seamMaterial=new THREE.MeshBasicMaterial({color:branch?0x87958f:0x929e99,transparent:true,opacity:.58});
+    const guideMaterial=new THREE.MeshBasicMaterial({color:0xf4f6e8,transparent:true,opacity:.82});
+    const xAxis=new THREE.Vector3(1,0,0);
+    for(let index=0;index<count;index+=1){
+      const t=closed?index/count:(index+.4)/(count+.2);
+      const point=curve.getPoint(t);
+      const tangent=curve.getTangent(t).setY(0).normalize();
+      const side=new THREE.Vector3(-tangent.z,0,tangent.x).normalize();
+      const seam=new THREE.Mesh(new THREE.BoxGeometry(width*.92,.018,.026),seamMaterial);
+      seam.position.set(point.x,point.y+.235,point.z);
+      seam.quaternion.setFromUnitVectors(xAxis,side);
+      this.boardGroup.add(seam);
+      if(index%8===4){
+        const guide=new THREE.Mesh(new THREE.BoxGeometry(.055,.022,.42),guideMaterial);
+        guide.position.set(point.x,point.y+.247,point.z);
+        guide.rotation.y=Math.atan2(tangent.x,tangent.z);
+        this.boardGroup.add(guide);
+      }
+    }
   }
 
   createJunction(nodeId,branchId){
     const point=getLayoutPoint(this.layout,nodeId);
     if(!point)return;
     const base=new THREE.Mesh(
-      new THREE.CylinderGeometry(1.04,1.11,.28,12),
-      new THREE.MeshStandardMaterial({color:0x3e4e58,roughness:.84,flatShading:true}),
+      new THREE.CylinderGeometry(1.08,1.12,.25,12),
+      new THREE.MeshStandardMaterial({color:0x66726f,roughness:.9,flatShading:true}),
     );
     base.position.set(point.x,point.y-.03,point.z);
     const top=new THREE.Mesh(
-      new THREE.CylinderGeometry(.92,.92,.11,12),
-      new THREE.MeshStandardMaterial({color:0xb9a06e,roughness:.72,flatShading:true}),
+      new THREE.CylinderGeometry(.99,.99,.1,12),
+      new THREE.MeshStandardMaterial({color:0xcbd3cf,roughness:.88,flatShading:true}),
     );
     top.position.set(point.x,point.y+.13,point.z);
     base.castShadow=true;base.receiveShadow=true;top.receiveShadow=true;
@@ -249,7 +261,7 @@ export class PartyBoardScene{
     const postOrigin=new THREE.Vector3(point.x+roadside.x,point.y,point.z+roadside.z);
     const post=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,.72,6),new THREE.MeshStandardMaterial({color:0x655044,roughness:1}));
     post.position.set(postOrigin.x,point.y+.58,postOrigin.z);
-    const signMaterial=new THREE.MeshStandardMaterial({color:0x8ff1dc,emissive:0x1b6a62,emissiveIntensity:.45,roughness:.7});
+    const signMaterial=new THREE.MeshStandardMaterial({color:0xf1e9b0,emissive:0x726427,emissiveIntensity:.18,roughness:.8});
     for(const [direction,height] of [[directions.main,.75],[directions.branch,.55]]){
       const sign=new THREE.Mesh(new THREE.BoxGeometry(.46,.14,.09),signMaterial);
       sign.position.set(postOrigin.x+direction.x*.18,point.y+height,postOrigin.z+direction.z*.18);
@@ -263,22 +275,21 @@ export class PartyBoardScene{
     const point=getLayoutPoint(this.layout,node.id);
     if(!point)return;
     const style=TILE_STYLE[node.kind]||TILE_STYLE.branch;
-    const branch=node.kind==='branch';
-    const radius=branch ? .29 : .43;
+    const radius=.42;
     const group=new THREE.Group();
     group.position.set(point.x,point.y,point.z);
     const base=new THREE.Mesh(
-      new THREE.CylinderGeometry(radius+.055,radius+.085,.28,branch?10:12),
+      new THREE.CylinderGeometry(radius+.095,radius+.115,.18,18),
       new THREE.MeshStandardMaterial({color:style.base,roughness:.75,flatShading:true}),
     );
-    base.position.y=-.05;base.castShadow=false;base.receiveShadow=true;
-    const topMaterial=new THREE.MeshStandardMaterial({color:style.top,roughness:.5,metalness:.08,emissive:style.top,emissiveIntensity:.08,flatShading:true});
-    const top=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,.15,branch?10:12),topMaterial);
-    top.position.y=.13;top.castShadow=false;top.receiveShadow=true;
+    base.position.y=.13;base.castShadow=false;base.receiveShadow=true;
+    const topMaterial=new THREE.MeshStandardMaterial({color:style.top,roughness:.44,metalness:.04,emissive:style.top,emissiveIntensity:.055});
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,.1,20),topMaterial);
+    top.position.y=.26;top.castShadow=false;top.receiveShadow=true;
     group.add(base,top);
     if(style.icon){
       const sprite=makeIconSprite(style.icon,node.kind==='trap'?'#fff4f7':'#172442');
-      sprite.position.y=.73;
+      sprite.position.y=.78;
       sprite.scale.set(.56,.56,.56);
       group.add(sprite);
     }
@@ -287,17 +298,17 @@ export class PartyBoardScene{
       for(let index=0;index<3;index+=1){
         const spike=new THREE.Mesh(new THREE.ConeGeometry(.065,.2,5),spikeMaterial);
         const angle=index/3*Math.PI*2;
-        spike.position.set(Math.cos(angle)*.22,.34,Math.sin(angle)*.22);
+        spike.position.set(Math.cos(angle)*.22,.48,Math.sin(angle)*.22);
         group.add(spike);
       }
     }
     if(node.kind==='shop'){
       const gem=new THREE.Mesh(new THREE.OctahedronGeometry(.14,0),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffc84f,emissiveIntensity:1.8}));
-      gem.position.y=.57;gem.castShadow=true;group.add(gem);
+      gem.position.y=.68;gem.castShadow=true;group.add(gem);
     }
     if(node.id==='r0'){
       const startRing=new THREE.Mesh(new THREE.TorusGeometry(radius+.12,.055,8,24),new THREE.MeshBasicMaterial({color:0xffef82}));
-      startRing.rotation.x=Math.PI/2;startRing.position.y=.24;group.add(startRing);
+      startRing.rotation.x=Math.PI/2;startRing.position.y=.36;group.add(startRing);
     }
     group.userData.nodeId=node.id;
     group.userData.topMaterial=topMaterial;
@@ -308,7 +319,7 @@ export class PartyBoardScene{
   createSplitMarker(branch){
     const point=getLayoutPoint(this.layout,branch.splitId);
     if(!point)return;
-    const material=new THREE.MeshStandardMaterial({color:0x8ef3ff,emissive:0x2a98b2,emissiveIntensity:1.4});
+    const material=new THREE.MeshStandardMaterial({color:0xffef91,emissive:0xb7942e,emissiveIntensity:.8});
     const marker=new THREE.Mesh(new THREE.TorusGeometry(.58,.055,7,20),material);
     marker.position.set(point.x,point.y+.28,point.z);
     marker.rotation.x=Math.PI/2;
@@ -534,9 +545,9 @@ export class PartyBoardScene{
     if(!this.camera||!this.layout)return;
     let targetFov=47;
     if(this.cameraMode==='overview'){
-      this.cameraDesiredPosition.set(18,21,23);
-      this.cameraDesiredLook.set(0,.1,0);
-      targetFov=48;
+      this.cameraDesiredPosition.set(27,36,40);
+      this.cameraDesiredLook.set(0,.1,2.4);
+      targetFov=50;
     }else{
       const root=this.characters.get(this.activePlayerId)||this.characters.values().next().value;
       if(!root)return;

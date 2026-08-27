@@ -1,16 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {advanceMovement,BOARD_RULES,createBoard,validateBoard} from '../src/domain/board.js';
+import {advanceMovement,BOARD_LAYOUT_VERSION,BOARD_RULES,createBoard,validateBoard} from '../src/domain/board.js';
 import {getTurnMilestones,salaryForCompletedLap} from '../src/domain/turns.js';
 import {buildBoardLayout,getBranchDirections,getNodeDirection,getPlayerPoint} from '../src/three/board-layout.js';
 import {isFastMovement,MOTION_STAGES,movementPace,movementStepDuration} from '../src/three/movement-timing.js';
 
-test('generated boards satisfy every Phase 1 placement invariant',()=>{
+test('the authored harbor route satisfies its Phase 1 topology contract',()=>{
   for(let seed=0;seed<750;seed+=1){
     const board=createBoard(`seed-${seed}`);
     assert.deepEqual(validateBoard(board),[],`seed ${seed}`);
-    assert.equal(board.spaces.length,60);
+    assert.equal(board.layoutVersion,BOARD_LAYOUT_VERSION);
+    assert.equal(board.spaces.length,BOARD_RULES.regularSpaces);
     assert.equal(board.branches.length,4);
+    assert.deepEqual(board.branches.map(branch=>branch.name),['마을 세로길','부두 안쪽길','정원 대각길','해변 마을길']);
     assert.deepEqual(Object.fromEntries(Object.keys(BOARD_RULES.kindCounts).map(kind=>[kind,board.spaces.filter(space=>space.kind===kind).length])),BOARD_RULES.kindCounts);
   }
 });
@@ -39,7 +41,7 @@ test('movement pauses at a branch and continues with only the remaining steps',(
 test('crossing the start line reports a completed lap',()=>{
   const board=createBoard('lap');
   const choices=Object.fromEntries(board.branches.map(branch=>[branch.id,'main']));
-  const result=advanceMovement(board,{startId:'r58',steps:3,choices});
+  const result=advanceMovement(board,{startId:'r'+(board.spaces.length-2),steps:3,choices});
   assert.equal(result.status,'complete');
   assert.equal(result.currentId,'r1');
   assert.equal(result.laps,1);
@@ -57,9 +59,9 @@ test('lap salary and global-turn milestones use the documented global clock',()=
 test('3D layout includes every regular and branch node with four complete branch paths',()=>{
   const board=createBoard('three-layout');
   const layout=buildBoardLayout(board);
-  const expectedNodes=60+board.branches.reduce((total,branch)=>total+branch.nodes.length,0);
+  const expectedNodes=board.spaces.length+board.branches.reduce((total,branch)=>total+branch.nodes.length,0);
   assert.equal(layout.positions.size,expectedNodes);
-  assert.equal(layout.mainPath.length,60);
+  assert.equal(layout.mainPath.length,BOARD_RULES.regularSpaces);
   assert.equal(layout.branchPaths.length,4);
   for(const branch of layout.branchPaths){
     assert.ok(layout.positions.has(branch.splitId));
@@ -79,6 +81,17 @@ test('3D player offsets separate four characters sharing a space',()=>{
   const points=Array.from({length:4},(_,seat)=>getPlayerPoint(layout,'r0',seat));
   assert.equal(new Set(points.map(point=>`${point.x},${point.z}`)).size,4);
   assert.ok(points.every(point=>Number.isFinite(point.x)&&Number.isFinite(point.y)&&Number.isFinite(point.z)));
+});
+
+test('authored 3D spaces remain visibly separated outside shared junction nodes',()=>{
+  const layout=buildBoardLayout(createBoard('visual-spacing'));
+  const points=[...layout.positions.values()];
+  for(let first=0;first<points.length;first+=1){
+    for(let second=first+1;second<points.length;second+=1){
+      const distance=Math.hypot(points[first].x-points[second].x,points[first].z-points[second].z);
+      assert.ok(distance>1.05,`${points[first].id} overlaps ${points[second].id} at ${distance.toFixed(3)}`);
+    }
+  }
 });
 
 test('movement timing switches to fast mode only above 12 spaces and slows for landing',()=>{
