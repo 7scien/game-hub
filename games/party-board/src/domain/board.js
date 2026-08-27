@@ -1,10 +1,10 @@
-export const BOARD_LAYOUT_VERSION='harbor-village-v1';
+export const BOARD_LAYOUT_VERSION='harbor-village-v2';
 
 export const BOARD_RULES=Object.freeze({
   regularSpaces:68,
   branchCount:4,
   kindCounts:Object.freeze({normal:43,special:7,event:7,trap:7,shop:4}),
-  branchLengths:Object.freeze([7,6,6,7]),
+  branchLengths:Object.freeze([12,11,9,10]),
 });
 
 const KIND_POSITIONS=Object.freeze({
@@ -17,32 +17,32 @@ const KIND_POSITIONS=Object.freeze({
 // Authored from the user's route sketch: west climb, north promenade,
 // large pier loop, middle crossing, south promenade, village loop, coast return.
 const MAIN_GUIDE=Object.freeze([
-  [-11,8],[-11,-7],[-3,-7],[3,-7],[6,-7],[8,-9],[11,-8],[12,-5],
-  [11,-2],[8,-1],[8,1],[4,1],[0,1],[-4,1],[-9,1],[-9,5],
-  [-5.5,6],[-2,6],[2,6],[6,6],[8,6],[10,7],[10,10],
-  [8,12],[5,11],[3,9],[0,11],[-4,10],[-8,9],[-11,8],
+  [-13,7],[-14.8,3],[-13.3,0],[-15,-3.5],[-12.5,-8.5],[-8.5,-11],[-4,-10.2],
+  [0,-11],[4,-10.6],[7,-12.5],[11,-12],[14,-9],[15,-5],
+  [13.5,-1.5],[11,.5],[12,4.5],[14,8],[13,11.5],[10,14],
+  [6,15],[2.5,13],[-1,15],[-5.5,12.7],[-9.8,14.5],[-12.8,9.5],
 ]);
 
 const BRANCH_BLUEPRINTS=Object.freeze([
   {
-    id:'village-crossing',name:'마을 세로길',splitId:'r15',mergeId:'r34',
-    guide:[[0,-5.3],[1.3,-3.2],[1.5,-1.5],[-.85,-1.2]],
-    kinds:['normal','special','normal','event','normal','normal','trap'],
+    id:'village-crossing',name:'중앙 마을길',splitId:'r8',mergeId:'r38',
+    guide:[[-11,-4],[-9,-1],[-6,.2],[-2,-.8],[2,.7],[6,-.2],[9,-1.5],[11,-3]],
+    kinds:['normal','special','normal','event','normal','normal','trap','normal','event','normal','special','normal'],
   },
   {
-    id:'north-pier-loop',name:'부두 안쪽길',splitId:'r18',mergeId:'r27',
-    guide:[[5,-5.5],[7,-4.6],[7.4,-2.9],[8.2,-1.6]],
-    kinds:['normal','normal','event','normal','special','normal'],
+    id:'north-pier-loop',name:'부두 반원길',splitId:'r18',mergeId:'r34',
+    guide:[[-2.2,-7.5],[0,-5],[4,-3],[8,-4],[8.5,-5.5],[10.5,-8]],
+    kinds:['normal','normal','event','normal','special','normal','normal','trap','normal','event','normal'],
   },
   {
-    id:'garden-cut',name:'정원 대각길',splitId:'r43',mergeId:'r63',
-    guide:[[-6.5,6.7],[-4.8,8.1],[-2.6,9.5]],
-    kinds:['normal','event','normal','special','normal','normal'],
+    id:'garden-cut',name:'정원 S지름길',splitId:'r54',mergeId:'r65',
+    guide:[[1.5,11],[-1,9],[-4,10],[-6.5,8],[-9,9]],
+    kinds:['normal','event','normal','special','normal','normal','trap','normal','event'],
   },
   {
-    id:'beach-village-loop',name:'해변 마을길',splitId:'r50',mergeId:'r59',
-    guide:[[6.7,6.8],[7.6,7.8],[7.3,9.7],[5.7,10.2],[4.3,9.6]],
-    kinds:['normal','trap','normal','event','normal','special','normal'],
+    id:'beach-village-loop',name:'해변 마을고리',splitId:'r40',mergeId:'r50',
+    guide:[[8.8,3.5],[6.8,5.8],[6.2,8],[6.8,11],[6,12]],
+    kinds:['normal','trap','normal','event','normal','special','normal','normal','event','normal'],
   },
 ]);
 

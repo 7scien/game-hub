@@ -1,10 +1,11 @@
-const MAP_SCALE=1.3;
+const MAP_SCALE=1.22;
+const ARC_SAMPLES_PER_CONTROL=72;
 
 export function buildBoardLayout(board){
   if(!board?.spaces?.length)throw new Error('A board with regular spaces is required');
   const positions=new Map();
   const mainGuide=(board.layoutGuide||fallbackGuide()).map(([x,z])=>({x:x*MAP_SCALE,y:.34,z:z*MAP_SCALE}));
-  const mainPoints=samplePolyline(mainGuide,board.spaces.length,true);
+  const mainPoints=sampleSpline(mainGuide,board.spaces.length,true);
   const mainPath=board.spaces.map((space,index)=>{
     const point=mainPoints[index];
     positions.set(space.id,{...point,id:space.id,kind:space.kind,path:'main'});
@@ -20,7 +21,7 @@ export function buildBoardLayout(board){
       y:.38+Math.sin((index+1)/(branch.guide.length+1)*Math.PI)*.07,
       z:z*MAP_SCALE,
     }));
-    const sampled=samplePolyline([start,...authoredGuide,end],branch.nodes.length+2,false).slice(1,-1);
+    const sampled=sampleSpline([start,...authoredGuide,end],branch.nodes.length+2,false).slice(1,-1);
     const ids=[];
     branch.nodes.forEach((node,index)=>{
       const point=sampled[index];
@@ -74,26 +75,64 @@ export function getBranchDirections(layout,branchId){
   };
 }
 
-function samplePolyline(points,count,closed){
-  if(!points.length)return [];
-  const segments=[];
-  let totalLength=0;
+export function getRouteSamplePoints(layout,pathId='main',sampleCount=240){
+  if(!layout)return [];
+  const branch=layout.branchPaths.find(path=>path.id===pathId);
+  const ids=branch?[branch.splitId,...branch.nodeIds,branch.mergeId]:layout.mainPath;
+  const points=ids.map(id=>getLayoutPoint(layout,id)).filter(Boolean);
+  return sampleSpline(points,Math.max(2,sampleCount),!branch);
+}
+
+function sampleSpline(points,count,closed){
+  if(points.length<2)return points;
   const segmentCount=closed?points.length:points.length-1;
-  for(let index=0;index<segmentCount;index+=1){
-    const from=points[index];
-    const to=points[(index+1)%points.length];
-    const length=Math.hypot(to.x-from.x,to.z-from.z);
-    segments.push({from,to,length,start:totalLength});
-    totalLength+=length;
+  const denseCount=Math.max(segmentCount*ARC_SAMPLES_PER_CONTROL,count*12);
+  const dense=Array.from({length:denseCount+(closed?0:1)},(_,index)=>{
+    const progress=index/denseCount*segmentCount;
+    const segment=Math.min(segmentCount-1,Math.floor(progress));
+    const t=progress-segment;
+    return catmullRom(points,segment,t,closed);
+  });
+  return resampleByArcLength(dense,count,closed);
+}
+
+function catmullRom(points,segment,t,closed){
+  const size=points.length;
+  const at=index=>{
+    if(closed)return points[(index%size+size)%size];
+    return points[Math.max(0,Math.min(size-1,index))];
+  };
+  const p0=at(segment-1),p1=at(segment),p2=at(segment+1),p3=at(segment+2);
+  const t2=t*t,t3=t2*t;
+  return {
+    x:catmullValue(p0.x,p1.x,p2.x,p3.x,t,t2,t3),
+    y:catmullValue(p0.y,p1.y,p2.y,p3.y,t,t2,t3),
+    z:catmullValue(p0.z,p1.z,p2.z,p3.z,t,t2,t3),
+  };
+}
+
+function catmullValue(p0,p1,p2,p3,t,t2,t3){
+  return .5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t2+(-p0+3*p1-3*p2+p3)*t3);
+}
+
+function resampleByArcLength(points,count,closed){
+  const samples=closed?[...points,points[0]]:points;
+  const distances=[0];
+  for(let index=1;index<samples.length;index+=1){
+    const previous=samples[index-1],current=samples[index];
+    distances.push(distances.at(-1)+Math.hypot(current.x-previous.x,current.y-previous.y,current.z-previous.z));
   }
+  const total=distances.at(-1);
+  let cursor=1;
   return Array.from({length:count},(_,index)=>{
-    const distance=closed?index/count*totalLength:index/(count-1)*totalLength;
-    const segment=segments.find(candidate=>distance<=candidate.start+candidate.length)||segments.at(-1);
-    const t=segment.length?(distance-segment.start)/segment.length:0;
+    const target=(closed?index/count:index/(count-1))*total;
+    while(cursor<distances.length-1&&distances[cursor]<target)cursor+=1;
+    const start=distances[cursor-1],end=distances[cursor];
+    const t=end===start?0:(target-start)/(end-start);
     return {
-      x:lerp(segment.from.x,segment.to.x,t),
-      y:lerp(segment.from.y,segment.to.y,t),
-      z:lerp(segment.from.z,segment.to.z,t),
+      x:lerp(samples[cursor-1].x,samples[cursor].x,t),
+      y:lerp(samples[cursor-1].y,samples[cursor].y,t),
+      z:lerp(samples[cursor-1].z,samples[cursor].z,t),
     };
   });
 }

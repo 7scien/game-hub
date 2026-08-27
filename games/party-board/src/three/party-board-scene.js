@@ -76,7 +76,7 @@ export class PartyBoardScene{
     key.position.set(-8,19,11);
     key.castShadow=true;
     key.shadow.mapSize.set(this.isCompactDevice()?1024:1536,this.isCompactDevice()?1024:1536);
-    key.shadow.camera.left=-18;key.shadow.camera.right=18;key.shadow.camera.top=16;key.shadow.camera.bottom=-16;
+    key.shadow.camera.left=-24;key.shadow.camera.right=24;key.shadow.camera.top=24;key.shadow.camera.bottom=-24;
     const rim=new THREE.DirectionalLight(0x9edfff,1.1);
     rim.position.set(-13,8,-9);
     this.scene.add(hemisphere,key,rim);
@@ -136,7 +136,7 @@ export class PartyBoardScene{
     water.receiveShadow=true;
     this.boardGroup.add(water);
     const island=new THREE.Mesh(
-      new THREE.BoxGeometry(41,1.35,41),
+      new THREE.BoxGeometry(49,1.35,47),
       new THREE.MeshStandardMaterial({color:0x526d61,roughness:1,flatShading:true}),
     );
     island.position.set(0,-.71,2.2);
@@ -144,7 +144,7 @@ export class PartyBoardScene{
     island.castShadow=true;
     this.boardGroup.add(island);
     const islandTop=new THREE.Mesh(
-      new THREE.BoxGeometry(40.2,.24,40.2),
+      new THREE.BoxGeometry(48.2,.24,46.2),
       new THREE.MeshStandardMaterial({color:0x6da862,roughness:1,flatShading:true}),
     );
     islandTop.position.set(0,.02,2.2);
@@ -153,6 +153,7 @@ export class PartyBoardScene{
     const lawnMaterial=new THREE.MeshStandardMaterial({color:0x79b866,roughness:1});
     const wallMaterial=new THREE.MeshStandardMaterial({color:0x71807b,roughness:.95,flatShading:true});
     for(const [x,z,width,depth] of [[-5.8,-4.1,8.1,6.5],[3.5,-4.2,6.2,6.2],[-4.1,4.65,10.7,4.15],[5.9,4.65,6.4,4.15]]){
+      if(!this.isAreaClear(x,z,width,depth,1.8))continue;
       const lawn=new THREE.Mesh(new THREE.BoxGeometry(width,.22,depth),lawnMaterial);
       lawn.position.set(x,.16,z);lawn.receiveShadow=true;this.boardGroup.add(lawn);
       for(const [wallX,wallZ,wallW,wallD] of [[x,z-depth/2,width,.16],[x,z+depth/2,width,.16],[x-width/2,z,.16,depth],[x+width/2,z,.16,depth]]){
@@ -164,6 +165,7 @@ export class PartyBoardScene{
     const trunkMaterial=new THREE.MeshStandardMaterial({color:0x775543,roughness:1});
     const plantSpots=[[-9.1,-3.9],[-6.5,-6],[-3.2,-2.9],[1.8,-6.1],[6,-3.4],[-8.1,4.6],[-4.6,5.4],[1.8,4.4],[7.4,4.2],[-7,10.7],[1.6,12.2],[9.9,11.8]];
     for(const [index,[x,z]] of plantSpots.entries()){
+      if(!this.isClearOfRoad(x,z,2.05))continue;
       if(index%3===0){
         const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.1,.14,.62,6),trunkMaterial);
         trunk.position.set(x,.58,z);
@@ -176,9 +178,53 @@ export class PartyBoardScene{
     }
     const ruinMaterial=new THREE.MeshStandardMaterial({color:0x87928c,roughness:1,flatShading:true});
     for(const [x,z,height] of [[-1.8,-4.9,1.25],[.2,-4.9,.88],[5.2,-5.5,1.4],[-6.4,4.3,1.05]]){
+      if(!this.isClearOfRoad(x,z,2))continue;
       const ruin=new THREE.Mesh(new THREE.BoxGeometry(.7,height,.72),ruinMaterial);
       ruin.position.set(x,height/2+.25,z);ruin.rotation.y=(x+z)*.12;ruin.castShadow=true;this.boardGroup.add(ruin);
     }
+    for(const [x,z,rotation] of [[-8,-7,.18],[-3,5.7,-.22],[3.8,5.2,.12],[9,-5.5,-.28],[-10,9,.35]]){
+      if(this.isAreaClear(x,z,2.5,2.5,1.55))this.createHouse(x,z,rotation);
+    }
+    for(const [x,z] of [[-3,8],[3,-7],[8,8]]){
+      if(!this.isAreaClear(x,z,5.2,3.6,1.7))continue;
+      const pond=new THREE.Mesh(new THREE.CylinderGeometry(2.3,2.5,.11,14),new THREE.MeshStandardMaterial({color:0x4d9eb5,roughness:.34,metalness:.12}));
+      pond.scale.z=.62;pond.position.set(x,.17,z);pond.receiveShadow=true;this.boardGroup.add(pond);
+      const bridge=new THREE.Group();
+      const bridgeMaterial=new THREE.MeshStandardMaterial({color:0x9b7651,roughness:.92});
+      for(let plank=-2;plank<=2;plank+=1){
+        const board=new THREE.Mesh(new THREE.BoxGeometry(.52,.13,2.05),bridgeMaterial);
+        board.position.set(x+plank*.52,.32,z);board.castShadow=true;bridge.add(board);
+      }
+      this.boardGroup.add(bridge);
+      break;
+    }
+  }
+
+  isClearOfRoad(x,z,clearance=2){
+    if(!this.layout)return true;
+    for(const point of this.layout.positions.values()){
+      if(Math.hypot(point.x-x,point.z-z)<clearance)return false;
+    }
+    return true;
+  }
+
+  isAreaClear(x,z,width,depth,clearance=1.6){
+    const probes=[
+      [x,z],[x-width/2,z],[x+width/2,z],[x,z-depth/2],[x,z+depth/2],
+      [x-width/2,z-depth/2],[x+width/2,z-depth/2],[x-width/2,z+depth/2],[x+width/2,z+depth/2],
+    ];
+    return probes.every(([probeX,probeZ])=>this.isClearOfRoad(probeX,probeZ,clearance));
+  }
+
+  createHouse(x,z,rotation=0){
+    const house=new THREE.Group();
+    const wall=new THREE.Mesh(new THREE.BoxGeometry(1.65,1.15,1.45),new THREE.MeshStandardMaterial({color:0xe7d7aa,roughness:.94,flatShading:true}));
+    wall.position.y=.83;wall.castShadow=true;wall.receiveShadow=true;
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(1.32,.82,4),new THREE.MeshStandardMaterial({color:0x805647,roughness:1,flatShading:true}));
+    roof.position.y=1.75;roof.rotation.y=Math.PI/4;roof.castShadow=true;
+    const door=new THREE.Mesh(new THREE.BoxGeometry(.34,.68,.06),new THREE.MeshStandardMaterial({color:0x624638,roughness:1}));
+    door.position.set(0,.65,.755);
+    house.add(wall,roof,door);house.position.set(x,0,z);house.rotation.y=rotation;this.boardGroup.add(house);
   }
 
   createRoadNetwork(){
@@ -545,8 +591,8 @@ export class PartyBoardScene{
     if(!this.camera||!this.layout)return;
     let targetFov=47;
     if(this.cameraMode==='overview'){
-      this.cameraDesiredPosition.set(27,36,40);
-      this.cameraDesiredLook.set(0,.1,2.4);
+      this.cameraDesiredPosition.set(34,46,52);
+      this.cameraDesiredLook.set(0,.1,1.8);
       targetFov=50;
     }else{
       const root=this.characters.get(this.activePlayerId)||this.characters.values().next().value;
@@ -639,7 +685,7 @@ export class PartyBoardScene{
 }
 
 function createRouteCurve(points,closed=false){
-  return new THREE.CatmullRomCurve3(points.map(point=>point.clone()),closed,'centripetal',.5);
+  return new THREE.CatmullRomCurve3(points.map(point=>point.clone()),closed,'catmullrom',.5);
 }
 
 function createMotionCurve(points){
