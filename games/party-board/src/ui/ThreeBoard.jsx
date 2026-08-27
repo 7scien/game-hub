@@ -7,6 +7,8 @@ export function ThreeBoard({
   activePlayerId=null,
   moveCommand=null,
   effectCommand=null,
+  branchChoice=null,
+  cameraMode='follow',
   onMotionStage,
   onMoveComplete,
   className='',
@@ -44,6 +46,8 @@ export function ThreeBoard({
   useEffect(()=>{sceneRef.current?.setBoard(board)},[board]);
   useEffect(()=>{sceneRef.current?.setPlayers(players)},[players]);
   useEffect(()=>{sceneRef.current?.setActivePlayer(activePlayerId)},[activePlayerId]);
+  useEffect(()=>{sceneRef.current?.setBranchChoice(branchChoice)},[branchChoice]);
+  useEffect(()=>{sceneRef.current?.setCameraMode(cameraMode)},[cameraMode]);
 
   useEffect(()=>{
     if(!moveCommand?.token||handledMoveRef.current===moveCommand.token)return;

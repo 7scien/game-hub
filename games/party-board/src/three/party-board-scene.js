@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {buildBoardLayout,getLayoutPoint,getPlayerPoint} from './board-layout.js';
+import {buildBoardLayout,getBranchDirections,getLayoutPoint,getNodeDirection,getPlayerPoint} from './board-layout.js';
 import {isFastMovement,movementStepDuration,stageDuration} from './movement-timing.js';
 
 const TILE_STYLE={
@@ -12,6 +12,7 @@ const TILE_STYLE={
 };
 
 const CHARACTER_COLORS={ghost:0xc9b8ff,mole:0xb97852,chick:0xffda56,slime:0x70dfbc};
+const Y_AXIS=new THREE.Vector3(0,1,0);
 
 export class PartyBoardScene{
   constructor({canvas,onReady,onStage,onError}){
@@ -23,6 +24,17 @@ export class PartyBoardScene{
     this.effects=[];
     this.activePlayerId=null;
     this.motion=null;
+    this.cameraMode='follow';
+    this.branchChoice=null;
+    this.cameraInitialized=false;
+    this.cameraLookTarget=new THREE.Vector3();
+    this.cameraDesiredPosition=new THREE.Vector3();
+    this.cameraDesiredLook=new THREE.Vector3();
+    this.cameraQuaternion=new THREE.Quaternion();
+    this.cameraMatrix=new THREE.Matrix4();
+    this.cameraUp=new THREE.Vector3(0,1,0);
+    this.arrivalFocusUntil=0;
+    this.lastFrameTime=performance.now();
     this.reducedMotion=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches||false;
     try{
       this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance'});
@@ -39,9 +51,8 @@ export class PartyBoardScene{
     this.scene=new THREE.Scene();
     this.scene.background=new THREE.Color(0x09152e);
     this.scene.fog=new THREE.FogExp2(0x09152e,.018);
-    this.camera=new THREE.OrthographicCamera(-13,13,10,-10,.1,100);
-    this.camera.position.set(18,20,22);
-    this.camera.lookAt(0,0,0);
+    this.camera=new THREE.PerspectiveCamera(48,1,.1,120);
+    this.camera.position.set(0,4.2,7);
     this.boardGroup=new THREE.Group();
     this.characterGroup=new THREE.Group();
     this.effectGroup=new THREE.Group();
@@ -98,7 +109,7 @@ export class PartyBoardScene{
     this.layout=buildBoardLayout(board);
     this.board=board;
     this.createTerrain();
-    this.createConnectors();
+    this.createRoadNetwork();
     for(const space of board.spaces)this.createTile(space);
     for(const branch of board.branches||[]){
       for(const node of branch.nodes)this.createTile(node);
@@ -112,6 +123,7 @@ export class PartyBoardScene{
     this.landingRing.visible=false;
     this.boardGroup.add(this.landingRing);
     if(this.players.length)this.setPlayers(this.players);
+    this.cameraInitialized=false;
   }
 
   createTerrain(){
@@ -123,29 +135,43 @@ export class PartyBoardScene{
     water.receiveShadow=true;
     this.boardGroup.add(water);
     const island=new THREE.Mesh(
-      new THREE.CylinderGeometry(8.1,9.6,1.25,12),
+      new THREE.CylinderGeometry(8.7,10.1,1.5,14),
       new THREE.MeshStandardMaterial({color:0x2c8c78,roughness:.93,flatShading:true}),
     );
-    island.position.y=-.83;
+    island.position.y=-.94;
+    island.scale.x=1.22;
     island.receiveShadow=true;
     island.castShadow=true;
     this.boardGroup.add(island);
     const islandTop=new THREE.Mesh(
-      new THREE.CylinderGeometry(7.6,8.1,.28,12),
+      new THREE.CylinderGeometry(8.5,8.8,.3,14),
       new THREE.MeshStandardMaterial({color:0x5fbc78,roughness:1,flatShading:true}),
     );
-    islandTop.position.y=-.08;
+    islandTop.position.y=-.05;
+    islandTop.scale.x=1.22;
     islandTop.receiveShadow=true;
     this.boardGroup.add(islandTop);
-    for(let index=0;index<10;index+=1){
-      const angle=index/10*Math.PI*2+.28;
-      const radius=2.65+(index%3)*.45;
+    for(let index=0;index<16;index+=1){
+      const angle=index/16*Math.PI*2+.28;
+      const radius=2.3+(index%4)*.7;
       const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.09,.13,.55,6),new THREE.MeshStandardMaterial({color:0x815239,roughness:1}));
-      trunk.position.set(Math.cos(angle)*radius,.32,Math.sin(angle)*radius);
+      trunk.position.set(Math.cos(angle)*radius*1.18,.32,Math.sin(angle)*radius);
       const crown=new THREE.Mesh(new THREE.ConeGeometry(.46,.95,7),new THREE.MeshStandardMaterial({color:index%2?0x57c69b:0x43a985,roughness:.9,flatShading:true}));
       crown.position.copy(trunk.position);crown.position.y=.95;
       trunk.castShadow=true;crown.castShadow=true;
       this.boardGroup.add(trunk,crown);
+    }
+    for(let index=0;index<12;index+=1){
+      const angle=index/12*Math.PI*2+.52;
+      const radius=6.3+(index%3)*.6;
+      const rock=new THREE.Mesh(
+        new THREE.DodecahedronGeometry(.22+(index%2)*.08,0),
+        new THREE.MeshStandardMaterial({color:index%2?0x68877e:0x7b9184,roughness:1,flatShading:true}),
+      );
+      rock.position.set(Math.cos(angle)*radius*1.2,.2,Math.sin(angle)*radius);
+      rock.rotation.set(index*.31,index*.18,index*.12);
+      rock.castShadow=true;
+      this.boardGroup.add(rock);
     }
     const beacon=new THREE.Mesh(
       new THREE.OctahedronGeometry(.72,0),
@@ -157,28 +183,80 @@ export class PartyBoardScene{
     this.boardGroup.add(beacon);
   }
 
-  createConnectors(){
-    const mainMaterial=new THREE.MeshStandardMaterial({color:0x254d78,roughness:.7,metalness:.12});
-    const branchMaterial=new THREE.MeshStandardMaterial({color:0x1e7898,emissive:0x0d4055,emissiveIntensity:.7,roughness:.62});
-    const main=this.layout.mainPath;
-    for(let index=0;index<main.length;index+=1)this.createConnector(main[index],main[(index+1)%main.length],mainMaterial,.25);
+  createRoadNetwork(){
+    this.routeCurves=new Map();
+    const mainPoints=this.layout.mainPath.map(id=>vectorFromPoint(getLayoutPoint(this.layout,id)));
+    const mainCurve=this.createRoad(mainPoints,{closed:true,branch:false});
+    this.routeCurves.set('main',mainCurve);
+    const junctionIds=new Set();
     for(const branch of this.layout.branchPaths){
       const ids=[branch.splitId,...branch.nodeIds,branch.mergeId];
-      for(let index=0;index<ids.length-1;index+=1)this.createConnector(ids[index],ids[index+1],branchMaterial,.17);
+      const points=ids.map(id=>vectorFromPoint(getLayoutPoint(this.layout,id)));
+      const curve=this.createRoad(points,{closed:false,branch:true});
+      this.routeCurves.set(branch.id,curve);
+      for(const nodeId of [branch.splitId,branch.mergeId]){
+        if(junctionIds.has(nodeId))continue;
+        junctionIds.add(nodeId);
+        this.createJunction(nodeId,branch.id);
+      }
     }
   }
 
-  createConnector(fromId,toId,material,width){
-    const from=getLayoutPoint(this.layout,fromId);
-    const to=getLayoutPoint(this.layout,toId);
-    if(!from||!to)return;
-    const dx=to.x-from.x;const dz=to.z-from.z;
-    const distance=Math.hypot(dx,dz);
-    const mesh=new THREE.Mesh(new THREE.BoxGeometry(distance,.1,width),material);
-    mesh.position.set((from.x+to.x)/2,Math.min(from.y,to.y)-.05,(from.z+to.z)/2);
-    mesh.rotation.y=-Math.atan2(dz,dx);
-    mesh.receiveShadow=true;
-    this.boardGroup.add(mesh);
+  createRoad(points,{closed,branch}){
+    const curve=createRouteCurve(points,closed);
+    const edge=new THREE.Mesh(
+      createRoadGeometry(curve,{width:branch?1.7:2.05,thickness:.3,closed,segments:Math.max(points.length*9,36),verticalOffset:-.1}),
+      new THREE.MeshStandardMaterial({color:branch?0x215d68:0x4a5261,roughness:.84,metalness:.08}),
+    );
+    const surface=new THREE.Mesh(
+      createRoadGeometry(curve,{width:branch?1.42:1.75,thickness:.08,closed,segments:Math.max(points.length*9,36),verticalOffset:.13}),
+      new THREE.MeshStandardMaterial({color:branch?0x65bca9:0xc69a65,roughness:.76,metalness:.03}),
+    );
+    edge.castShadow=false;edge.receiveShadow=true;surface.receiveShadow=true;
+    this.boardGroup.add(edge,surface);
+    const supportMaterial=new THREE.MeshStandardMaterial({color:0x55463d,roughness:1,flatShading:true});
+    const supportCount=branch?Math.max(6,Math.round(points.length*.45)):20;
+    for(let index=0;index<supportCount;index+=1){
+      const point=curve.getPoint((index+.5)/supportCount);
+      if(point.y<.35)continue;
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(.07,.09,Math.max(.35,point.y+1.05),6),supportMaterial);
+      post.position.set(point.x,(point.y-1.05)/2,point.z);
+      post.castShadow=true;
+      this.boardGroup.add(post);
+    }
+    return curve;
+  }
+
+  createJunction(nodeId,branchId){
+    const point=getLayoutPoint(this.layout,nodeId);
+    if(!point)return;
+    const base=new THREE.Mesh(
+      new THREE.CylinderGeometry(1.04,1.11,.28,12),
+      new THREE.MeshStandardMaterial({color:0x3e4e58,roughness:.84,flatShading:true}),
+    );
+    base.position.set(point.x,point.y-.03,point.z);
+    const top=new THREE.Mesh(
+      new THREE.CylinderGeometry(.92,.92,.11,12),
+      new THREE.MeshStandardMaterial({color:0xb9a06e,roughness:.72,flatShading:true}),
+    );
+    top.position.set(point.x,point.y+.13,point.z);
+    base.castShadow=true;base.receiveShadow=true;top.receiveShadow=true;
+    this.boardGroup.add(base,top);
+    const directions=getBranchDirections(this.layout,branchId);
+    if(!directions)return;
+    const bisector=new THREE.Vector3(directions.main.x+directions.branch.x,0,directions.main.z+directions.branch.z).normalize();
+    const roadside=new THREE.Vector3(-bisector.z,0,bisector.x).multiplyScalar(.82);
+    const postOrigin=new THREE.Vector3(point.x+roadside.x,point.y,point.z+roadside.z);
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(.055,.075,.72,6),new THREE.MeshStandardMaterial({color:0x655044,roughness:1}));
+    post.position.set(postOrigin.x,point.y+.58,postOrigin.z);
+    const signMaterial=new THREE.MeshStandardMaterial({color:0x8ff1dc,emissive:0x1b6a62,emissiveIntensity:.45,roughness:.7});
+    for(const [direction,height] of [[directions.main,.75],[directions.branch,.55]]){
+      const sign=new THREE.Mesh(new THREE.BoxGeometry(.46,.14,.09),signMaterial);
+      sign.position.set(postOrigin.x+direction.x*.18,point.y+height,postOrigin.z+direction.z*.18);
+      sign.rotation.y=Math.atan2(direction.x,direction.z);
+      this.boardGroup.add(sign);
+    }
+    this.boardGroup.add(post);
   }
 
   createTile(node){
@@ -193,10 +271,10 @@ export class PartyBoardScene{
       new THREE.CylinderGeometry(radius+.055,radius+.085,.28,branch?10:12),
       new THREE.MeshStandardMaterial({color:style.base,roughness:.75,flatShading:true}),
     );
-    base.position.y=-.05;base.castShadow=true;base.receiveShadow=true;
+    base.position.y=-.05;base.castShadow=false;base.receiveShadow=true;
     const topMaterial=new THREE.MeshStandardMaterial({color:style.top,roughness:.5,metalness:.08,emissive:style.top,emissiveIntensity:.08,flatShading:true});
     const top=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,.15,branch?10:12),topMaterial);
-    top.position.y=.13;top.castShadow=true;top.receiveShadow=true;
+    top.position.y=.13;top.castShadow=false;top.receiveShadow=true;
     group.add(base,top);
     if(style.icon){
       const sprite=makeIconSprite(style.icon,node.kind==='trap'?'#fff4f7':'#172442');
@@ -261,6 +339,9 @@ export class PartyBoardScene{
       root.userData.nodeId=player.positionId||'r0';
       const point=getPlayerPoint(this.layout,root.userData.nodeId,player.seat);
       root.userData.basePosition=new THREE.Vector3(point.x,point.y,point.z);
+      const direction=getNodeDirection(this.layout,root.userData.nodeId);
+      root.userData.forward=new THREE.Vector3(direction.x,0,direction.z).normalize();
+      if(!this.motion||this.motion.playerId!==id)root.rotation.y=Math.atan2(direction.x,direction.z);
       if(this.motion?.playerId!==id)root.position.copy(root.userData.basePosition);
       root.userData.activeRing.visible=id===this.activePlayerId;
     }
@@ -269,13 +350,27 @@ export class PartyBoardScene{
       this.characterGroup.remove(root);disposeObject(root);this.characters.delete(id);
     }
     this.highlightNode(players.find(player=>(player.id||player.userId||player.user_id)===this.activePlayerId)?.positionId||null);
+    if(!this.cameraInitialized&&this.activePlayerId)this.updateCamera(performance.now(),1/60,true);
   }
 
   setActivePlayer(playerId){
+    const firstSelection=!this.activePlayerId;
     this.activePlayerId=playerId;
     for(const [id,root] of this.characters)root.userData.activeRing.visible=id===playerId;
     const player=this.players.find(candidate=>(candidate.id||candidate.userId||candidate.user_id)===playerId);
     if(player)this.highlightNode(player.positionId||'r0');
+    if(firstSelection)this.cameraInitialized=false;
+  }
+
+  setBranchChoice(branch){
+    this.branchChoice=branch?.id?branch:null;
+  }
+
+  setCameraMode(mode){
+    const next=mode==='overview'?'overview':'follow';
+    if(next===this.cameraMode)return;
+    this.cameraMode=next;
+    this.cameraInitialized=false;
   }
 
   highlightNode(nodeId){
@@ -296,10 +391,11 @@ export class PartyBoardScene{
         const point=getPlayerPoint(this.layout,nodeId,player.seat);
         return {nodeId,vector:new THREE.Vector3(point.x,point.y,point.z)};
       });
+      const splinePoints=[root.userData.basePosition.clone(),...points.map(point=>point.vector.clone())];
       this.motion={
         playerId,root,player,points,totalSteps,reward,onStage,resolve,
         fast:isFastMovement(totalSteps),segmentIndex:0,
-        segmentStart:root.position.clone(),stage:'anticipation',stageStarted:performance.now(),effectShown:false,
+        curve:createMotionCurve(splinePoints),stage:'anticipation',stageStarted:performance.now(),effectShown:false,
       };
       this.setMotionStage('anticipation');
     });
@@ -331,9 +427,13 @@ export class PartyBoardScene{
       const progress=clamp01(elapsed/duration);
       const eased=easeInOut(progress);
       const target=motion.points[motion.segmentIndex];
-      root.position.lerpVectors(motion.segmentStart,target.vector,eased);
-      const dx=target.vector.x-motion.segmentStart.x;const dz=target.vector.z-motion.segmentStart.z;
-      if(Math.abs(dx)+Math.abs(dz)>.001)root.rotation.y=Math.atan2(dx,dz);
+      const curveProgress=(motion.segmentIndex+eased)/motion.points.length;
+      motion.curve.getPoint(curveProgress,root.position);
+      const tangent=motion.curve.getTangent(Math.min(.9999,curveProgress+.001)).setY(0).normalize();
+      if(tangent.lengthSq()>.001){
+        root.userData.forward.lerp(tangent,.22).normalize();
+        smoothFacing(root,root.userData.forward,.24);
+      }
       root.position.y+=movementHop(root.userData.character,progress,motion.fast);
       applyMovingShape(root,progress);
       if(progress>=1){
@@ -344,7 +444,6 @@ export class PartyBoardScene{
         body.scale.set(1,1,1);
         if(motion.segmentIndex>=motion.points.length){this.highlightNode(target.nodeId);this.setMotionStage('stop')}
         else{
-          motion.segmentStart=target.vector.clone();
           const remaining=motion.points.length-motion.segmentIndex;
           this.setMotionStage(remaining<=2?'slow_down':'move');
         }
@@ -374,6 +473,7 @@ export class PartyBoardScene{
     motion.root.userData.body.scale.set(1,1,1);
     motion.root.userData.body.rotation.set(0,0,0);
     motion.root.position.copy(motion.root.userData.basePosition);
+    if(!cancelled)this.arrivalFocusUntil=performance.now()+1100;
     this.motion=null;
     motion.onStage?.('idle',{fast:false});
     this.onStage?.('idle',{fast:false});
@@ -430,8 +530,63 @@ export class PartyBoardScene{
     this.effectGroup.remove(effect.group);disposeObject(effect.group);
   }
 
+  updateCamera(now,delta,snap=false){
+    if(!this.camera||!this.layout)return;
+    let targetFov=47;
+    if(this.cameraMode==='overview'){
+      this.cameraDesiredPosition.set(18,21,23);
+      this.cameraDesiredLook.set(0,.1,0);
+      targetFov=48;
+    }else{
+      const root=this.characters.get(this.activePlayerId)||this.characters.values().next().value;
+      if(!root)return;
+      const forward=(root.userData.forward||new THREE.Vector3(0,0,1)).clone().setY(0).normalize();
+      if(this.branchChoice){
+        const directions=getBranchDirections(this.layout,this.branchChoice.id);
+        if(directions){
+          const main=new THREE.Vector3(directions.main.x,0,directions.main.z);
+          const branch=new THREE.Vector3(directions.branch.x,0,directions.branch.z);
+          const viewDirection=main.add(branch).normalize();
+          const split=vectorFromPoint(directions.split);
+          this.cameraDesiredPosition.copy(split).addScaledVector(viewDirection,-5.6).addScaledVector(this.cameraUp,4.2);
+          this.cameraDesiredLook.copy(split).addScaledVector(viewDirection,1.45).addScaledVector(this.cameraUp,.42);
+          targetFov=50;
+        }
+      }else{
+        const arriving=this.motion?.stage==='stop'||this.motion?.stage==='reaction'||now<this.arrivalFocusUntil;
+        const running=this.motion?.fast&&this.motion.segmentIndex>=2&&this.motion.stage==='move';
+        const distance=arriving?3.9:running?6.8:5.8;
+        const height=arriving?2.65:running?4.05:3.5;
+        const lookAhead=arriving ? .65 : running ? 2.2 : 1.35;
+        this.cameraDesiredPosition.copy(root.position).addScaledVector(forward,-distance).addScaledVector(this.cameraUp,height);
+        this.cameraDesiredLook.copy(root.position).addScaledVector(forward,lookAhead).addScaledVector(this.cameraUp,.48);
+        targetFov=arriving?43:running?50:47;
+      }
+    }
+    if(!this.cameraInitialized||snap){
+      this.camera.position.copy(this.cameraDesiredPosition);
+      this.cameraLookTarget.copy(this.cameraDesiredLook);
+      this.camera.lookAt(this.cameraLookTarget);
+      this.camera.fov=targetFov;
+      this.camera.updateProjectionMatrix();
+      this.cameraInitialized=true;
+      return;
+    }
+    const positionAlpha=1-Math.exp(-4.6*delta);
+    const lookAlpha=1-Math.exp(-6.2*delta);
+    this.camera.position.lerp(this.cameraDesiredPosition,positionAlpha);
+    this.cameraLookTarget.lerp(this.cameraDesiredLook,lookAlpha);
+    this.cameraMatrix.lookAt(this.camera.position,this.cameraLookTarget,this.cameraUp);
+    this.cameraQuaternion.setFromRotationMatrix(this.cameraMatrix);
+    this.camera.quaternion.slerp(this.cameraQuaternion,lookAlpha);
+    const nextFov=THREE.MathUtils.lerp(this.camera.fov,targetFov,positionAlpha);
+    if(Math.abs(nextFov-this.camera.fov)>.001){this.camera.fov=nextFov;this.camera.updateProjectionMatrix()}
+  }
+
   tick(time){
     if(!this.renderer)return;
+    const delta=Math.min(.05,Math.max(.001,(time-this.lastFrameTime)/1000));
+    this.lastFrameTime=time;
     const seconds=time*.001;
     if(this.skyDust)this.skyDust.rotation.y=seconds*.014;
     const beacon=this.boardGroup.children.find(child=>child.userData.beacon);
@@ -442,6 +597,7 @@ export class PartyBoardScene{
     }
     this.updateMotion(time);
     this.updateEffects(time);
+    this.updateCamera(time,delta);
     if(this.landingRing?.visible){
       this.landingRing.rotation.z=seconds*.5;
       this.landingRing.material.opacity=.62+Math.sin(seconds*3.5)*.26;
@@ -458,11 +614,7 @@ export class PartyBoardScene{
     const width=Math.max(1,parent.clientWidth);
     const height=Math.max(1,parent.clientHeight);
     this.renderer.setSize(width,height,false);
-    const aspect=width/height;
-    const horizontal=Math.max(26,18*aspect);
-    const vertical=horizontal/aspect;
-    this.camera.left=-horizontal/2;this.camera.right=horizontal/2;
-    this.camera.top=vertical/2;this.camera.bottom=-vertical/2;
+    this.camera.aspect=width/height;
     this.camera.updateProjectionMatrix();
   }
 
@@ -473,6 +625,67 @@ export class PartyBoardScene{
     disposeObject(this.scene);
     this.renderer?.dispose();
   }
+}
+
+function createRouteCurve(points,closed=false){
+  return new THREE.CatmullRomCurve3(points.map(point=>point.clone()),closed,'centripetal',.5);
+}
+
+function createMotionCurve(points){
+  if(points.length===2)return new THREE.LineCurve3(points[0],points[1]);
+  return createRouteCurve(points,false);
+}
+
+function createRoadGeometry(curve,{width,thickness,closed,segments,verticalOffset=0}){
+  const positions=[];
+  const indices=[];
+  const sampleCount=closed?segments:segments+1;
+  const side=new THREE.Vector3();
+  for(let index=0;index<sampleCount;index+=1){
+    const t=closed?index/segments:index/(sampleCount-1);
+    const point=curve.getPoint(t);
+    const tangent=curve.getTangent(t).setY(0).normalize();
+    side.set(-tangent.z,0,tangent.x).normalize().multiplyScalar(width/2);
+    const topY=point.y+verticalOffset+thickness/2;
+    const bottomY=point.y+verticalOffset-thickness/2;
+    positions.push(
+      point.x+side.x,topY,point.z+side.z,
+      point.x-side.x,topY,point.z-side.z,
+      point.x+side.x,bottomY,point.z+side.z,
+      point.x-side.x,bottomY,point.z-side.z,
+    );
+  }
+  const spanCount=closed?sampleCount:sampleCount-1;
+  for(let index=0;index<spanCount;index+=1){
+    const next=(index+1)%sampleCount;
+    const a=index*4;const b=next*4;
+    indices.push(
+      a,b,a+1,b,b+1,a+1,
+      a+2,a+3,b+2,b+2,a+3,b+3,
+      a,a+2,b,b,a+2,b+2,
+      a+1,b+1,a+3,b+1,b+3,a+3,
+    );
+  }
+  if(!closed){
+    const first=0;const last=(sampleCount-1)*4;
+    indices.push(first,first+1,first+2,first+1,first+3,first+2,last,last+2,last+1,last+1,last+2,last+3);
+  }
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function vectorFromPoint(point){
+  return new THREE.Vector3(point?.x||0,point?.y||0,point?.z||0);
+}
+
+function smoothFacing(root,direction,alpha){
+  const target=root.userData.facingQuaternion||(root.userData.facingQuaternion=new THREE.Quaternion());
+  target.setFromAxisAngle(Y_AXIS,Math.atan2(direction.x,direction.z));
+  root.quaternion.slerp(target,alpha);
 }
 
 function createCharacter(type){

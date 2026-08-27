@@ -12,7 +12,7 @@ export function BoardPreview({board:providedBoard,compact=false}){
     {id:'preview-slime',seat:3,character:'slime',positionId:'r46'},
   ],[]);
   return <div className={`board-preview board-preview-3d${compact?' board-compact':''}`}>
-    <ThreeBoard board={board} players={players} activePlayerId="preview-ghost" label="60칸 메인 루트와 4개 갈래길이 있는 3D 보드 미리보기"/>
-    <div className="board-preview-caption"><span>LIVE 3D BOARD</span><b>60 MAIN · 4 BRANCHES</b></div>
+    <ThreeBoard board={board} players={players} activePlayerId="preview-ghost" cameraMode="follow" label="캐릭터 뒤에서 연결된 길을 바라보는 3D 보드 미리보기"/>
+    <div className="board-preview-caption"><span>PLAYER FOLLOW CAMERA</span><b>CONNECTED ROAD · 4 BRANCHES</b></div>
   </div>;
 }

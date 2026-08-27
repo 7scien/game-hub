@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {advanceMovement,BOARD_RULES,createBoard,validateBoard} from '../src/domain/board.js';
 import {getTurnMilestones,salaryForCompletedLap} from '../src/domain/turns.js';
-import {buildBoardLayout,getPlayerPoint} from '../src/three/board-layout.js';
-import {isFastMovement,MOTION_STAGES,movementStepDuration} from '../src/three/movement-timing.js';
+import {buildBoardLayout,getBranchDirections,getNodeDirection,getPlayerPoint} from '../src/three/board-layout.js';
+import {isFastMovement,MOTION_STAGES,movementPace,movementStepDuration} from '../src/three/movement-timing.js';
 
 test('generated boards satisfy every Phase 1 placement invariant',()=>{
   for(let seed=0;seed<750;seed+=1){
@@ -65,6 +65,12 @@ test('3D layout includes every regular and branch node with four complete branch
     assert.ok(layout.positions.has(branch.splitId));
     assert.ok(layout.positions.has(branch.mergeId));
     assert.ok(branch.nodeIds.every(nodeId=>layout.positions.has(nodeId)));
+    const directions=getBranchDirections(layout,branch.id);
+    assert.ok(directions);
+    assert.ok(Math.hypot(directions.main.x,directions.main.z)>.99);
+    assert.ok(Math.hypot(directions.branch.x,directions.branch.z)>.99);
+    const branchDirection=getNodeDirection(layout,branch.nodeIds[0],branch.id);
+    assert.ok(Math.hypot(branchDirection.x,branchDirection.z)>.99);
   }
 });
 
@@ -83,4 +89,7 @@ test('movement timing switches to fast mode only above 12 spaces and slows for l
   const landing=movementStepDuration({totalSteps:13,stepIndex:12,pathLength:13});
   assert.ok(cruise<movementStepDuration({totalSteps:8,stepIndex:0,pathLength:8}));
   assert.ok(landing>cruise);
+  assert.equal(movementPace({totalSteps:13,stepIndex:0,pathLength:13}),'walk');
+  assert.equal(movementPace({totalSteps:13,stepIndex:2,pathLength:13}),'run');
+  assert.equal(movementPace({totalSteps:13,stepIndex:12,pathLength:13}),'slow_down');
 });

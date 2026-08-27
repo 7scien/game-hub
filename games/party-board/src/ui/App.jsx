@@ -114,12 +114,14 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
   const [effectCommand,setEffectCommand]=useState(null);
   const [isAnimating,setIsAnimating]=useState(false);
   const [pendingChoice,setPendingChoice]=useState(null);
+  const [cameraMode,setCameraMode]=useState('follow');
   const [lastLanding,setLastLanding]=useState(currentPlayerId?serverPlayers.find(player=>player.id===currentPlayerId)?.positionId||'r0':'r0');
   const tokenRef=useRef(0);
 
   useEffect(()=>{
     setPreviewPositions(Object.fromEntries(serverPlayers.map(player=>[player.id,player.positionId])));
     setPendingChoice(null);setMoveCommand(null);setIsAnimating(false);setMotionStage('idle');
+    setCameraMode('follow');
     setLastLanding(serverPlayers.find(player=>player.id===currentPlayerId)?.positionId||'r0');
   },[snapshot.room.state_version,serverPlayers,currentPlayerId]);
 
@@ -200,6 +202,8 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
         activePlayerId={currentPlayerId}
         moveCommand={moveCommand}
         effectCommand={effectCommand}
+        branchChoice={pendingChoice?.branch||null}
+        cameraMode={cameraMode}
         onMotionStage={setMotionStage}
         onMoveComplete={handleMoveComplete}
         className="game-board-canvas"
@@ -213,8 +217,8 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
       </aside>
       <div className="board-legend-3d" aria-label="칸 종류"><span className="normal">일반</span><span className="special">특수</span><span className="event">이벤트</span><span className="trap">함정</span><span className="shop">상점</span></div>
       <section className="movement-console" aria-label="3D 이동 연출 미리보기">
-        <div className="motion-status"><span className={motionStage!=='idle'?'active':''}/><div><small>ANIMATION STATE</small><b>{stageLabel}{moveCommand?.totalSteps>12&&motionStage!=='idle'?' · FAST':''}</b></div><em>도착 {lastLanding}</em></div>
-        <p>서버 상태를 바꾸지 않는 렌더링 미리보기입니다. 실제 주사위 판정은 다음 PHASE 1 서버 슬라이스에서 연결합니다.</p>
+        <div className="motion-status"><span className={motionStage!=='idle'?'active':''}/><div><small>ANIMATION STATE</small><b>{stageLabel}{moveCommand?.totalSteps>12&&motionStage==='move'?' · RUN':''}</b></div><em>도착 {lastLanding}</em></div>
+        <p>캐릭터 뒤에서 길을 따라가는 렌더링 미리보기입니다. 서버 상태는 변경하지 않습니다.</p>
         <div className="movement-buttons">
           <button disabled={busy} onClick={()=>startMovement(8,'coin')}>8칸 이동</button>
           <button disabled={busy} onClick={startBranchDemo}>갈림길 체험</button>
@@ -227,6 +231,7 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
       </section>}
       <nav className="game-3d-actions" aria-label="게임 화면 메뉴">
         <span>PHASE 1 · 3D RENDER SLICE</span>
+        {import.meta.env.DEV&&<button className="secondary" onClick={()=>setCameraMode(mode=>mode==='follow'?'overview':'follow')}>{cameraMode==='follow'?'디버그 전체 보기':'플레이어 추적'}</button>}
         {canSave&&<button onClick={onSave}>저장하고 종료</button>}
         <button className="secondary" onClick={onExit}>시작 화면</button>
       </nav>

@@ -9,14 +9,15 @@ Game Hub 안에서 독립 실행되는 온라인 4인용 파티 보드게임입�
 - 중복 없는 4캐릭터 선택과 방장 시작/저장
 - 60칸 보드, 같은 종류 간 거리, 상점 20칸 간격, 4개 갈래길 생성 및 검증
 - 글로벌 60턴 milestone과 누적 월급 규칙
-- Three.js 로우폴리 3D 보드, 4개 입체 갈래길, 4종 지오메트리 캐릭터
-- `idle → anticipation → move → slow down → stop → reaction → idle` 이동 연출과 12칸 초과 빠른 이동
-- 갈림길 정지·경로 선택, 도착 칸 강조, 코인/별/아이템/보호권 연출 구조
+- Three.js 로우폴리 3D 보드, 연속된 도로 geometry, 실제 Y/T자 형태로 연결되는 4개 갈래길
+- 현재 캐릭터 뒤·위에서 길을 바라보며 부드럽게 회전하는 3인칭 추적 카메라
+- Catmull-Rom spline을 따르는 `idle → anticipation → move → slow down → stop → reaction → idle` 이동과 12칸 초과 walk → run 전환
+- 갈림길 정지 시 두 경로를 함께 보여주는 카메라, 도착 줌인, 코인/별/아이템/보호권 연출 구조
 - 6턴 미니게임 placeholder가 들어갈 게임 화면
 
 현재 3D 화면의 이동 버튼은 렌더링 검증용 로컬 미리보기이며 Supabase 상태를 바꾸지 않습니다. 주사위·이동·갈림길 명령의 authoritative 서버 판정은 다음 PHASE 1 슬라이스입니다. 클라이언트는 확정된 state의 표현만 담당하며, 게임 결과를 직접 저장하지 않습니다.
 
-개발 중 전체 3D 게임 HUD와 이동 연출만 바로 확인하려면 `http://localhost:5173/games/party-board/?board3d=1`을 사용합니다. 이 미리보기 분기는 개발 빌드에서만 활성화됩니다.
+개발 중 3D 게임 HUD와 추적 이동을 바로 확인하려면 `http://localhost:5173/games/party-board/?board3d=1`을 사용합니다. 기본 시점은 항상 플레이어 추적이며, 이 개발 화면에서만 전체 보드 디버그 시점으로 전환할 수 있습니다. 미리보기 분기는 개발 빌드에서만 활성화됩니다.
 
 ## Supabase 연결 시점
 
