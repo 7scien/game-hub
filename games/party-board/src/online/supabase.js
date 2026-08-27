@@ -3,10 +3,16 @@ import {supabaseConfig} from '../config.js';
 
 let client;
 
+function testProfile(){
+  if(!import.meta.env.DEV||typeof location==='undefined')return '';
+  return (new URLSearchParams(location.search).get('profile')||'').replace(/[^a-z0-9_-]/gi,'').slice(0,24);
+}
+
 export function getSupabaseClient(){
   if(!supabaseConfig.isConfigured)throw new Error('Supabase 연결 정보가 아직 설정되지 않았습니다.');
+  const profile=testProfile();
   client??=createClient(supabaseConfig.url,supabaseConfig.publishableKey,{
-    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false},
+    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,...(profile?{storageKey:`party-board-auth-${profile}`}:{})},
   });
   return client;
 }

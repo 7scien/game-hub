@@ -2,6 +2,10 @@ export const MINIGAME_REWARDS=Object.freeze({entryCoins:10,totalPool:40,soloWinn
 
 export const MINIGAME_PHASES=Object.freeze(['board','reveal','briefing','countdown','playing','results','returning']);
 
+export const ONLINE_MINIGAME_PHASES=Object.freeze([
+  'BRIEFING','COUNTDOWN','PLAYING','MINIGAME_RESULT','REWARD_APPLIED','RETURNING_TO_BOARD',
+]);
+
 export const TEST_MINIGAME=Object.freeze({
   id:'starlight-catch',
   name:'별빛 부두 포착전',
@@ -27,6 +31,36 @@ const PHASE_EVENTS=Object.freeze({
 export function transitionMinigamePhase(phase,event){
   if(!MINIGAME_PHASES.includes(phase))throw new RangeError(`Unknown minigame phase: ${phase}`);
   return PHASE_EVENTS[phase]?.[event]||phase;
+}
+
+export function deriveOnlineMinigameView(minigame,now=Date.now()){
+  const phase=minigame?.phase;
+  if(!ONLINE_MINIGAME_PHASES.includes(phase))return Object.freeze({view:'board',remainingMs:0});
+  if(phase==='BRIEFING')return Object.freeze({view:'briefing',remainingMs:0});
+  if(phase==='COUNTDOWN'||phase==='PLAYING'){
+    const startAt=Date.parse(minigame.startAt||'');
+    const endsAt=Date.parse(minigame.endsAt||'');
+    const finalizeAt=Date.parse(minigame.finalizeAt||'');
+    if(Number.isFinite(startAt)&&now<startAt)return Object.freeze({view:'countdown',remainingMs:startAt-now});
+    if(Number.isFinite(endsAt)&&now<endsAt)return Object.freeze({view:'playing',remainingMs:endsAt-now});
+    if(Number.isFinite(finalizeAt)&&now<finalizeAt)return Object.freeze({view:'settling',remainingMs:finalizeAt-now});
+    return Object.freeze({view:'finalizing',remainingMs:0});
+  }
+  if(phase==='MINIGAME_RESULT')return Object.freeze({view:'results',remainingMs:0});
+  if(phase==='REWARD_APPLIED')return Object.freeze({view:'reward',remainingMs:Math.max(0,Date.parse(minigame.returnAt||'')-now)});
+  return Object.freeze({view:'returning',remainingMs:Math.max(0,Date.parse(minigame.boardAt||'')-now)});
+}
+
+export function countConfirmed(record){
+  return Object.values(record||{}).filter(Boolean).length;
+}
+
+export function mergeMinigameScores(players,...scoreMaps){
+  const scores=Object.fromEntries(players.map(player=>[player.id,0]));
+  for(const scoreMap of scoreMaps){
+    for(const [id,value] of Object.entries(scoreMap||{}))if(id in scores)scores[id]=Math.max(scores[id],Math.max(0,Number(value)||0));
+  }
+  return Object.freeze(scores);
 }
 
 export function rankPlayers(players,{bonusStars={}}={}){

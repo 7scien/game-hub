@@ -19,9 +19,13 @@ Game Hub 안에서 독립 실행되는 온라인 4인용 파티 보드게임입�
 - 별→코인 순위의 4인 HUD와 현재 플레이어 전용 6칸 인벤토리 바
 - `board → reveal → briefing → countdown → playing → results → returning` 미니게임 전환 프레임워크
 - 터치·마우스로 별빛을 포착하는 독립 Three.js 테스트 경기장 1종과 40코인 분배 규칙
+- 6턴 간격의 서버 미니게임 생성, 4인 READY, 서버 `startAt` 기반 카운트다운과 재접속 복구
+- Realtime Broadcast의 저지연 점수 표시와 서버가 검증·집계하는 개별 포착 이벤트
+- `MINIGAME_RESULT → REWARD_APPLIED → RETURNING_TO_BOARD → BOARD` 권위 상태 전환
+- action ID와 `rewardApplied`를 함께 사용하는 40코인 1회 지급, 우승자의 `minigameWins` 누적
 - 업적 3종 공개와 보너스 별 재계산, 공동 우승을 지원하는 최종 우승 화면 프로토타입
 
-현재 3D 화면의 이동·미니게임·최종 우승 버튼은 렌더링 검증용 로컬 미리보기이며 Supabase 상태를 바꾸지 않습니다. 주사위·이동·경로 선택 명령과 미니게임 READY·점수·보상·업적의 authoritative 서버 판정은 후속 온라인 슬라이스입니다. 클라이언트는 최종적으로 서버에서 확정된 state의 표현만 담당합니다.
+실제 온라인 방에서는 현재 플레이어가 `온라인 턴 완료`를 눌러 서버 턴 경계를 확정합니다. 글로벌 턴 6·12·18·24·30·36·42·48·54의 종료 경계에서는 테스트 미니게임이 자동 생성되며, 네 클라이언트는 서버에서 확정한 같은 미니게임 상태만 표현합니다. 개발용 `미니게임 연출`과 `최종 우승 연출` 버튼은 기존 독립 미리보기로 유지됩니다.
 
 개발 중 3D 게임 HUD와 추적 이동을 바로 확인하려면 `http://localhost:5173/games/party-board/?board3d=1`을 사용합니다. 기본 시점은 항상 플레이어 추적이며, 이 개발 화면에서만 전체 보드 디버그 시점으로 전환할 수 있습니다. 미리보기 분기는 개발 빌드에서만 활성화됩니다.
 
@@ -32,7 +36,7 @@ Game Hub 안에서 독립 실행되는 온라인 4인용 파티 보드게임입�
 
 1. Supabase 프로젝트를 만든 뒤 Anonymous Sign-ins를 활성화합니다.
 2. `supabase/migrations/202608260001_phase1_rooms.sql`을 적용합니다.
-   기존 프로젝트에 첫 migration을 이미 적용했다면 `supabase/migrations/202608270001_harbor_village_board.sql`과 `supabase/migrations/202608270002_curved_harbor_board.sql`도 순서대로 적용합니다. 마지막 migration은 새로 만드는 방의 저장 보드를 곡선형 항구 마을 v2로 맞추며, 기존 방 데이터는 덮어쓰지 않습니다.
+   기존 프로젝트에 첫 migration을 이미 적용했다면 `supabase/migrations/202608270001_harbor_village_board.sql`, `supabase/migrations/202608270002_curved_harbor_board.sql`, `supabase/migrations/202608270003_online_minigame.sql`을 순서대로 적용합니다. 마지막 migration은 미니게임 입력 이벤트 테이블과 턴·READY·결과·보상·복귀 RPC를 추가하며 기존 방 상태를 덮어쓰지 않습니다.
 3. 프로젝트 루트의 로컬 `.env.local`에 아래 두 값을 넣습니다. 실제 secret/service-role key는 프론트엔드에 절대 넣지 않습니다.
 
 ```dotenv
@@ -44,9 +48,18 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
 
 처음 연결하는 사람을 위한 화면별 절차와 4인 테스트 순서는 `docs/supabase-setup.ko.md`에 정리되어 있습니다. 실제 값은 루트 `.env.example`이 아니라 새로 만드는 `.env.local`에만 입력합니다.
 
+로컬 한 브라우저에서 서로 다른 익명 세션 네 개를 검증할 때는 개발 전용 `profile` 값을 사용합니다.
+
+- `?profile=p1`
+- `?profile=p2`
+- `?profile=p3`
+- `?profile=p4`
+
+이 값은 개발 빌드에서만 Supabase Auth 저장 키를 분리하며 운영 빌드의 로그인 구조에는 영향을 주지 않습니다.
+
 ## PHASE 게이트
 
-현재 작업 범위는 PHASE 1의 3D 플레이 인터페이스와 전환 연출 프로토타입입니다. 실제 Supabase 프로젝트에서 방 생성·참여·Presence·같은 기기 재접속 검증이 모두 통과하기 전에는 나머지 미니게임 8종이나 아이템 규칙 확장을 시작하지 않습니다.
+현재 작업 범위는 테스트 미니게임 1종의 온라인 권위 파이프라인까지입니다. 실제 Supabase 프로젝트에서 4인 READY·플레이·결과·1회 보상·보드 복귀·재접속 검증이 모두 통과하기 전에는 나머지 미니게임 8종이나 아이템 규칙 확장을 시작하지 않습니다.
 
 ## 검증
 

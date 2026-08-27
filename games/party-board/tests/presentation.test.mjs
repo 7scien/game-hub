@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {achievementBonusStars,distributeMinigameCoins,rankPlayers,resolveAchievementAwards,transitionMinigamePhase} from '../src/domain/presentation.js';
+import {achievementBonusStars,countConfirmed,deriveOnlineMinigameView,distributeMinigameCoins,mergeMinigameScores,rankPlayers,resolveAchievementAwards,transitionMinigamePhase} from '../src/domain/presentation.js';
 
 const players=[
   {id:'p1',seat:0,stars:1,coins:12},
@@ -39,4 +39,19 @@ test('achievement ties are resolved by coins and become bonus stars',()=>{
   const awards=resolveAchievementAwards(players,metrics);
   assert.deepEqual(awards.map(award=>award.winnerId),['p3','p3','p4']);
   assert.deepEqual(achievementBonusStars(awards),{p3:2,p4:1});
+});
+
+test('online minigame view catches up from authoritative timestamps',()=>{
+  const base=Date.parse('2026-08-27T00:00:00.000Z');
+  const minigame={phase:'COUNTDOWN',startAt:new Date(base+4000).toISOString(),endsAt:new Date(base+16000).toISOString(),finalizeAt:new Date(base+17500).toISOString()};
+  assert.deepEqual(deriveOnlineMinigameView(minigame,base),{view:'countdown',remainingMs:4000});
+  assert.deepEqual(deriveOnlineMinigameView(minigame,base+5000),{view:'playing',remainingMs:11000});
+  assert.deepEqual(deriveOnlineMinigameView(minigame,base+16500),{view:'settling',remainingMs:1000});
+  assert.deepEqual(deriveOnlineMinigameView(minigame,base+18000),{view:'finalizing',remainingMs:0});
+  assert.equal(deriveOnlineMinigameView({...minigame,phase:'MINIGAME_RESULT'},base).view,'results');
+});
+
+test('READY counts and broadcast score merges are deterministic',()=>{
+  assert.equal(countConfirmed({p1:true,p2:false,p3:true,p4:true}),3);
+  assert.deepEqual(mergeMinigameScores(players,{p1:2,p2:4},{p1:5,p2:3,p3:1}),{p1:5,p2:4,p3:1,p4:0});
 });

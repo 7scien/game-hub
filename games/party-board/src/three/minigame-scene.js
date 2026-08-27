@@ -3,8 +3,8 @@ import * as THREE from 'three';
 const PLAYER_COLORS=[0xc9b8ff,0xb97852,0xffda56,0x70dfbc];
 
 export class StarCatchScene{
-  constructor({canvas,onReady,onScore,onError}){
-    this.canvas=canvas;this.onScore=onScore;this.active=false;this.score=0;this.hitIndex=0;this.targets=[];
+  constructor({canvas,playerSeat=0,onReady,onScore,onError}){
+    this.canvas=canvas;this.playerSeat=Math.max(0,Math.min(3,playerSeat));this.onScore=onScore;this.active=false;this.score=0;this.hitIndex=0;this.targets=[];
     this.pointer=new THREE.Vector2();this.raycaster=new THREE.Raycaster();this.clock=new THREE.Clock();
     try{
       this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
@@ -42,6 +42,10 @@ export class StarCatchScene{
   createPlayerTotem(index){
     const material=new THREE.MeshStandardMaterial({color:PLAYER_COLORS[index],roughness:.58,emissive:PLAYER_COLORS[index],emissiveIntensity:.08,flatShading:true});
     const group=new THREE.Group();const body=new THREE.Mesh(new THREE.CapsuleGeometry(.22,.38,4,8),material);body.position.y=.35;body.castShadow=true;group.add(body);
+    if(index===this.playerSeat){
+      const marker=new THREE.Mesh(new THREE.TorusGeometry(.42,.055,8,24),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.9}));
+      marker.rotation.x=Math.PI/2;marker.position.y=.04;group.add(marker);group.userData.localPlayer=true;
+    }
     const x=index%2===0?-4.8:4.8,z=index<2?-2.65:2.65;group.position.set(x,0,z);this.scene.add(group);
   }
 
@@ -60,7 +64,12 @@ export class StarCatchScene{
     group.scale.setScalar(1);group.visible=true;
   }
 
-  setActive(active){this.active=Boolean(active);if(active){this.score=0;this.hitIndex=0;this.targets.forEach((target,index)=>this.positionTarget(target,index));this.onScore?.(0)}}
+  setActive(active,initialScore=0){
+    const next=Boolean(active);const startingScore=Math.max(0,Number(initialScore)||0);
+    if(next&&!this.active){this.score=startingScore;this.hitIndex=startingScore;this.targets.forEach((target,index)=>this.positionTarget(target,index));this.onScore?.(this.score)}
+    else if(next&&startingScore>this.score)this.score=startingScore;
+    this.active=next;
+  }
 
   handlePointer(event){
     if(!this.active||!this.renderer)return;
@@ -73,6 +82,7 @@ export class StarCatchScene{
   tick(){
     if(!this.renderer)return;const time=this.clock.getElapsedTime();
     for(const target of this.targets){target.position.y=.5+Math.sin(time*2.8+target.userData.phase)*.16;target.rotation.y=time*1.35+target.userData.phase;target.userData.ring.rotation.z=time*.9}
+    for(const object of this.scene.children)if(object.userData?.localPlayer)object.rotation.y=Math.sin(time*2.2)*.08;
     this.camera.position.x=Math.sin(time*.18)*.22;this.camera.lookAt(0,.1,-.35);this.renderer.render(this.scene,this.camera);
   }
 

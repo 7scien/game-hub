@@ -5,6 +5,7 @@ import {roomService} from '../online/room-service.js';
 import {BoardPreview} from './BoardPreview.jsx';
 import {CHARACTERS,Character} from './characters.jsx';
 import {PersonalInventory,PlayerStandings,SpaceIconLegend} from './GameHud.jsx';
+import {OnlineMiniGameFlow} from './OnlineMiniGameFlow.jsx';
 import {FinalWinnerPrototype,MiniGameFlow} from './PresentationOverlays.jsx';
 import {ThreeBoard} from './ThreeBoard.jsx';
 
@@ -17,6 +18,7 @@ export function App(){
   const [snapshot,setSnapshot]=useState(null);
   const [presence,setPresence]=useState(emptyPresence);
   const [connection,setConnection]=useState('CLOSED');
+  const [minigameEvent,setMinigameEvent]=useState(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const resumeCode=roomService.getResumeCode();
@@ -30,6 +32,7 @@ export function App(){
       onSnapshot:value=>{if(!disposed)setSnapshot(value)},
       onPresence:value=>{if(!disposed)setPresence(value)},
       onStatus:value=>{if(!disposed)setConnection(value)},
+      onMinigameEvent:payload=>{if(!disposed)setMinigameEvent({token:crypto.randomUUID(),payload})},
     }).then(cleanup=>{if(disposed)cleanup();else unsubscribe=cleanup}).catch(reason=>setError(reason.message));
     return ()=>{disposed=true;unsubscribe?.()};
   },[snapshot?.room?.id]);
@@ -45,7 +48,7 @@ export function App(){
   };
 
   if(devBoardSnapshot)return <GameFoundation snapshot={devBoardSnapshot} connection="SUBSCRIBED" canSave={false} onExit={()=>location.assign('./')} />;
-  if(screen==='room'&&snapshot)return <RoomScreen snapshot={snapshot} presence={presence} connection={connection} busy={busy} error={error} onError={setError} onBusy={setBusy} onSnapshot={setSnapshot} onExit={()=>{setScreen('home');setSnapshot(null);setPresence(emptyPresence)}} />;
+  if(screen==='room'&&snapshot)return <RoomScreen snapshot={snapshot} presence={presence} connection={connection} minigameEvent={minigameEvent} busy={busy} error={error} onError={setError} onBusy={setBusy} onSnapshot={setSnapshot} onExit={()=>{setScreen('home');setSnapshot(null);setPresence(emptyPresence);setMinigameEvent(null)}} />;
 
   return <main className="party-app">
     <div className="sky" aria-hidden="true"><i /><i /><i /><i /><i /></div>
@@ -71,7 +74,7 @@ export function App(){
   </main>;
 }
 
-function RoomScreen({snapshot,presence,connection,busy,error,onError,onBusy,onSnapshot,onExit}){
+function RoomScreen({snapshot,presence,connection,minigameEvent,busy,error,onError,onBusy,onSnapshot,onExit}){
   const room=snapshot.room;
   const players=snapshot.players||[];
   const me=players.find(player=>player.user_id===snapshot.current_user_id);
@@ -83,7 +86,7 @@ function RoomScreen({snapshot,presence,connection,busy,error,onError,onBusy,onSn
     onBusy(true);onError('');
     try{onSnapshot(await action())}catch(reason){onError(reason.message)}finally{onBusy(false)}
   };
-  if(active)return <GameFoundation snapshot={snapshot} connection={connection} onSave={()=>perform(()=>roomService.saveRoom(room.id))} canSave={isHost} onExit={onExit}/>;
+  if(active)return <GameFoundation snapshot={snapshot} connection={connection} minigameEvent={minigameEvent} onSnapshot={onSnapshot} onError={onError} onSave={()=>perform(()=>roomService.saveRoom(room.id))} canSave={isHost} onExit={onExit}/>;
   return <main className="room-screen">
     <header className="room-header"><button className="text-button" onClick={onExit}>← 나가기</button><div><small>ROOM CODE</small><strong>{room.code}</strong></div><span className={`live-state ${connection==='SUBSCRIBED'?'online':''}`}>{connection==='SUBSCRIBED'?'실시간 연결':'다시 연결 중'}</span></header>
     <section className="lobby-title"><p className="eyebrow">CHARACTER SELECT</p><h1>함께 떠날 친구를 골라요</h1><p>캐릭터 능력은 모두 같고, 움직임과 표정만 달라요.</p></section>
@@ -104,7 +107,7 @@ function RoomScreen({snapshot,presence,connection,busy,error,onError,onBusy,onSn
   </main>;
 }
 
-function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
+function GameFoundation({snapshot,connection,minigameEvent,onSnapshot,onError,onSave,canSave,onExit}){
   const state=snapshot.room.game_state||{};
   const fallbackBoard=useMemo(()=>createBoard(`fallback-${snapshot.room.code}`),[snapshot.room.code]);
   const board=state.board?.layoutVersion===BOARD_LAYOUT_VERSION?state.board:fallbackBoard;
@@ -119,6 +122,7 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
   const [cameraMode,setCameraMode]=useState('follow');
   const [presentation,setPresentation]=useState(()=>import.meta.env.DEV?new URLSearchParams(location.search).get('show'):null);
   const [lastLanding,setLastLanding]=useState(currentPlayerId?serverPlayers.find(player=>player.id===currentPlayerId)?.positionId||'r0':'r0');
+  const [serverActionBusy,setServerActionBusy]=useState(false);
   const tokenRef=useRef(0);
 
   useEffect(()=>{
@@ -191,6 +195,12 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
 
   const stageLabel=MOTION_LABELS[motionStage]||motionStage;
   const inventory=currentPlayer?.inventory||[];
+  const isMyTurn=snapshot.current_user_id===currentPlayerId;
+  const finishOnlineTurn=async()=>{
+    if(!onSnapshot||serverActionBusy||!isMyTurn||state.minigame)return;
+    setServerActionBusy(true);
+    try{onSnapshot(await roomService.finishTurn(snapshot.room.id,snapshot.room.state_version))}catch(reason){onError?.(reason.message)}finally{setServerActionBusy(false)}
+  };
   return <main className="game-3d-shell">
     <header className="game-hud game-hud-3d">
       <div className="turn-readout"><small>GLOBAL TURN</small><strong>{String(snapshot.room.global_turn||1).padStart(2,'0')} <i>/ 60</i></strong></div>
@@ -222,6 +232,7 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
           <button disabled={busy} onClick={()=>startMovement(8,'coin')}>8칸 이동</button>
           <button disabled={busy} onClick={startBranchDemo}>갈림길 체험</button>
           <button className="effect-button" disabled={isAnimating} onClick={()=>previewEffect('shield')}>보호권 연출</button>
+          {onSnapshot&&<button className="online-turn-button" disabled={busy||serverActionBusy||!isMyTurn||Boolean(state.minigame)} onClick={finishOnlineTurn}>{isMyTurn?'온라인 턴 완료':'현재 플레이어 대기'}</button>}
         </div>
       </section>
       {pendingChoice&&<section className="branch-choice" role="dialog" aria-modal="true" aria-label="갈림길 경로 선택">
@@ -238,6 +249,7 @@ function GameFoundation({snapshot,connection,onSave,canSave,onExit}){
       </nav>
       {presentation==='minigame'&&<MiniGameFlow players={displayPlayers} currentPlayerId={currentPlayerId} onComplete={()=>setPresentation(null)}/>}
       {presentation==='finale'&&<FinalWinnerPrototype players={displayPlayers} onClose={()=>setPresentation(null)}/>}
+      {state.minigame&&onSnapshot&&<OnlineMiniGameFlow snapshot={snapshot} players={displayPlayers} minigameEvent={minigameEvent} onSnapshot={onSnapshot} onError={onError}/>}
     </section>
   </main>;
 }
@@ -262,6 +274,9 @@ function normalizeGamePlayers(state,roomPlayers){
       stars:gamePlayer.stars??0,
       inventory:Array.isArray(gamePlayer.inventory)?gamePlayer.inventory:[],
       positionId:gamePlayer.positionId||'r0',
+      minigameWins:gamePlayer.minigameWins??0,
+      totalMoved:gamePlayer.totalMoved??0,
+      itemsUsed:gamePlayer.itemsUsed??0,
     };
   });
 }
