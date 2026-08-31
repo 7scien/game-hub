@@ -1,11 +1,11 @@
 import {boardPosition,createBoard} from './board.js';
-import {SPECIAL_CARD_INFO,getCurrentPlayer,getNetWorth,getTradeableAssets} from './game.js';
+import {SPECIAL_CARD_INFO,getCurrentPlayer,getGlobalEffectRounds,getNetWorth,getTradeableAssets,isGlobalEffectActive} from './game.js';
 import {PHASES,RULES,formatMoney,regionMeta} from './rules.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const phaseLabel={
   [PHASES.WAITING_FOR_ROLL]:'주사위를 굴릴 차례',[PHASES.ROLLING]:'주사위 굴리는 중',[PHASES.MOVING]:'이동 중',[PHASES.RESOLVING_TILE]:'도착지 확인 중',
-  [PHASES.BUY_DECISION]:'인수 결정',[PHASES.BUILD_DECISION]:'도시 개발',[PHASES.TRAVEL_DECISION]:'게임판에서 목적지 선택',[PHASES.WORLD_CUP_DECISION]:'월드컵 개최 도시 선택',[PHASES.PAYMENT_DECISION]:'통행료 지불 방법 선택',[PHASES.TRADE]:'플레이어 거래',[PHASES.ASSET_MANAGEMENT]:'자산 정리',[PHASES.END_TURN]:'턴 마무리',[PHASES.GAME_OVER]:'게임 종료',
+  [PHASES.BUY_DECISION]:'인수 결정',[PHASES.BUILD_DECISION]:'도시 개발',[PHASES.TRAVEL_DECISION]:'게임판에서 목적지 선택',[PHASES.WORLD_CUP_DECISION]:'월드컵 개최 도시 선택',[PHASES.TERROR_TARGET_DECISION]:'파괴할 건물이 있는 도시 선택',[PHASES.PAYMENT_DECISION]:'통행료 지불 방법 선택',[PHASES.TRADE]:'플레이어 거래',[PHASES.ASSET_MANAGEMENT]:'자산 정리',[PHASES.END_TURN]:'턴 마무리',[PHASES.GAME_OVER]:'게임 종료',
 };
 
 function tilePrice(tile){return tile.purchasePrice?formatMoney(tile.purchasePrice):tile.type==='event'?'KEY CARD':tile.type==='tax'?`−${formatMoney(tile.amount)}`:tile.type.toUpperCase()}
@@ -28,12 +28,13 @@ function tileSide(index){
   if(index<10)return 'bottom';if(index<20)return 'left';if(index<30)return 'top';return 'right';
 }
 function boardMarkup(state){
-  const board=state?.board??createBoard();const players=state?.players??[];
+  const board=state?.board??createBoard();const players=state?.players??[];const imperialActive=state&&isGlobalEffectActive(state,'imperialExploitation');const rageActive=state&&isGlobalEffectActive(state,'americanRage');const koreanTiles=new Set(['jeju','busan','seoul-olympic']);
   return `<div class="board-grid">${board.map((tile,index)=>{
     const position=boardPosition(index);const region=regionMeta(tile.region);const owner=state?.players.find(player=>player.id===tile.ownerId);
-    const side=tileSide(index);const travelTarget=state?.phase===PHASES.TRAVEL_DECISION&&tile.type==='city';
-    return `<article class="board-tile tile-${tile.type} side-${side}${side==='corner'?' corner':''}${tile.buildingLevel===RULES.MAX_BUILDING_LEVEL?' landmark':''}${tile.worldCupTurns>0?' world-cup-host':''}${travelTarget?' travel-target':''}" data-tile-index="${index}"${travelTarget?` data-action="choose-space-destination" data-destination-index="${index}" role="button" tabindex="0"`:''} style="--row:${position.row};--column:${position.column};--region:${region.color};--band:${tile.bandColor||'transparent'};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}${tile.worldCupTurns>0?`, 월드컵 통행료 2배 ${tile.worldCupTurns}차례`:''}${travelTarget?', 우주여행 목적지로 선택':''}">
-      ${tile.bandColor?'<span class="tile-band"></span>':''}<span class="owner-strip"></span>${buildingMarkup(tile)}${tile.worldCupTurns>0?`<span class="world-cup-badge" title="월드컵 통행료 2배 · ${tile.worldCupTurns}차례 남음">⚽ ×2</span>`:''}<span class="tile-face">${tileArtwork(tile)}<strong>${escapeHtml(tile.name)}</strong><span class="tile-en">${escapeHtml(tile.englishName)}</span><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
+    const side=tileSide(index);const travelTarget=state?.phase===PHASES.TRAVEL_DECISION&&tile.type==='city';const terrorTarget=state?.phase===PHASES.TERROR_TARGET_DECISION&&tile.type==='city'&&tile.buildingLevel>0;const occupationTarget=imperialActive&&koreanTiles.has(tile.id);const transportLocked=rageActive&&(tile.type==='facility'||tile.id==='space-travel');
+    const targetAttrs=travelTarget?` data-action="choose-space-destination" data-destination-index="${index}" role="button" tabindex="0"`:terrorTarget?` data-action="choose-terror-target" data-tile="${tile.id}" role="button" tabindex="0"`:'';
+    return `<article class="board-tile tile-${tile.type} side-${side}${side==='corner'?' corner':''}${tile.buildingLevel===RULES.MAX_BUILDING_LEVEL?' landmark':''}${tile.worldCupTurns>0?' world-cup-host':''}${travelTarget?' travel-target':''}${terrorTarget?' terror-target':''}${occupationTarget?' occupation-target':''}${transportLocked?' transport-locked':''}" data-tile-index="${index}"${targetAttrs} style="--row:${position.row};--column:${position.column};--region:${region.color};--band:${tile.bandColor||'transparent'};--owner:${owner?.color||'transparent'}" aria-label="${escapeHtml(tile.name)}${owner?`, ${owner.name} 소유`:''}${tile.worldCupTurns>0?`, 월드컵 통행료 2배 ${tile.worldCupTurns}차례`:''}${occupationTarget?', 일제의 수탈로 통행료 도쿄 귀속':''}${transportLocked?', 미국의 분노로 이용 금지':''}${travelTarget?', 우주여행 목적지로 선택':''}${terrorTarget?', 파괴 대상으로 선택':''}">
+      ${tile.bandColor?'<span class="tile-band"></span>':''}<span class="owner-strip"></span>${buildingMarkup(tile)}${tile.worldCupTurns>0?`<span class="world-cup-badge" title="월드컵 통행료 2배 · ${tile.worldCupTurns}차례 남음">⚽ ×2</span>`:''}${occupationTarget?'<span class="occupation-badge" title="일제의 수탈 · 통행료가 도쿄 소유주에게 귀속">🇯🇵 도쿄 귀속</span>':''}${transportLocked?'<span class="transport-lock-badge" title="미국의 분노 · 이동수단 이용 금지">⛔ 이용 금지</span>':''}<span class="tile-face">${tileArtwork(tile)}<strong>${escapeHtml(tile.name)}</strong><span class="tile-en">${escapeHtml(tile.englishName)}</span><small>${tilePrice(tile)}</small></span>${tokenMarkup(players,index)}
     </article>`;
   }).join('')}
     <div class="board-center">
@@ -80,6 +81,13 @@ function playerStrip(state){
   return `<section class="player-strip" aria-label="플레이어 현황">${state.players.map((player,index)=>`<article class="player-mini ${index===state.currentPlayerIndex?'current':''} ${player.bankrupt?'bankrupt':''}" style="--player-color:${player.color}"><i>${player.token}</i><span><b>${escapeHtml(player.name)}</b><small>${player.bankrupt?'파산':`${formatMoney(player.money)} · 자산 ${formatMoney(getNetWorth(state,player.id))}`}</small></span></article>`).join('')}</section>`;
 }
 
+function globalEffectsPanel(state){
+  const effects=[];
+  if(isGlobalEffectActive(state,'imperialExploitation')){const tokyo=state.board.find(tile=>tile.id==='tokyo');const owner=state.players.find(player=>player.id===tokyo?.ownerId&&!player.bankrupt);effects.push(`<article class="global-effect imperial-effect"><i>🇯🇵</i><span><b>일제의 수탈 · ${getGlobalEffectRounds(state,'imperialExploitation')}라운드</b><small>한국 통행료 → ${owner?`${escapeHtml(owner.name)}(도쿄 소유주)`:'도쿄 미소유 시 은행'}</small></span></article>`) }
+  if(isGlobalEffectActive(state,'americanRage'))effects.push(`<article class="global-effect rage-effect"><i>⛔</i><span><b>미국의 분노 · ${getGlobalEffectRounds(state,'americanRage')}라운드</b><small>이동수단·우주여행·황금열쇠 이동 봉쇄</small></span></article>`);
+  return effects.length?`<section class="global-effects" aria-label="현재 전역 효과">${effects.join('')}</section>`:'';
+}
+
 function decisionPanel(state){
   const player=getCurrentPlayer(state);const tile=state.pendingAction?state.board[state.pendingAction.tileIndex]:state.board[player.position];
   if(state.phase===PHASES.WAITING_FOR_ROLL){
@@ -95,7 +103,8 @@ function decisionPanel(state){
   if(state.phase===PHASES.TRAVEL_DECISION){
     return `<div class="travel-decision"><span class="action-kicker">SPACE TRAVEL</span><h3>게임판에서 도시를 누르세요</h3><p>노란빛으로 표시된 도시를 직접 누르면 즉시 이동하고 도착 효과를 적용합니다.</p><div class="travel-board-hint"><i>✦</i><span>목적지 도시 선택 대기 중</span></div></div>`;
   }
-  if(state.phase===PHASES.WORLD_CUP_DECISION){const cities=state.board.filter(item=>item.type==='city'&&item.ownerId===player.id);return `<div class="world-cup-decision"><span class="action-kicker">WORLD CUP</span><h3>개최 도시를 선택하세요</h3><p>선택한 도시의 통행료가 다음 자신의 3번 차례 동안 2배가 됩니다.</p><div class="world-cup-city-list">${cities.map(item=>`<button type="button" data-action="choose-world-cup-city" data-tile="${item.id}"><i>${escapeHtml(item.landmarkGlyph||'▥')}</i><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.landmarkName||'대표 랜드마크')}</small></span><strong>선택</strong></button>`).join('')}</div></div>`}
+  if(state.phase===PHASES.WORLD_CUP_DECISION){const cities=state.board.filter(item=>item.type==='city'&&item.ownerId===player.id);return `<div class="world-cup-decision"><span class="action-kicker">WORLD CUP · IMMEDIATE</span><h3>즉시 개최할 도시를 선택하세요</h3><p>카드는 보관되지 않습니다. 선택한 도시의 통행료가 다음 자신의 3번 차례 동안 2배가 됩니다.</p><div class="world-cup-city-list">${cities.map(item=>`<button type="button" data-action="choose-world-cup-city" data-tile="${item.id}"><i>${escapeHtml(item.landmarkGlyph||'▥')}</i><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.landmarkName||'대표 랜드마크')}</small></span><strong>선택</strong></button>`).join('')}</div></div>`}
+  if(state.phase===PHASES.TERROR_TARGET_DECISION){const targets=state.board.filter(item=>item.type==='city'&&item.buildingLevel>0);return `<div class="terror-decision"><span class="action-kicker warning">911 · IMMEDIATE</span><h3>파괴할 도시를 지정하세요</h3><p>카드는 보관할 수 없습니다. 판에서 붉게 표시된 도시나 아래 목록을 누르면 그곳의 건물이 모두 파괴됩니다.</p><div class="terror-target-list">${targets.map(item=>`<button type="button" data-action="choose-terror-target" data-tile="${item.id}"><i>✈</i><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(buildingLabel(item))}</small></span><strong>지정</strong></button>`).join('')}</div></div>`}
   if(state.phase===PHASES.PAYMENT_DECISION){const debt=state.pendingDebt;return `<div class="debt-panel payment-choice"><span class="action-kicker warning">TOLL PAYMENT</span><h3>${escapeHtml(debt.reason)}</h3><p class="debt-total">${formatMoney(debt.amount)} <small>우대권을 사용할지 직접 선택하세요.</small></p><button class="primary-button" type="button" data-action="use-special-card" data-card="toll-waiver">우대권 사용 <span>◇</span></button><button class="secondary-button wide" type="button" data-action="settle-debt">${player.money>=debt.amount?'현금으로 지불':'우대권 없이 자산 정리'}</button></div>`}
   if(state.phase===PHASES.ASSET_MANAGEMENT)return debtPanel(state);
   if(state.phase===PHASES.END_TURN)return `<div class="action-copy end-turn"><span class="action-kicker">TURN COMPLETE</span><h3>턴을 마칩니다</h3><p>${state.rolledDouble?'더블이면 한 번 더 여행할 수 있어요.':'다음 차례로 바로 이어집니다.'}</p></div><div class="dice-row">${die(state.dice[0])}${die(state.dice[1])}<b>${state.rollTotal||'—'}</b></div><button class="primary-button" type="button" data-action="end-turn">턴 종료 <span>→</span></button>`;
@@ -145,7 +154,7 @@ function gameOverModal(state){
 
 export function renderGame(root,state){
   const player=getCurrentPlayer(state);
-  root.innerHTML=`<main class="in-game"><header class="game-topbar"><div class="game-brand"><span>WT</span><b>WORLD TYCOON</b></div><div class="game-meta"><span>${modeLabel(state.mode)}</span><b data-timer>${timerLabel(state)}</b><span>TURN ${state.turnNumber}</span></div><div class="utility-actions"><button type="button" data-action="open-help" aria-label="게임 방법">?</button><button type="button" data-action="open-menu" aria-label="게임 메뉴">☰</button></div></header>${playerStrip(state)}<div class="play-layout"><section class="board-panel">${boardMarkup(state)}</section><aside class="control-panel turn-panel" style="--player-color:${player.color}"><div class="current-player"><span class="current-token">${player.token}</span><div><small>CURRENT PLAYER</small><h2>${escapeHtml(player.name)}</h2></div><strong>${formatMoney(player.money)}<small>보유 현금</small></strong></div><div class="phase-pill">${phaseLabel[state.phase]}</div><section class="turn-actions">${decisionPanel(state)}</section>${currentAssets(state)}${activity(state)}</aside></div></main><div id="modal-root">${noticeModal(state)||tradeModal(state)||gameOverModal(state)}</div>`;
+  root.innerHTML=`<main class="in-game"><header class="game-topbar"><div class="game-brand"><span>WT</span><b>WORLD TYCOON</b></div><div class="game-meta"><span>${modeLabel(state.mode)}</span><b data-timer>${timerLabel(state)}</b><span>TURN ${state.turnNumber}</span></div><div class="utility-actions"><button type="button" data-action="open-help" aria-label="게임 방법">?</button><button type="button" data-action="open-menu" aria-label="게임 메뉴">☰</button></div></header>${playerStrip(state)}<div class="play-layout"><section class="board-panel">${boardMarkup(state)}</section><aside class="control-panel turn-panel" style="--player-color:${player.color}"><div class="current-player"><span class="current-token">${player.token}</span><div><small>CURRENT PLAYER</small><h2>${escapeHtml(player.name)}</h2></div><strong>${formatMoney(player.money)}<small>보유 현금</small></strong></div><div class="phase-pill">${phaseLabel[state.phase]}</div>${globalEffectsPanel(state)}<section class="turn-actions">${decisionPanel(state)}</section>${currentAssets(state)}${activity(state)}</aside></div></main><div id="modal-root">${noticeModal(state)||tradeModal(state)||gameOverModal(state)}</div>`;
   if(state.notice?.source==='golden-key')animateGoldenKeyDraw(root);
 }
 
@@ -154,7 +163,8 @@ export function renderHelp(){
     ['🎲','주사위','주사위 2개의 합만큼 이동합니다. 무인도에서는 횟수 제한 없이 매 차례 더블로 탈출을 시도합니다.'],
     ['◈','도시 구매','소유자가 없는 도시에 도착하면 표시된 가격으로 인수할 수 있습니다.'],['▥','랜드마크','자기 도시에 도착하면 그 도시의 대표 건축물을 기초, 건설 중, 1동, 2동 단계로 개발합니다.'],
     ['₩','통행료','상대 도시나 탈것에 도착하면 표시된 통행료를 냅니다. 우대권은 지불 직전에 직접 선택해 사용합니다.'],['◆','황금열쇠','우대권과 무인도 탈출권은 필요한 순간에 직접 사용하거나 은행에 팔 수 있습니다.'],
-    ['✈','탈것','콩코드·퀸 엘리자베스호 여행과 콜럼비아호를 이용하는 우주여행은 소유자에게 이용료를 냅니다. 목적지는 판의 도시를 직접 눌러 선택합니다.'],['⚽','월드컵','보유 도시 하나를 골라 다음 자신의 3번 차례 동안 통행료를 2배로 올립니다.'],
+    ['✈','탈것','콩코드·퀸 엘리자베스호 여행과 콜럼비아호를 이용하는 우주여행은 소유자에게 이용료를 냅니다. 목적지는 판의 도시를 직접 눌러 선택합니다.'],['⚽','월드컵','카드를 뽑는 즉시 보유 도시 하나를 골라 다음 자신의 3번 차례 동안 통행료를 2배로 올립니다.'],
+    ['🇯🇵','일제의 수탈','즉시 3라운드 동안 제주도·부산·서울 통행료가 도쿄 소유주에게 귀속됩니다. 도쿄가 미소유면 은행이 회수합니다.'],['⛔','911 테러','즉시 건물이 있는 도시 하나를 지정해 전부 파괴합니다. 이어지는 2라운드에는 이동수단과 특수 이동이 봉쇄되지만 주사위 이동은 정상입니다.'],
     ['⇄','거래','주사위를 굴리기 전에 현금·도시·탈것을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
     ['!','파산','현금이 부족하면 건물과 자산을 반값에 정리합니다. 모두 정리해도 못 내면 파산합니다.'],['♛','승리','완전 게임은 마지막 생존자가, 시간제 게임은 종료 시 순자산 1위가 승리합니다.']
   ].map(([icon,title,copy])=>`<article><i>${icon}</i><span><b>${title}</b><p>${copy}</p></span></article>`).join('')}</div></section></div>`;
@@ -190,6 +200,13 @@ export async function animateTokenStep(playerId,fromRect){
   const token=document.querySelector(`[data-player-token="${playerId}"]`);if(!token||!fromRect||globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return;
   const to=token.getBoundingClientRect();const dx=fromRect.left+fromRect.width/2-(to.left+to.width/2);const dy=fromRect.top+fromRect.height/2-(to.top+to.height/2);
   try{await token.animate([{transform:`translate(calc(-50% + ${dx}px),calc(-50% + ${dy}px)) scale(.92)`,filter:'brightness(1)'},{transform:'translate(-50%,-50%) scale(1.14)',filter:'brightness(1.35)',offset:.78},{transform:'translate(-50%,-50%) scale(1)',filter:'brightness(1)'}],{duration:270,easing:'cubic-bezier(.2,.75,.25,1)'}).finished}catch{}
+}
+
+export function animateBuildingDestruction(result){
+  const tile=document.querySelector(`[data-tile-index="${Number(result?.tileIndex)}"]`);if(!tile)return Promise.resolve();
+  const effect=document.createElement('span');effect.className='building-destruction-animation';effect.setAttribute('role','img');effect.setAttribute('aria-label',`${result.tileName}의 ${result.landmarkName} 건물이 비행기 충돌 연출 뒤 무너집니다.`);
+  const glyph=escapeHtml(result.landmarkGlyph||'▥');const buildings=`<b>${glyph}</b>`.repeat(Math.max(1,Number(result.buildingCount)||1));effect.innerHTML=`<i class="destruction-plane">✈</i><span class="destruction-building">${buildings}</span><em class="destruction-impact">✦</em><small>건물 파괴</small>`;tile.append(effect);
+  const reduced=globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;return new Promise(resolve=>setTimeout(()=>{effect.remove();resolve()},reduced?650:1750));
 }
 
 export function showMoneyFeedback(feedback){

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  advanceMovement,buildCurrentTile,buyCurrentTile,chooseSpaceTravelDestination,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishMovement,getNetWorth,openTrade,
+  advanceMovement,buildCurrentTile,buyCurrentTile,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishMovement,getGlobalEffectRounds,getNetWorth,isGlobalEffectActive,openTrade,
   proposeTrade,resolveTile,resolveTrade,rollDice,sellSpecialCard,settleDebt,updateClock,useSpecialCard,
 } from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
@@ -129,10 +129,10 @@ test('우주여행 초대권도 콜럼비아호 이용료를 정산한다',()=>{
   traveler.position=2;state.eventDeck=['space-invitation'];state.eventCursor=0;const before=owner.money;resolveTile(state);assert.equal(owner.money,before+columbia.baseRent);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
 });
 
-test('황금열쇠에 전액대매출과 월드컵을 더한 32장 구성을 사용한다',()=>{
-  assert.equal(EVENT_CARDS.length,32);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
-  assert.equal(counts.move.length,12);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,7);
-  assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='전액대매출').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='월드컵 개최').length,1);
+test('황금열쇠에 일제의 수탈과 911 테러를 포함한 34장 구성을 사용한다',()=>{
+  assert.equal(EVENT_CARDS.length,34);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
+  assert.equal(counts.move.length,12);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,9);
+  assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='전액대매출').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='월드컵 개최').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='일제의 수탈').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='911 테러').length,1);
 });
 
 test('월드컵은 선택한 내 도시의 통행료를 다음 자신의 세 차례 동안 2배로 만든다',()=>{
@@ -140,6 +140,25 @@ test('월드컵은 선택한 내 도시의 통행료를 다음 자신의 세 차
   assert.equal(state.phase,PHASES.WORLD_CUP_DECISION);chooseWorldCupCity(state,'taipei');assert.equal(taipei.worldCupTurns,3);assert.equal(calculateRent(state,taipei,state.players[1]),taipei.baseRent*2);
   const finishBareTurn=()=>{state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)};finishBareTurn();assert.equal(taipei.worldCupTurns,3);
   for(const remaining of [2,1,0]){finishBareTurn();finishBareTurn();assert.equal(taipei.worldCupTurns,remaining)}assert.equal(calculateRent(state,taipei,state.players[1]),taipei.baseRent);
+});
+
+test('일제의 수탈은 3라운드 동안 한국 땅 통행료를 도쿄 소유주에게 귀속한다',()=>{
+  const state=createGame(3,{mode:'full',rng:()=>.2});const visitor=state.players[0];const koreanOwner=state.players[1];const tokyoOwner=state.players[2];const busan=state.board.find(tile=>tile.id==='busan');const tokyo=state.board.find(tile=>tile.id==='tokyo');
+  busan.ownerId=koreanOwner.id;koreanOwner.ownedProperties.push(busan.id);tokyo.ownerId=tokyoOwner.id;tokyoOwner.ownedProperties.push(tokyo.id);visitor.position=2;state.eventDeck=['imperial-exploitation'];state.eventCursor=0;resolveTile(state);
+  assert.ok(isGlobalEffectActive(state,'imperialExploitation'));assert.equal(getGlobalEffectRounds(state,'imperialExploitation'),3);assert.equal(state.phase,PHASES.END_TURN);
+  const visitorBefore=visitor.money;const koreanBefore=koreanOwner.money;const tokyoBefore=tokyoOwner.money;visitor.position=busan.index;resolveTile(state);
+  assert.equal(visitor.money,visitorBefore-busan.baseRent);assert.equal(koreanOwner.money,koreanBefore);assert.equal(tokyoOwner.money,tokyoBefore+busan.baseRent);assert.match(state.feedback.message,/일제의 수탈/);
+  state.phase=PHASES.END_TURN;endTurn(state);for(let turn=0;turn<9;turn+=1){state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)}assert.equal(isGlobalEffectActive(state,'imperialExploitation'),false);
+});
+
+test('911 테러는 즉시 선택한 도시 건물을 파괴하고 2라운드 동안 특수 이동을 봉쇄한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const attacker=state.players[0];const owner=state.players[1];const newYork=state.board.find(tile=>tile.id==='new-york');const concorde=state.board.find(tile=>tile.id==='concorde');
+  newYork.ownerId=owner.id;newYork.buildingLevel=4;owner.ownedProperties.push(newYork.id);concorde.ownerId=owner.id;owner.specialAssets.push(concorde.id);attacker.position=2;state.eventDeck=['nine-eleven'];state.eventCursor=0;resolveTile(state);
+  assert.equal(state.phase,PHASES.TERROR_TARGET_DECISION);assert.equal(getGlobalEffectRounds(state,'americanRage'),2);const result=chooseTerrorTarget(state,'new-york');assert.equal(result.previousLevel,4);assert.equal(result.buildingCount,2);assert.equal(newYork.buildingLevel,0);assert.equal(state.phase,PHASES.END_TURN);
+  const attackerBefore=attacker.money;const ownerBefore=owner.money;attacker.position=concorde.index;resolveTile(state);assert.equal(attacker.money,attackerBefore);assert.equal(owner.money,ownerBefore);assert.equal(state.phase,PHASES.END_TURN);
+  attacker.position=30;resolveTile(state);assert.equal(attacker.position,30);assert.equal(state.phase,PHASES.END_TURN);
+  attacker.position=2;state.eventDeck=['tour-busan'];state.eventCursor=0;resolveTile(state);assert.equal(attacker.position,2);assert.equal(state.phase,PHASES.END_TURN);assert.match(state.notice.message,/이동 효과는 발동하지 않습니다/);
+  endTurn(state);for(let turn=0;turn<4;turn+=1){state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)}assert.equal(isGlobalEffectActive(state,'americanRage'),false);
 });
 
 test('항공여행은 콩코드 이용료를 낸 뒤 타이페이로 이동한다',()=>{
@@ -217,7 +236,7 @@ test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
 
 test('게임 상태는 새 저장 형식으로 저장하고 불러올 수 있다',()=>{
   const values=new Map();const storage={setItem:(key,value)=>values.set(key,value),getItem:key=>values.get(key)??null,removeItem:key=>values.delete(key)};
-  const state=createGame(4,{mode:'45',rng:()=>.2});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup'].includes(id));assert.equal(saveGame(state,storage),true);const loaded=loadGame(storage);
+  const state=createGame(4,{mode:'45',rng:()=>.2});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup','imperial-exploitation','nine-eleven'].includes(id));delete state.globalEffects;assert.equal(saveGame(state,storage),true);const loaded=loadGame(storage);
   assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,4);assert.equal(loaded.players.length,4);assert.equal(loaded.timer.remainingSeconds,2700);
-  assert.equal(loaded.board[1].buildingCosts.length,4);assert.ok(loaded.eventDeck.includes('full-price-sale'));assert.ok(loaded.eventDeck.includes('world-cup'));
+  assert.equal(loaded.board[1].buildingCosts.length,4);assert.ok(loaded.eventDeck.includes('full-price-sale'));assert.ok(loaded.eventDeck.includes('world-cup'));assert.ok(loaded.eventDeck.includes('imperial-exploitation'));assert.ok(loaded.eventDeck.includes('nine-eleven'));assert.deepEqual(loaded.globalEffects,{imperialExploitation:null,americanRage:null});
 });

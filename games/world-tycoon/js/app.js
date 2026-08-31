@@ -1,11 +1,11 @@
 import {
-  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
+  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
   endTurn,finishMovement,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,useSpecialCard,
 } from './game.js';
 import {clearGame,loadGame,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {
-  animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
+  animateBuildingDestruction,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
@@ -39,6 +39,11 @@ function handleEndTurn(){
   if(result.bonusTurn)toast('더블! 한 번 더 굴리세요.');
 }
 
+async function handleTerrorTarget(tileId){
+  if(actionLocked)return;actionLocked=true;
+  try{const result=commit(()=>chooseTerrorTarget(state,tileId));if(result){await animateBuildingDestruction(result);toast(`${result.tileName}의 건물이 모두 파괴되었습니다.`)}}finally{actionLocked=false}
+}
+
 document.addEventListener('submit',event=>{
   if(event.target.matches('[data-setup-form]')){event.preventDefault();startGame(event.target);return}
   if(event.target.matches('[data-trade-form]')){
@@ -64,6 +69,7 @@ document.addEventListener('click',event=>{
   if(action==='build-tile'){commit(()=>buildCurrentTile(state));return}
   if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
   if(action==='choose-world-cup-city'){commit(()=>chooseWorldCupCity(state,target.dataset.tile));return}
+  if(action==='choose-terror-target'){handleTerrorTarget(target.dataset.tile);return}
   if(action==='decline-decision'){commit(()=>declineDecision(state));return}
   if(action==='end-turn'){handleEndTurn();return}
   if(action==='dismiss-notice'){commit(()=>dismissNotice(state));return}
@@ -83,6 +89,7 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Escape'){const freeModal=document.querySelector('.free-modal');if(freeModal)closeFreeModal()}
   if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="roll-dice"]')){event.preventDefault();handleRoll()}
   if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="choose-space-destination"]')){event.preventDefault();event.target.click()}
+  if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="choose-terror-target"]')){event.preventDefault();event.target.click()}
 });
 
 setInterval(()=>{

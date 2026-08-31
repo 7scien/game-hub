@@ -32,6 +32,8 @@ export const EVENT_CARDS = [
   {id:'half-price-sale-2',category:'special',title:'반액대매출',text:'가장 비싼 부동산과 건물을 반값에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:.5}},
   {id:'full-price-sale',category:'special',title:'전액대매출',text:'현재 가치가 가장 높은 부동산과 건물을 전액에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:1}},
   {id:'world-cup',category:'special',title:'월드컵 개최',text:'보유 도시 하나를 선택하세요. 다음 자신의 3번 차례 동안 그 도시의 통행료가 2배가 됩니다.',effect:{type:'worldCup',turns:3}},
+  {id:'imperial-exploitation',category:'special',title:'일제의 수탈',text:'즉시 발동합니다. 앞으로 3라운드 동안 제주도·부산·서울 통행료는 해당 땅 주인이 아니라 도쿄 소유주에게 귀속됩니다.',effect:{type:'imperialExploitation',rounds:3}},
+  {id:'nine-eleven',category:'special',title:'911 테러',text:'즉시 건물이 있는 도시 하나를 지정해 그곳의 모든 건물을 파괴합니다. 이후 2라운드 동안 미국의 분노로 모든 특수 이동과 이동수단 이용이 금지됩니다.',effect:{type:'terrorAttack',rageRounds:2}},
   {id:'toll-waiver-1',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
   {id:'toll-waiver-2',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
 ];

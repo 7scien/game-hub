@@ -13,8 +13,14 @@ export function loadGame(storage=globalThis.localStorage){
     const freshBoard=createBoard();value.board=freshBoard.map((fresh,index)=>({...fresh,ownerId:value.board[index]?.ownerId??null,buildingLevel:Math.min(RULES.MAX_BUILDING_LEVEL,Math.max(0,Number(value.board[index]?.buildingLevel)||0)),worldCupTurns:Math.max(0,Number(value.board[index]?.worldCupTurns)||0),worldCupActivatedTurn:value.board[index]?.worldCupActivatedTurn??null}));
     if(!Array.isArray(value.eventDeck)){value.eventDeck=EVENT_CARDS.map(card=>card.id);value.eventCursor=0}
     EVENT_CARDS.forEach(card=>{if(!value.eventDeck.includes(card.id))value.eventDeck.push(card.id)});
+    const savedEffects=value.globalEffects||{};value.globalEffects={imperialExploitation:normalizeEffect(savedEffects.imperialExploitation),americanRage:normalizeEffect(savedEffects.americanRage)};
     value.islandEscapeThisTurn=false;return value;
   }catch{return null}
+}
+
+function normalizeEffect(effect){
+  if(!effect||Number(effect.remainingTurns)<=0)return null;
+  return {remainingTurns:Math.max(1,Math.round(Number(effect.remainingTurns))),durationRounds:Math.max(1,Math.round(Number(effect.durationRounds)||1)),activatedTurn:effect.activatedTurn??null};
 }
 
 export function saveGame(state,storage=globalThis.localStorage){

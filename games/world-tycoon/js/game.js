@@ -16,6 +16,17 @@ export const SPECIAL_CARD_INFO={
 
 const removeSpecialCard=(player,cardId)=>{const index=player.specialCards.indexOf(cardId);if(index<0)return false;player.specialCards.splice(index,1);return true};
 const collectWelfareFund=(state,player)=>{const amount=state.welfareFund||0;player.money+=amount;state.welfareFund=0;return amount};
+const KOREAN_TILE_IDS=new Set(['jeju','busan','seoul-olympic']);
+const MOVEMENT_EFFECT_TYPES=new Set(['moveBy','moveTo','travelRoute','worldTour']);
+const EFFECT_NAMES={imperialExploitation:'일제의 수탈',americanRage:'미국의 분노'};
+
+function activePlayerCount(state){return Math.max(1,state.players.filter(player=>!player.bankrupt).length)}
+export function isGlobalEffectActive(state,key){return Boolean(state.globalEffects?.[key]?.remainingTurns>0)}
+export function getGlobalEffectRounds(state,key){const effect=state.globalEffects?.[key];return effect?.remainingTurns>0?Math.ceil(effect.remainingTurns/activePlayerCount(state)):0}
+function startGlobalEffect(state,key,rounds){
+  state.globalEffects??={imperialExploitation:null,americanRage:null};const duration=Math.max(1,Number(rounds)||1);
+  state.globalEffects[key]={remainingTurns:activePlayerCount(state)*duration,durationRounds:duration,activatedTurn:state.turnNumber};return state.globalEffects[key];
+}
 
 export function createGame(playerCount,{mode='30',names=[],rng=Math.random}={}){
   if(![2,3,4].includes(playerCount))throw new Error('플레이 인원은 2~4명이어야 합니다.');
@@ -28,7 +39,7 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random}={}){
   const state={
     version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
     phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,islandEscapeThisTurn:false,pendingMovement:null,pendingAction:null,pendingDebt:null,
-    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,trade:null,notice:null,feedback:null,log:[],sequence:1,
+    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null},trade:null,notice:null,feedback:null,log:[],sequence:1,
     timer:{remainingSeconds:minutes===null?null:minutes*60},winnerIds:[],finishedReason:null,
   };
   addLog(state,`${players[0].name}의 여행이 시작되었습니다.`);
@@ -101,6 +112,9 @@ function finishSimpleTile(state){state.phase=PHASES.END_TURN;state.pendingAction
 
 function continueAfterPayment(state,action){
   if(!action){finishSimpleTile(state);return}
+  if(isGlobalEffectActive(state,'americanRage')&&(action.type==='spaceTravel'||action.type==='moveTo')){
+    notice(state,'미국의 분노','이동 봉쇄 기간이라 이동수단과 특수 이동을 사용할 수 없습니다.','warning');finishSimpleTile(state);return;
+  }
   if(action.type==='spaceTravel'){
     const player=currentPlayer(state);state.pendingAction={type:'space-travel',tileIndex:player.position};state.phase=PHASES.TRAVEL_DECISION;addLog(state,`${player.name}이 우주여행 목적지를 선택합니다.`);return;
   }
@@ -146,6 +160,7 @@ function sellMostExpensive(state,player,rate,saleName){
 }
 
 function travelRoute(state,effect){
+  if(isGlobalEffectActive(state,'americanRage')){notice(state,'미국의 분노','이동 봉쇄로 이번 항공·선박 여행은 취소됩니다. 이용료도 내지 않습니다.','warning','golden-key');finishSimpleTile(state);return}
   const player=currentPlayer(state);const vehicleIndex=findTileIndex(state.board,effect.vehicleTileId);moveTo(state,vehicleIndex);
   const vehicle=state.board[vehicleIndex];const afterPayment={type:'moveTo',tileId:effect.destinationTileId};
   if(vehicle.ownerId&&vehicle.ownerId!==player.id){prepareDebt(state,{amount:vehicle.baseRent,recipientId:vehicle.ownerId,reason:`${vehicle.name} 이용료`,afterPayment});return}
@@ -153,6 +168,7 @@ function travelRoute(state,effect){
 }
 
 function beginSpaceTravel(state){
+  if(isGlobalEffectActive(state,'americanRage')){notice(state,'미국의 분노','우주여행 이용이 금지되어 목적지를 선택할 수 없고 이용료도 내지 않습니다.','warning');finishSimpleTile(state);return}
   const player=currentPlayer(state);const vehicle=state.board[findTileIndex(state.board,'columbia')];const afterPayment={type:'spaceTravel'};
   if(vehicle?.ownerId&&vehicle.ownerId!==player.id){prepareDebt(state,{amount:calculateRent(state,vehicle,player),recipientId:vehicle.ownerId,reason:`${vehicle.name} 우주여행 이용료`,afterPayment});return}
   continueAfterPayment(state,afterPayment);
@@ -161,6 +177,9 @@ function beginSpaceTravel(state){
 function applyEvent(state,card){
   const player=currentPlayer(state);const effect=card.effect;
   notice(state,card.title,card.text,'event','golden-key');addLog(state,`${player.name}: ${card.title}`);
+  if(isGlobalEffectActive(state,'americanRage')&&MOVEMENT_EFFECT_TYPES.has(effect.type)){
+    notice(state,card.title,'미국의 분노로 이동이 봉쇄되어 이 카드의 이동 효과는 발동하지 않습니다.','warning','golden-key');addLog(state,`${card.title} 이동 효과가 미국의 분노로 무효화되었습니다.`);finishSimpleTile(state);return;
+  }
   if(effect.type==='cash'){
     if(effect.amount>=0){player.money+=effect.amount;finishSimpleTile(state)}else prepareDebt(state,{amount:-effect.amount,reason:card.title});
     return;
@@ -187,16 +206,33 @@ function applyEvent(state,card){
     if(!cities.length){notice(state,card.title,'아직 보유한 도시가 없어 월드컵을 개최할 수 없습니다.','warning','golden-key');finishSimpleTile(state);return}
     state.pendingAction={type:'world-cup',turns:effect.turns};state.phase=PHASES.WORLD_CUP_DECISION;return;
   }
+  if(effect.type==='imperialExploitation'){
+    startGlobalEffect(state,'imperialExploitation',effect.rounds);notice(state,card.title,`즉시 발동했습니다. 앞으로 ${effect.rounds}라운드 동안 제주도·부산·서울 통행료가 도쿄 소유주에게 귀속됩니다.`,'warning','golden-key');addLog(state,`일제의 수탈이 ${effect.rounds}라운드 동안 적용됩니다.`);finishSimpleTile(state);return;
+  }
+  if(effect.type==='terrorAttack'){
+    startGlobalEffect(state,'americanRage',effect.rageRounds);const targets=state.board.filter(tile=>tile.type==='city'&&tile.buildingLevel>0);
+    if(!targets.length){notice(state,card.title,`파괴할 건물이 없습니다. 미국의 분노 이동 봉쇄만 ${effect.rageRounds}라운드 동안 즉시 적용됩니다.`,'warning','golden-key');addLog(state,`미국의 분노가 ${effect.rageRounds}라운드 동안 적용됩니다.`);finishSimpleTile(state);return}
+    state.pendingAction={type:'terror-attack'};state.phase=PHASES.TERROR_TARGET_DECISION;addLog(state,`미국의 분노가 ${effect.rageRounds}라운드 동안 적용됩니다.`);return;
+  }
   if(effect.type==='keepCard'){player.specialCards.push(effect.cardId);finishSimpleTile(state);return}
 }
 
 export function resolveTile(state,depth=0){
   if(depth>3){finishSimpleTile(state);return}
   const player=currentPlayer(state);const tile=state.board[player.position];state.pendingAction=null;
+  if(isGlobalEffectActive(state,'americanRage')&&(tile.type==='facility'||tile.type==='move')){
+    const isSpace=tile.id==='space-travel';notice(state,'미국의 분노',isSpace?'우주여행이 봉쇄되어 목적지를 선택할 수 없고 이용료도 내지 않습니다.':`${tile.name} 이용이 금지되어 인수·이용·통행료 정산 없이 지나갑니다.`,'warning');addLog(state,`${player.name}이 이동 봉쇄로 ${tile.name}을 이용하지 못했습니다.`);finishSimpleTile(state);return;
+  }
   if(tile.type==='city'){
     if(!tile.ownerId){state.pendingAction={type:'buy',tileIndex:tile.index};state.phase=PHASES.BUY_DECISION;return}
     if(tile.ownerId===player.id){if(tile.buildable===false){finishSimpleTile(state);return}state.pendingAction={type:'build',tileIndex:tile.index};state.phase=PHASES.BUILD_DECISION;return}
-    prepareDebt(state,{amount:calculateRent(state,tile,player),recipientId:tile.ownerId,reason:`${tile.name} 통행료`});return;
+    let recipientId=tile.ownerId;let reason=`${tile.name} 통행료`;
+    if(isGlobalEffectActive(state,'imperialExploitation')&&KOREAN_TILE_IDS.has(tile.id)){
+      const tokyo=state.board.find(item=>item.id==='tokyo');const tokyoOwner=state.players.find(item=>item.id===tokyo?.ownerId&&!item.bankrupt);recipientId=tokyoOwner?.id??null;
+      reason=recipientId?`일제의 수탈 · ${tile.name} 통행료 → ${tokyoOwner.name}`:`일제의 수탈 · ${tile.name} 통행료 은행 귀속`;
+      addLog(state,recipientId?`${tile.name} 통행료가 도쿄 소유주 ${tokyoOwner.name}에게 귀속됩니다.`:`도쿄가 미소유 상태라 ${tile.name} 통행료를 은행이 회수합니다.`);
+    }
+    prepareDebt(state,{amount:calculateRent(state,tile,player),recipientId,reason});return;
   }
   if(tile.type==='facility'){
     if(!tile.ownerId){state.pendingAction={type:'buy',tileIndex:tile.index};state.phase=PHASES.BUY_DECISION;return}
@@ -215,6 +251,7 @@ export function resolveTile(state,depth=0){
 
 export function chooseSpaceTravelDestination(state,targetIndex){
   requirePhase(state,PHASES.TRAVEL_DECISION);const player=currentPlayer(state);const index=Number(targetIndex);const origin=state.board[player.position];const destination=state.board[index];
+  if(isGlobalEffectActive(state,'americanRage'))throw new Error('미국의 분노가 지속되는 동안 우주여행을 이용할 수 없습니다.');
   if(state.pendingAction?.type!=='space-travel'||origin?.id!=='space-travel')throw new Error('지금은 우주여행 목적지를 정할 수 없습니다.');
   if(!Number.isInteger(index)||!destination||destination.type!=='city')throw new Error('게임판에서 이동할 도시를 선택하세요.');
   moveTo(state,index);state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
@@ -225,6 +262,13 @@ export function chooseWorldCupCity(state,tileId){
   requirePhase(state,PHASES.WORLD_CUP_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);const turns=Math.max(1,Number(state.pendingAction?.turns)||3);
   if(state.pendingAction?.type!=='world-cup'||!tile||tile.type!=='city'||tile.ownerId!==player.id)throw new Error('월드컵을 개최할 내 도시를 선택하세요.');
   tile.worldCupTurns=turns;tile.worldCupActivatedTurn=state.turnNumber;state.pendingAction=null;state.phase=PHASES.END_TURN;notice(state,'월드컵 개최!',`${tile.name}의 통행료가 다음 자신의 ${turns}번 차례 동안 2배가 됩니다.`,'landmark');addLog(state,`${player.name}이 ${tile.name}에서 월드컵을 개최합니다.`);return tile;
+}
+
+export function chooseTerrorTarget(state,tileId){
+  requirePhase(state,PHASES.TERROR_TARGET_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
+  if(state.pendingAction?.type!=='terror-attack'||!tile||tile.type!=='city'||tile.buildingLevel<1)throw new Error('건물이 있는 도시를 선택하세요.');
+  const result={tileIndex:tile.index,tileId:tile.id,tileName:tile.name,landmarkName:tile.landmarkName||'랜드마크',landmarkGlyph:tile.landmarkGlyph||'▥',previousLevel:tile.buildingLevel,buildingCount:tile.buildingLevel===RULES.MAX_BUILDING_LEVEL?2:1};
+  tile.buildingLevel=0;state.pendingAction=null;state.phase=PHASES.END_TURN;state.notice=null;addLog(state,`${player.name}이 ${tile.name}을 지정해 ${result.landmarkName} 건물을 모두 파괴했습니다.`);return result;
 }
 
 export function buyCurrentTile(state){
@@ -314,11 +358,21 @@ function tickWorldCupBonuses(state,playerId){
   });
 }
 
+function tickGlobalEffects(state){
+  if(!state.globalEffects)return;
+  for(const key of ['imperialExploitation','americanRage']){
+    const effect=state.globalEffects[key];if(!effect?.remainingTurns)continue;
+    if(effect.activatedTurn===state.turnNumber){effect.activatedTurn=null;continue}
+    effect.remainingTurns-=1;
+    if(effect.remainingTurns<=0){state.globalEffects[key]=null;addLog(state,`${EFFECT_NAMES[key]} 효과가 끝났습니다.`)}
+  }
+}
+
 export function endTurn(state){
   requirePhase(state,PHASES.END_TURN);const oldIndex=state.currentPlayerIndex;
   const bonus=RULES.BONUS_TURN_ON_DOUBLE&&state.rolledDouble&&!state.islandEscapeThisTurn&&state.consecutiveDoubles<RULES.MAX_CONSECUTIVE_DOUBLES&&!currentPlayer(state).bankrupt;
   tickWorldCupBonuses(state,currentPlayer(state).id);
-  if(!bonus){state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
+  if(!bonus){tickGlobalEffects(state);state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
   prepareTurn(state);return {playerChanged:oldIndex!==state.currentPlayerIndex,bonusTurn:bonus};
 }
 
