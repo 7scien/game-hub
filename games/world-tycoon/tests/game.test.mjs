@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   advanceMovement,buildCurrentTile,buyCurrentTile,chooseSpaceTravelDestination,completeRoll,createGame,declareBankruptcy,endTurn,finishMovement,getNetWorth,openTrade,
-  proposeTrade,resolveTile,resolveTrade,rollDice,sellSpecialCard,updateClock,
+  proposeTrade,resolveTile,resolveTrade,rollDice,sellSpecialCard,settleDebt,updateClock,useSpecialCard,
 } from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
 import {PHASES,RULES,calculateRent,formatMoney} from '../js/rules.js';
@@ -71,12 +71,12 @@ test('출발점을 통과하면 20만 원을 받고 도착한 도시를 살 수 
   buyCurrentTile(state);assert.equal(state.board[1].ownerId,player.id);assert.ok(player.ownedProperties.includes('taipei'));
 });
 
-test('건설 가능한 도시는 별장·빌딩·호텔 3단계로 개발되고 고정 통행료 도시는 건설하지 않는다',()=>{
+test('건설 가능한 도시는 별장·빌딩·호텔 1개·호텔 2개까지 개발되고 고정 통행료 도시는 건설하지 않는다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const tile=state.board[1];tile.ownerId=state.players[0].id;state.players[0].ownedProperties.push(tile.id);state.players[0].money=10000000;
-  for(let level=1;level<=3;level++){
+  for(let level=1;level<=4;level++){
     state.phase=PHASES.BUILD_DECISION;state.pendingAction={type:'build',tileIndex:1};buildCurrentTile(state);assert.equal(tile.buildingLevel,level);
   }
-  assert.equal(calculateRent(state,tile,state.players[1]),tile.rentByLevel[3]);assert.equal(state.notice.title,'호텔 완성!');
+  assert.equal(calculateRent(state,tile,state.players[1]),tile.rentByLevel[4]);assert.equal(state.notice.title,'호텔 2개 완성!');
   const jeju=state.board.find(item=>item.id==='jeju');jeju.ownerId=state.players[0].id;state.players[0].ownedProperties.push(jeju.id);state.players[0].position=jeju.index;resolveTile(state);assert.equal(state.phase,PHASES.END_TURN);
 });
 
@@ -105,6 +105,13 @@ test('우주여행에서는 원하는 칸을 선택해 이동하고 도착 효�
   const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=30;resolveTile(state);
   assert.equal(state.phase,PHASES.TRAVEL_DECISION);assert.equal(state.pendingAction.type,'space-travel');
   chooseSpaceTravelDestination(state,37);assert.equal(player.position,37);assert.equal(state.board[37].id,'new-york');assert.equal(state.phase,PHASES.BUY_DECISION);
+  state.phase=PHASES.TRAVEL_DECISION;state.pendingAction={type:'space-travel',tileIndex:30};player.position=30;assert.throws(()=>chooseSpaceTravelDestination(state,28),/도시/);
+});
+
+test('우주여행은 콜럼비아호 소유자에게 이용료를 낸 뒤 판에서 도시를 선택한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const traveler=state.players[0];const owner=state.players[1];const columbia=state.board.find(tile=>tile.id==='columbia');
+  columbia.ownerId=owner.id;owner.specialAssets.push(columbia.id);traveler.position=30;const travelerBefore=traveler.money;const ownerBefore=owner.money;resolveTile(state);
+  assert.equal(traveler.money,travelerBefore-columbia.baseRent);assert.equal(owner.money,ownerBefore+columbia.baseRent);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
 });
 
 test('우주여행 초대권으로 도착해도 목적지를 선택한다',()=>{
@@ -112,10 +119,15 @@ test('우주여행 초대권으로 도착해도 목적지를 선택한다',()=>{
   assert.equal(state.players[0].position,30);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
 });
 
-test('클래식 대형판 황금열쇠 30장 구성을 사용한다',()=>{
-  assert.equal(EVENT_CARDS.length,30);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
-  assert.equal(counts.move.length,12);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,5);
-  assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);
+test('우주여행 초대권도 콜럼비아호 이용료를 정산한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const traveler=state.players[0];const owner=state.players[1];const columbia=state.board.find(tile=>tile.id==='columbia');columbia.ownerId=owner.id;owner.specialAssets.push(columbia.id);
+  traveler.position=2;state.eventDeck=['space-invitation'];state.eventCursor=0;const before=owner.money;resolveTile(state);assert.equal(owner.money,before+columbia.baseRent);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
+});
+
+test('황금열쇠에 전액대매출을 더한 31장 구성을 사용한다',()=>{
+  assert.equal(EVENT_CARDS.length,31);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
+  assert.equal(counts.move.length,12);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,6);
+  assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='전액대매출').length,1);
 });
 
 test('항공여행은 콩코드 이용료를 낸 뒤 타이페이로 이동한다',()=>{
@@ -124,11 +136,40 @@ test('항공여행은 콩코드 이용료를 낸 뒤 타이페이로 이동한�
   resolveTile(state);assert.equal(traveler.position,1);assert.equal(owner.money,before+300000);assert.equal(traveler.money,RULES.STARTING_MONEY-300000+RULES.PASS_START_BONUS);assert.equal(state.phase,PHASES.BUY_DECISION);
 });
 
-test('우대권은 통행료를 한 번 면제하고 특수카드는 정가에 매각할 수 있다',()=>{
+test('유람선 여행은 퀸 엘리자베스호 이용료를 낸 뒤 부산으로 이동한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const traveler=state.players[0];const owner=state.players[1];const queen=state.board.find(tile=>tile.id==='queen-elizabeth');
+  queen.ownerId=owner.id;owner.specialAssets.push(queen.id);traveler.position=2;state.eventDeck=['sea-travel'];state.eventCursor=0;const before=owner.money;resolveTile(state);
+  assert.equal(owner.money,before+queen.baseRent);assert.equal(traveler.position,state.board.find(tile=>tile.id==='busan').index);
+});
+
+test('우대권은 자동으로 소모되지 않고 통행료 지불 직전에 직접 사용한다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const traveler=state.players[0];const owner=state.players[1];traveler.specialCards=['toll-waiver','island-escape'];
   const newYork=state.board.find(tile=>tile.id==='new-york');newYork.ownerId=owner.id;traveler.position=newYork.index;const before=traveler.money;resolveTile(state);
-  assert.equal(traveler.money,before);assert.deepEqual(traveler.specialCards,['island-escape']);
+  assert.equal(state.phase,PHASES.PAYMENT_DECISION);assert.equal(traveler.money,before);assert.deepEqual(traveler.specialCards,['toll-waiver','island-escape']);
+  useSpecialCard(state,'toll-waiver');assert.equal(traveler.money,before);assert.deepEqual(traveler.specialCards,['island-escape']);
   state.phase=PHASES.END_TURN;sellSpecialCard(state,'island-escape');assert.equal(traveler.money,before+200000);assert.deepEqual(traveler.specialCards,[]);
+});
+
+test('우대권을 보관하고 현금으로 통행료를 낼 수도 있다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const traveler=state.players[0];const owner=state.players[1];traveler.specialCards=['toll-waiver'];
+  const taipei=state.board.find(tile=>tile.id==='taipei');taipei.ownerId=owner.id;traveler.position=taipei.index;const before=traveler.money;resolveTile(state);settleDebt(state);
+  assert.equal(traveler.money,before-taipei.baseRent);assert.deepEqual(traveler.specialCards,['toll-waiver']);assert.equal(state.phase,PHASES.END_TURN);
+});
+
+test('무인도에서는 매 차례 주사위를 굴리고 더블 또는 탈출권으로 직접 탈출한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=10;resolveTile(state);assert.equal(player.skipTurns,3);
+  state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,.2));const failed=completeRoll(state);assert.equal(failed.islandEscaped,false);assert.equal(player.skipTurns,2);assert.equal(state.phase,PHASES.END_TURN);
+  state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(.4,.4));const escaped=completeRoll(state);assert.equal(escaped.islandEscaped,true);assert.equal(player.skipTurns,0);assert.equal(state.phase,PHASES.MOVING);
+  const cardState=createGame(2,{mode:'full',rng:()=>.2});const cardPlayer=cardState.players[0];cardPlayer.position=10;cardPlayer.skipTurns=3;cardPlayer.specialCards=['island-escape'];useSpecialCard(cardState,'island-escape');assert.equal(cardPlayer.skipTurns,0);assert.deepEqual(cardPlayer.specialCards,[]);assert.equal(cardState.phase,PHASES.WAITING_FOR_ROLL);
+});
+
+test('반액·전액대매출은 현재 투자 가치가 가장 높은 부동산을 대상으로 한다',()=>{
+  const half=createGame(2,{mode:'full',rng:()=>.2});const player=half.players[0];const busan=half.board.find(tile=>tile.id==='busan');const rome=half.board.find(tile=>tile.id==='rome');
+  for(const tile of [busan,rome]){tile.ownerId=player.id;player.ownedProperties.push(tile.id)}const before=player.money;half.players[0].position=2;half.eventDeck=['half-price-sale-1'];half.eventCursor=0;resolveTile(half);
+  assert.equal(busan.ownerId,null);assert.equal(rome.ownerId,player.id);assert.equal(player.money,before+busan.purchasePrice*.5);
+  const full=createGame(2,{mode:'full',rng:()=>.2});const fullPlayer=full.players[0];const fullBusan=full.board.find(tile=>tile.id==='busan');const fullRome=full.board.find(tile=>tile.id==='rome');
+  fullBusan.ownerId=fullPlayer.id;fullRome.ownerId=fullPlayer.id;fullRome.buildingLevel=4;fullPlayer.ownedProperties.push(fullBusan.id,fullRome.id);const currentValue=fullRome.purchasePrice+fullRome.buildingCosts.reduce((sum,cost)=>sum+cost,0);const fullBefore=fullPlayer.money;fullPlayer.position=2;full.eventDeck=['full-price-sale'];full.eventCursor=0;resolveTile(full);
+  assert.equal(fullRome.ownerId,null);assert.equal(fullBusan.ownerId,fullPlayer.id);assert.equal(fullPlayer.money,fullBefore+currentValue);
 });
 
 test('건물 유지비와 사회복지기금을 원화로 처리한다',()=>{
@@ -164,6 +205,7 @@ test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
 
 test('게임 상태는 새 저장 형식으로 저장하고 불러올 수 있다',()=>{
   const values=new Map();const storage={setItem:(key,value)=>values.set(key,value),getItem:key=>values.get(key)??null,removeItem:key=>values.delete(key)};
-  const state=createGame(4,{mode:'45',rng:()=>.2});assert.equal(saveGame(state,storage),true);const loaded=loadGame(storage);
+  const state=createGame(4,{mode:'45',rng:()=>.2});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>id!=='full-price-sale');assert.equal(saveGame(state,storage),true);const loaded=loadGame(storage);
   assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,4);assert.equal(loaded.players.length,4);assert.equal(loaded.timer.remainingSeconds,2700);
+  assert.equal(loaded.board[1].buildingCosts.length,4);assert.ok(loaded.eventDeck.includes('full-price-sale'));
 });

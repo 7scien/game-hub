@@ -1,6 +1,6 @@
 export const EVENT_CARDS = [
   {id:'air-travel',category:'move',title:'항공여행',text:'콩코드여객기를 타고 타이페이로 갑니다. 소유자가 있으면 객실료를 냅니다.',effect:{type:'travelRoute',vehicleTileId:'concorde',destinationTileId:'taipei'}},
-  {id:'sea-travel',category:'move',title:'유람선 여행',text:'퀸 엘리자베스호를 타고 홍콩으로 갑니다. 소유자가 있으면 승선료를 냅니다.',effect:{type:'travelRoute',vehicleTileId:'queen-elizabeth',destinationTileId:'hong-kong'}},
+  {id:'sea-travel',category:'move',title:'유람선 여행',text:'퀸 엘리자베스호를 타고 부산으로 갑니다. 소유자가 있으면 승선료를 냅니다.',effect:{type:'travelRoute',vehicleTileId:'queen-elizabeth',destinationTileId:'busan'}},
   {id:'highway',category:'move',title:'고속도로',text:'출발지까지 곧바로 가고 월급 20만 원을 받습니다.',effect:{type:'moveTo',tileId:'start'}},
   {id:'tour-jeju',category:'move',title:'관광여행 · 제주도',text:'제주도로 갑니다. 출발지를 지나면 월급을 받습니다.',effect:{type:'moveTo',tileId:'jeju'}},
   {id:'tour-busan',category:'move',title:'관광여행 · 부산',text:'부산으로 갑니다. 출발지를 지나면 월급을 받습니다.',effect:{type:'moveTo',tileId:'busan'}},
@@ -27,9 +27,10 @@ export const EVENT_CARDS = [
   {id:'hospital-fee',category:'expense',title:'병원비 지불',text:'건강진단 비용 5만 원을 은행에 냅니다.',effect:{type:'cash',amount:-50000}},
   {id:'overseas-study',category:'expense',title:'해외유학',text:'학교 등록금 10만 원을 은행에 냅니다.',effect:{type:'cash',amount:-100000}},
 
-  {id:'island-radio',category:'special',title:'무인도 탈출용 특수무전기',text:'보관했다가 무인도에서 탈출합니다. 필요 없으면 은행에 20만 원에 팔 수 있습니다.',effect:{type:'keepCard',cardId:'island-escape'}},
+  {id:'island-radio',category:'special',title:'무인도 탈출권',text:'보관했다가 무인도 차례에 직접 사용해 탈출합니다. 필요 없으면 은행에 20만 원에 팔 수 있습니다.',effect:{type:'keepCard',cardId:'island-escape'}},
   {id:'half-price-sale-1',category:'special',title:'반액대매출',text:'가장 비싼 부동산과 건물을 반값에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:.5}},
   {id:'half-price-sale-2',category:'special',title:'반액대매출',text:'가장 비싼 부동산과 건물을 반값에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:.5}},
+  {id:'full-price-sale',category:'special',title:'전액대매출',text:'현재 가치가 가장 높은 부동산과 건물을 전액에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:1}},
   {id:'toll-waiver-1',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
   {id:'toll-waiver-2',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
 ];

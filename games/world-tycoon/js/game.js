@@ -11,7 +11,7 @@ const shuffled=(items,rng)=>items.map(item=>({item,sort:rng()})).sort((a,b)=>a.s
 
 export const SPECIAL_CARD_INFO={
   'toll-waiver':{name:'우대권',sellPrice:300000,icon:'◇'},
-  'island-escape':{name:'무인도 탈출용 특수무전기',sellPrice:200000,icon:'⌁'},
+  'island-escape':{name:'무인도 탈출권',sellPrice:200000,icon:'⌁'},
 };
 
 const removeSpecialCard=(player,cardId)=>{const index=player.specialCards.indexOf(cardId);if(index<0)return false;player.specialCards.splice(index,1);return true};
@@ -27,7 +27,7 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random}={}){
   const minutes=mode==='full'?null:Number(mode);
   const state={
     version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
-    phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,pendingMovement:null,pendingAction:null,pendingDebt:null,
+    phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,islandEscapeThisTurn:false,pendingMovement:null,pendingAction:null,pendingDebt:null,
     eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,trade:null,notice:null,feedback:null,log:[],sequence:1,
     timer:{remainingSeconds:minutes===null?null:minutes*60},winnerIds:[],finishedReason:null,
   };
@@ -64,6 +64,12 @@ function moveTo(state,targetIndex,{collectPassBonus=true}={}){
 
 export function completeRoll(state){
   requirePhase(state,PHASES.ROLLING);const player=currentPlayer(state);state.phase=PHASES.MOVING;
+  if(player.skipTurns>0&&state.board[player.position]?.id==='deserted-island'){
+    state.consecutiveDoubles=0;
+    if(state.rolledDouble){player.skipTurns=0;state.islandEscapeThisTurn=true;state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};addLog(state,`${player.name}이 더블로 무인도를 탈출했습니다.`);return {islandEscaped:true}}
+    else{player.skipTurns=Math.max(0,player.skipTurns-1);state.pendingMovement=null;state.phase=PHASES.END_TURN;const message=player.skipTurns>0?`더블이 아닙니다. 탈출 기회가 ${player.skipTurns}번 남았습니다.`:'세 번의 탈출 시도가 끝났습니다. 다음 차례부터 이동할 수 있습니다.';notice(state,'무인도 탈출 실패',message,'warning');addLog(state,`${player.name}이 무인도 탈출에 실패했습니다.`)}
+    return {islandEscaped:false};
+  }
   if(state.rolledDouble)state.consecutiveDoubles+=1;else state.consecutiveDoubles=0;
   if(state.consecutiveDoubles>=RULES.MAX_CONSECUTIVE_DOUBLES){
     player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=Math.max(player.skipTurns,3);
@@ -95,6 +101,9 @@ function finishSimpleTile(state){state.phase=PHASES.END_TURN;state.pendingAction
 
 function continueAfterPayment(state,action){
   if(!action){finishSimpleTile(state);return}
+  if(action.type==='spaceTravel'){
+    const player=currentPlayer(state);state.pendingAction={type:'space-travel',tileIndex:player.position};state.phase=PHASES.TRAVEL_DECISION;addLog(state,`${player.name}이 우주여행 목적지를 선택합니다.`);return;
+  }
   if(action.type==='moveTo'){
     moveTo(state,findTileIndex(state.board,action.tileId),{collectPassBonus:action.collectPassBonus!==false});
     state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return;
@@ -114,11 +123,7 @@ function completeDebtPayment(state,debt){
 
 function prepareDebt(state,{amount,recipientId=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null}){
   const payer=currentPlayer(state);const debt={amount:Math.round(amount),recipientId,recipientIds,shareAmount,reason,fundDeposit,afterPayment};
-  if(recipientId&&removeSpecialCard(payer,'toll-waiver')){
-    addLog(state,`${payer.name}이 우대권으로 ${reason}를 면제받았습니다.`);
-    notice(state,'우대권 사용',`${reason} ${formatMoney(debt.amount)}을 내지 않습니다.`,'success');
-    continueAfterPayment(state,afterPayment);return;
-  }
+  if(recipientId&&payer.specialCards.includes('toll-waiver')){state.pendingDebt=debt;state.phase=PHASES.PAYMENT_DECISION;return}
   if(payer.money>=debt.amount){completeDebtPayment(state,debt);return}
   state.pendingDebt=debt;state.phase=PHASES.ASSET_MANAGEMENT;
   notice(state,'자산 정리가 필요합니다',`${reason} ${formatMoney(debt.amount)}을 지불하려면 자산을 정리하세요.`,'warning');
@@ -128,22 +133,28 @@ function buildingFeeAmount(state,playerId,rates){
   return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===playerId&&tile.buildingLevel>0).reduce((sum,tile)=>{
     if(tile.buildingLevel===1)return sum+rates.villa;
     if(tile.buildingLevel===2)return sum+rates.building;
-    return sum+rates.hotel;
+    return sum+rates.hotel*(tile.buildingLevel-2);
   },0);
 }
 
-function sellMostExpensive(state,player,rate){
+function sellMostExpensive(state,player,rate,saleName){
   const assets=state.board.filter(tile=>tile.type==='city'&&tile.ownerId===player.id);
-  if(!assets.length){addLog(state,`${player.name}은 반액대매출할 부동산이 없습니다.`);return null}
-  const tile=assets.sort((a,b)=>(b.purchasePrice+buildingValue(b))-(a.purchasePrice+buildingValue(a)))[0];
+  if(!assets.length){addLog(state,`${player.name}은 ${saleName}할 부동산이 없습니다.`);return null}
+  const currentValue=tile=>(tile.purchasePrice||0)+buildingValue(tile);const tile=[...assets].sort((a,b)=>currentValue(b)-currentValue(a)||b.baseRent-a.baseRent)[0];
   const refund=Math.round((tile.purchasePrice+buildingValue(tile))*rate);tile.ownerId=null;tile.buildingLevel=0;removeOwnedId(player,tile);player.money+=refund;
-  addLog(state,`${player.name}이 ${tile.name}을 반액대매출해 ${formatMoney(refund)}을 받았습니다.`);return {tile,refund};
+  addLog(state,`${player.name}이 현재 가치가 가장 높은 ${tile.name}을 ${saleName}해 ${formatMoney(refund)}을 받았습니다.`);return {tile,refund};
 }
 
 function travelRoute(state,effect){
   const player=currentPlayer(state);const vehicleIndex=findTileIndex(state.board,effect.vehicleTileId);moveTo(state,vehicleIndex);
   const vehicle=state.board[vehicleIndex];const afterPayment={type:'moveTo',tileId:effect.destinationTileId};
   if(vehicle.ownerId&&vehicle.ownerId!==player.id){prepareDebt(state,{amount:vehicle.baseRent,recipientId:vehicle.ownerId,reason:`${vehicle.name} 이용료`,afterPayment});return}
+  continueAfterPayment(state,afterPayment);
+}
+
+function beginSpaceTravel(state){
+  const player=currentPlayer(state);const vehicle=state.board[findTileIndex(state.board,'columbia')];const afterPayment={type:'spaceTravel'};
+  if(vehicle?.ownerId&&vehicle.ownerId!==player.id){prepareDebt(state,{amount:calculateRent(state,vehicle,player),recipientId:vehicle.ownerId,reason:`${vehicle.name} 우주여행 이용료`,afterPayment});return}
   continueAfterPayment(state,afterPayment);
 }
 
@@ -170,7 +181,7 @@ function applyEvent(state,card){
   if(effect.type==='buildingFee'){
     const amount=buildingFeeAmount(state,player.id,effect.rates);if(amount>0)prepareDebt(state,{amount,reason:card.title});else finishSimpleTile(state);return;
   }
-  if(effect.type==='sellMostExpensive'){sellMostExpensive(state,player,effect.rate);finishSimpleTile(state);return}
+  if(effect.type==='sellMostExpensive'){sellMostExpensive(state,player,effect.rate,card.title);finishSimpleTile(state);return}
   if(effect.type==='keepCard'){player.specialCards.push(effect.cardId);finishSimpleTile(state);return}
 }
 
@@ -190,8 +201,8 @@ export function resolveTile(state,depth=0){
   if(tile.type==='event'){applyEvent(state,drawEvent(state));return}
   if(tile.type==='tax'){prepareDebt(state,{amount:tile.amount,reason:tile.name,fundDeposit:tile.id==='social-welfare-tax'});return}
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
-  if(tile.type==='wait'){player.skipTurns+=tile.turns;notice(state,tile.name,`다음 ${tile.turns}턴 동안 쉽니다.`,'warning');finishSimpleTile(state);return}
-  if(tile.id==='space-travel'){state.pendingAction={type:'space-travel',tileIndex:tile.index};state.phase=PHASES.TRAVEL_DECISION;addLog(state,`${player.name}이 우주여행 목적지를 선택합니다.`);return}
+  if(tile.type==='wait'){player.skipTurns=Math.max(player.skipTurns,tile.turns);notice(state,tile.name,`다음 ${tile.turns}번의 차례마다 주사위를 굴려 더블이면 즉시 탈출합니다.`,'warning');finishSimpleTile(state);return}
+  if(tile.id==='space-travel'){beginSpaceTravel(state);return}
   if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
   finishSimpleTile(state);
@@ -200,7 +211,7 @@ export function resolveTile(state,depth=0){
 export function chooseSpaceTravelDestination(state,targetIndex){
   requirePhase(state,PHASES.TRAVEL_DECISION);const player=currentPlayer(state);const index=Number(targetIndex);const origin=state.board[player.position];const destination=state.board[index];
   if(state.pendingAction?.type!=='space-travel'||origin?.id!=='space-travel')throw new Error('지금은 우주여행 목적지를 정할 수 없습니다.');
-  if(!Number.isInteger(index)||!destination||destination.id==='space-travel')throw new Error('이동할 칸을 선택하세요.');
+  if(!Number.isInteger(index)||!destination||destination.type!=='city')throw new Error('게임판에서 이동할 도시를 선택하세요.');
   moveTo(state,index);state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
   return destination;
 }
@@ -217,10 +228,11 @@ export function declineDecision(state){requirePhase(state,PHASES.BUY_DECISION,PH
 export function buildCurrentTile(state){
   requirePhase(state,PHASES.BUILD_DECISION);const player=currentPlayer(state);const tile=state.board[state.pendingAction.tileIndex];
   if(tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');
-  if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 호텔이 완성되었습니다.');
+  if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 호텔 2개가 완성되었습니다.');
   const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');
-  player.money-=cost;tile.buildingLevel+=1;const buildingName=['땅','별장','빌딩','호텔'][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName}을 건설했습니다.`);
-  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'호텔 완성!',`${tile.name}에 최고 등급 호텔이 완성되었습니다.`,'landmark');
+  player.money-=cost;tile.buildingLevel+=1;const buildingName=['땅','별장','빌딩','호텔 1개','호텔 2개'][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName}을 건설했습니다.`);
+  if(tile.buildingLevel===3)notice(state,'호텔 건설!',`${tile.name}에 첫 번째 호텔이 완성되었습니다.`,'landmark');
+  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'호텔 2개 완성!',`${tile.name}에 최고 단계인 호텔 2개가 완성되었습니다.`,'landmark');
   finishSimpleTile(state);
 }
 
@@ -244,8 +256,22 @@ export function sellSpecialCard(state,cardId){
   player.money+=info.sellPrice;addLog(state,`${player.name}이 ${info.name}을 은행에 팔아 ${formatMoney(info.sellPrice)}을 받았습니다.`);return info.sellPrice;
 }
 
+export function useSpecialCard(state,cardId){
+  const player=currentPlayer(state);
+  if(cardId==='toll-waiver'){
+    requirePhase(state,PHASES.PAYMENT_DECISION);const debt=state.pendingDebt;if(!debt?.recipientId)throw new Error('우대권을 사용할 통행료가 없습니다.');
+    if(!removeSpecialCard(player,cardId))throw new Error('보유한 우대권이 없습니다.');state.pendingDebt=null;addLog(state,`${player.name}이 우대권으로 ${debt.reason}를 면제받았습니다.`);notice(state,'우대권 사용',`${debt.reason} ${formatMoney(debt.amount)}을 내지 않습니다.`,'success');continueAfterPayment(state,debt.afterPayment);return;
+  }
+  if(cardId==='island-escape'){
+    requirePhase(state,PHASES.WAITING_FOR_ROLL);if(player.skipTurns<1||state.board[player.position]?.id!=='deserted-island')throw new Error('무인도에 갇힌 차례에만 사용할 수 있습니다.');
+    if(!removeSpecialCard(player,cardId))throw new Error('보유한 무인도 탈출권이 없습니다.');player.skipTurns=0;addLog(state,`${player.name}이 무인도 탈출권을 사용했습니다.`);notice(state,'무인도 탈출권 사용','이제 주사위를 굴려 정상적으로 이동할 수 있습니다.','success');return;
+  }
+  throw new Error('지금 사용할 수 없는 카드입니다.');
+}
+
 export function settleDebt(state){
-  requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const debt=state.pendingDebt;if(!debt)throw new Error('지불할 금액이 없습니다.');if(player.money<debt.amount)throw new Error('아직 현금이 부족합니다.');
+  requirePhase(state,PHASES.PAYMENT_DECISION,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const debt=state.pendingDebt;if(!debt)throw new Error('지불할 금액이 없습니다.');
+  if(player.money<debt.amount){if(state.phase===PHASES.PAYMENT_DECISION){state.phase=PHASES.ASSET_MANAGEMENT;notice(state,'자산 정리가 필요합니다',`${debt.reason} ${formatMoney(debt.amount)}을 지불하려면 자산을 정리하세요.`,'warning');return}throw new Error('아직 현금이 부족합니다.');}
   completeDebtPayment(state,debt);
 }
 
@@ -267,14 +293,13 @@ export function declareBankruptcy(state){
 
 function nextActiveIndex(state,from){let next=from;do{next=(next+1)%state.players.length}while(state.players[next].bankrupt);return next}
 function prepareTurn(state){
-  const player=currentPlayer(state);state.pendingMovement=null;state.pendingAction=null;state.pendingDebt=null;state.rolledDouble=false;state.rollTotal=0;
-  if(player.skipTurns>0&&removeSpecialCard(player,'island-escape')){player.skipTurns=0;state.phase=PHASES.WAITING_FOR_ROLL;notice(state,'무인도 탈출',`${player.name}이 특수무전기를 사용해 바로 탈출했습니다.`,'success');addLog(state,`${player.name}이 무인도 탈출용 특수무전기를 사용했습니다.`)}
-  else if(player.skipTurns>0){player.skipTurns-=1;state.phase=PHASES.END_TURN;notice(state,'대기 중',`${player.name}은 이번 턴을 쉽니다.`,'warning');addLog(state,`${player.name}이 한 턴 쉽니다.`)}else state.phase=PHASES.WAITING_FOR_ROLL;
+  const player=currentPlayer(state);state.pendingMovement=null;state.pendingAction=null;state.pendingDebt=null;state.rolledDouble=false;state.rollTotal=0;state.islandEscapeThisTurn=false;state.phase=PHASES.WAITING_FOR_ROLL;
+  if(player.skipTurns>0){notice(state,'무인도 탈출 도전',`주사위를 굴려 더블이 나오면 즉시 탈출합니다. 남은 기회 ${player.skipTurns}번`,'warning');addLog(state,`${player.name}의 무인도 탈출 차례입니다.`)}
 }
 
 export function endTurn(state){
   requirePhase(state,PHASES.END_TURN);const oldIndex=state.currentPlayerIndex;
-  const bonus=RULES.BONUS_TURN_ON_DOUBLE&&state.rolledDouble&&state.consecutiveDoubles<RULES.MAX_CONSECUTIVE_DOUBLES&&!currentPlayer(state).bankrupt;
+  const bonus=RULES.BONUS_TURN_ON_DOUBLE&&state.rolledDouble&&!state.islandEscapeThisTurn&&state.consecutiveDoubles<RULES.MAX_CONSECUTIVE_DOUBLES&&!currentPlayer(state).bankrupt;
   if(!bonus){state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
   prepareTurn(state);return {playerChanged:oldIndex!==state.currentPlayerIndex,bonusTurn:bonus};
 }

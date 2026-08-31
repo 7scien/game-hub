@@ -1,6 +1,6 @@
 import {
   advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
-  endTurn,finishMovement,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,
+  endTurn,finishMovement,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,useSpecialCard,
 } from './game.js';
 import {clearGame,loadGame,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
@@ -28,7 +28,7 @@ async function handleRoll(){
   if(actionLocked)return;actionLocked=true;
   try{
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
-    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));await showDiceResult([...state.dice],state.rollTotal);commit(()=>completeRoll(state));
+    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));await showDiceResult([...state.dice],state.rollTotal);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandEscaped)toast('더블! 무인도를 탈출합니다.');
     while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await new Promise(resolve=>setTimeout(resolve,55))}
     if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)commit(()=>finishMovement(state));
   }finally{actionLocked=false}
@@ -62,13 +62,14 @@ document.addEventListener('click',event=>{
   if(action==='roll-dice'){handleRoll();return}
   if(action==='buy-tile'){commit(()=>buyCurrentTile(state));return}
   if(action==='build-tile'){commit(()=>buildCurrentTile(state));return}
-  if(action==='choose-space-destination'){const select=document.querySelector('[data-space-destination]');commit(()=>chooseSpaceTravelDestination(state,Number(select?.value)));return}
+  if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
   if(action==='decline-decision'){commit(()=>declineDecision(state));return}
   if(action==='end-turn'){handleEndTurn();return}
   if(action==='dismiss-notice'){commit(()=>dismissNotice(state));return}
   if(action==='sell-building'){commit(()=>sellBuilding(state,target.dataset.tile));return}
   if(action==='sell-asset'){commit(()=>sellAsset(state,target.dataset.tile));return}
   if(action==='sell-special-card'){commit(()=>sellSpecialCard(state,target.dataset.card));return}
+  if(action==='use-special-card'){commit(()=>useSpecialCard(state,target.dataset.card));return}
   if(action==='settle-debt'){commit(()=>settleDebt(state));return}
   if(action==='declare-bankruptcy'){commit(()=>declareBankruptcy(state));return}
   if(action==='open-trade'){commit(()=>openTrade(state));return}
@@ -80,6 +81,7 @@ document.addEventListener('click',event=>{
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'){const freeModal=document.querySelector('.free-modal');if(freeModal)closeFreeModal()}
   if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="roll-dice"]')){event.preventDefault();handleRoll()}
+  if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="choose-space-destination"]')){event.preventDefault();event.target.click()}
 });
 
 setInterval(()=>{

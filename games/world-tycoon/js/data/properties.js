@@ -8,8 +8,8 @@ const city=(id,name,englishName,region,purchasePrice,{buildable=true,fixedRent=n
   purchasePrice,
   buildable,
   baseRent:fixedRent??roundTenThousand(purchasePrice*.11),
-  buildingCosts:buildable?[.55,.9,1.15].map(rate=>roundTenThousand(purchasePrice*rate)):[],
-  rentByLevel:buildable?[.11,.32,1.35,2.45].map(rate=>roundTenThousand(purchasePrice*rate)):[fixedRent],
+  buildingCosts:buildable?[.55,.9,1.15,1.15].map(rate=>roundTenThousand(purchasePrice*rate)):[],
+  rentByLevel:buildable?[.11,.32,1.35,2.45,3.55].map(rate=>roundTenThousand(purchasePrice*rate)):[fixedRent],
 });
 
 export const PROPERTIES = [
