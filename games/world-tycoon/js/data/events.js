@@ -20,9 +20,9 @@ export const EVENT_CARDS = [
   {id:'scholarship',category:'income',title:'장학금 혜택',text:'은행에서 장학금 10만 원을 받습니다.',effect:{type:'cash',amount:100000}},
   {id:'party-invitation',category:'income',title:'파티 초대권',text:'장기자랑 참가상으로 은행에서 1만 원을 받습니다.',effect:{type:'cash',amount:10000}},
 
-  {id:'security-fee',category:'expense',title:'방범비',text:'보유 건물마다 호텔 5만 원, 빌딩 3만 원, 별장 1만 원을 냅니다.',effect:{type:'buildingFee',rates:{villa:10000,building:30000,hotel:50000}}},
-  {id:'building-repairs',category:'expense',title:'건물수리비 지불',text:'보유 건물마다 호텔 10만 원, 빌딩 6만 원, 별장 3만 원을 냅니다.',effect:{type:'buildingFee',rates:{villa:30000,building:60000,hotel:100000}}},
-  {id:'income-tax',category:'expense',title:'정기종합소득세',text:'보유 건물마다 호텔 15만 원, 빌딩 10만 원, 별장 3만 원을 냅니다.',effect:{type:'buildingFee',rates:{villa:30000,building:100000,hotel:150000}}},
+  {id:'security-fee',category:'expense',title:'방범비',text:'랜드마크 기초 1만 원, 건설 중 3만 원, 완성된 1동마다 5만 원을 냅니다.',effect:{type:'buildingFee',rates:{villa:10000,building:30000,hotel:50000}}},
+  {id:'building-repairs',category:'expense',title:'건물수리비 지불',text:'랜드마크 기초 3만 원, 건설 중 6만 원, 완성된 1동마다 10만 원을 냅니다.',effect:{type:'buildingFee',rates:{villa:30000,building:60000,hotel:100000}}},
+  {id:'income-tax',category:'expense',title:'정기종합소득세',text:'랜드마크 기초 3만 원, 건설 중 10만 원, 완성된 1동마다 15만 원을 냅니다.',effect:{type:'buildingFee',rates:{villa:30000,building:100000,hotel:150000}}},
   {id:'speeding-fine',category:'expense',title:'과속운전 벌금',text:'벌금 5만 원을 은행에 냅니다.',effect:{type:'cash',amount:-50000}},
   {id:'hospital-fee',category:'expense',title:'병원비 지불',text:'건강진단 비용 5만 원을 은행에 냅니다.',effect:{type:'cash',amount:-50000}},
   {id:'overseas-study',category:'expense',title:'해외유학',text:'학교 등록금 10만 원을 은행에 냅니다.',effect:{type:'cash',amount:-100000}},
@@ -31,6 +31,7 @@ export const EVENT_CARDS = [
   {id:'half-price-sale-1',category:'special',title:'반액대매출',text:'가장 비싼 부동산과 건물을 반값에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:.5}},
   {id:'half-price-sale-2',category:'special',title:'반액대매출',text:'가장 비싼 부동산과 건물을 반값에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:.5}},
   {id:'full-price-sale',category:'special',title:'전액대매출',text:'현재 가치가 가장 높은 부동산과 건물을 전액에 은행에 팝니다.',effect:{type:'sellMostExpensive',rate:1}},
+  {id:'world-cup',category:'special',title:'월드컵 개최',text:'보유 도시 하나를 선택하세요. 다음 자신의 3번 차례 동안 그 도시의 통행료가 2배가 됩니다.',effect:{type:'worldCup',turns:3}},
   {id:'toll-waiver-1',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
   {id:'toll-waiver-2',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
 ];

@@ -2,7 +2,7 @@ import {REGION_STYLES} from './data/board.js';
 
 export const PHASES={
   WAITING_FOR_ROLL:'WAITING_FOR_ROLL',ROLLING:'ROLLING',MOVING:'MOVING',RESOLVING_TILE:'RESOLVING_TILE',
-  BUY_DECISION:'BUY_DECISION',BUILD_DECISION:'BUILD_DECISION',TRAVEL_DECISION:'TRAVEL_DECISION',PAYMENT_DECISION:'PAYMENT_DECISION',TRADE:'TRADE',ASSET_MANAGEMENT:'ASSET_MANAGEMENT',
+  BUY_DECISION:'BUY_DECISION',BUILD_DECISION:'BUILD_DECISION',TRAVEL_DECISION:'TRAVEL_DECISION',WORLD_CUP_DECISION:'WORLD_CUP_DECISION',PAYMENT_DECISION:'PAYMENT_DECISION',TRADE:'TRADE',ASSET_MANAGEMENT:'ASSET_MANAGEMENT',
   END_TURN:'END_TURN',GAME_OVER:'GAME_OVER',
 };
 
@@ -30,6 +30,7 @@ export function calculateRent(state,tile,visitor){
   if(tile.type==='city'){
     let rent=tile.rentByLevel[tile.buildingLevel]??tile.baseRent;
     if(tile.buildable!==false&&ownsRegion(state,tile.ownerId,tile.region))rent*=RULES.GROUP_COMPLETION_MULTIPLIER;
+    if(tile.worldCupTurns>0)rent*=2;
     return Math.round(rent);
   }
   if(tile.type==='facility'){

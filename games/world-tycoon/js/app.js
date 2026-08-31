@@ -1,5 +1,5 @@
 import {
-  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
+  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
   endTurn,finishMovement,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,useSpecialCard,
 } from './game.js';
 import {clearGame,loadGame,saveGame} from './storage.js';
@@ -63,6 +63,7 @@ document.addEventListener('click',event=>{
   if(action==='buy-tile'){commit(()=>buyCurrentTile(state));return}
   if(action==='build-tile'){commit(()=>buildCurrentTile(state));return}
   if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
+  if(action==='choose-world-cup-city'){commit(()=>chooseWorldCupCity(state,target.dataset.tile));return}
   if(action==='decline-decision'){commit(()=>declineDecision(state));return}
   if(action==='end-turn'){handleEndTurn();return}
   if(action==='dismiss-notice'){commit(()=>dismissNotice(state));return}

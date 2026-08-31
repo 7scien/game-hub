@@ -67,13 +67,13 @@ export function completeRoll(state){
   if(player.skipTurns>0&&state.board[player.position]?.id==='deserted-island'){
     state.consecutiveDoubles=0;
     if(state.rolledDouble){player.skipTurns=0;state.islandEscapeThisTurn=true;state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};addLog(state,`${player.name}이 더블로 무인도를 탈출했습니다.`);return {islandEscaped:true}}
-    else{player.skipTurns=Math.max(0,player.skipTurns-1);state.pendingMovement=null;state.phase=PHASES.END_TURN;const message=player.skipTurns>0?`더블이 아닙니다. 탈출 기회가 ${player.skipTurns}번 남았습니다.`:'세 번의 탈출 시도가 끝났습니다. 다음 차례부터 이동할 수 있습니다.';notice(state,'무인도 탈출 실패',message,'warning');addLog(state,`${player.name}이 무인도 탈출에 실패했습니다.`)}
+    else{state.pendingMovement=null;state.phase=PHASES.END_TURN;addLog(state,`${player.name}이 더블을 만들지 못해 무인도에 남았습니다.`)}
     return {islandEscaped:false};
   }
   if(state.rolledDouble)state.consecutiveDoubles+=1;else state.consecutiveDoubles=0;
   if(state.consecutiveDoubles>=RULES.MAX_CONSECUTIVE_DOUBLES){
-    player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=Math.max(player.skipTurns,3);
-    notice(state,'연속 더블!',`${RULES.MAX_CONSECUTIVE_DOUBLES}번 연속 더블로 무인도로 이동합니다.`,'warning');
+    player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=1;
+    notice(state,'무인도',`${RULES.MAX_CONSECUTIVE_DOUBLES}번 연속 더블로 무인도에 들어왔습니다.`,'warning');
     addLog(state,`${player.name}이 연속 더블로 무인도로 이동했습니다.`);state.pendingMovement=null;state.phase=PHASES.END_TURN;return;
   }
   state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};
@@ -141,7 +141,7 @@ function sellMostExpensive(state,player,rate,saleName){
   const assets=state.board.filter(tile=>tile.type==='city'&&tile.ownerId===player.id);
   if(!assets.length){addLog(state,`${player.name}은 ${saleName}할 부동산이 없습니다.`);return null}
   const currentValue=tile=>(tile.purchasePrice||0)+buildingValue(tile);const tile=[...assets].sort((a,b)=>currentValue(b)-currentValue(a)||b.baseRent-a.baseRent)[0];
-  const refund=Math.round((tile.purchasePrice+buildingValue(tile))*rate);tile.ownerId=null;tile.buildingLevel=0;removeOwnedId(player,tile);player.money+=refund;
+  const refund=Math.round((tile.purchasePrice+buildingValue(tile))*rate);tile.ownerId=null;tile.buildingLevel=0;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;removeOwnedId(player,tile);player.money+=refund;
   addLog(state,`${player.name}이 현재 가치가 가장 높은 ${tile.name}을 ${saleName}해 ${formatMoney(refund)}을 받았습니다.`);return {tile,refund};
 }
 
@@ -182,6 +182,11 @@ function applyEvent(state,card){
     const amount=buildingFeeAmount(state,player.id,effect.rates);if(amount>0)prepareDebt(state,{amount,reason:card.title});else finishSimpleTile(state);return;
   }
   if(effect.type==='sellMostExpensive'){sellMostExpensive(state,player,effect.rate,card.title);finishSimpleTile(state);return}
+  if(effect.type==='worldCup'){
+    const cities=state.board.filter(tile=>tile.type==='city'&&tile.ownerId===player.id);
+    if(!cities.length){notice(state,card.title,'아직 보유한 도시가 없어 월드컵을 개최할 수 없습니다.','warning','golden-key');finishSimpleTile(state);return}
+    state.pendingAction={type:'world-cup',turns:effect.turns};state.phase=PHASES.WORLD_CUP_DECISION;return;
+  }
   if(effect.type==='keepCard'){player.specialCards.push(effect.cardId);finishSimpleTile(state);return}
 }
 
@@ -201,7 +206,7 @@ export function resolveTile(state,depth=0){
   if(tile.type==='event'){applyEvent(state,drawEvent(state));return}
   if(tile.type==='tax'){prepareDebt(state,{amount:tile.amount,reason:tile.name,fundDeposit:tile.id==='social-welfare-tax'});return}
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
-  if(tile.type==='wait'){player.skipTurns=Math.max(player.skipTurns,tile.turns);notice(state,tile.name,`다음 ${tile.turns}번의 차례마다 주사위를 굴려 더블이면 즉시 탈출합니다.`,'warning');finishSimpleTile(state);return}
+  if(tile.type==='wait'){player.skipTurns=1;notice(state,tile.name,'무인도에 들어왔습니다. 다음 차례부터 더블이나 탈출권으로 나갈 수 있습니다.','warning');finishSimpleTile(state);return}
   if(tile.id==='space-travel'){beginSpaceTravel(state);return}
   if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
@@ -216,6 +221,12 @@ export function chooseSpaceTravelDestination(state,targetIndex){
   return destination;
 }
 
+export function chooseWorldCupCity(state,tileId){
+  requirePhase(state,PHASES.WORLD_CUP_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);const turns=Math.max(1,Number(state.pendingAction?.turns)||3);
+  if(state.pendingAction?.type!=='world-cup'||!tile||tile.type!=='city'||tile.ownerId!==player.id)throw new Error('월드컵을 개최할 내 도시를 선택하세요.');
+  tile.worldCupTurns=turns;tile.worldCupActivatedTurn=state.turnNumber;state.pendingAction=null;state.phase=PHASES.END_TURN;notice(state,'월드컵 개최!',`${tile.name}의 통행료가 다음 자신의 ${turns}번 차례 동안 2배가 됩니다.`,'landmark');addLog(state,`${player.name}이 ${tile.name}에서 월드컵을 개최합니다.`);return tile;
+}
+
 export function buyCurrentTile(state){
   requirePhase(state,PHASES.BUY_DECISION);const player=currentPlayer(state);const tile=state.board[state.pendingAction.tileIndex];
   if(tile.ownerId)throw new Error('이미 소유자가 있는 자산입니다.');if(player.money<tile.purchasePrice)throw new Error('구매할 현금이 부족합니다.');
@@ -228,11 +239,11 @@ export function declineDecision(state){requirePhase(state,PHASES.BUY_DECISION,PH
 export function buildCurrentTile(state){
   requirePhase(state,PHASES.BUILD_DECISION);const player=currentPlayer(state);const tile=state.board[state.pendingAction.tileIndex];
   if(tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');
-  if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 호텔 2개가 완성되었습니다.');
+  if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 대표 랜드마크 2동이 완성되었습니다.');
   const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');
-  player.money-=cost;tile.buildingLevel+=1;const buildingName=['땅','별장','빌딩','호텔 1개','호텔 2개'][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName}을 건설했습니다.`);
-  if(tile.buildingLevel===3)notice(state,'호텔 건설!',`${tile.name}에 첫 번째 호텔이 완성되었습니다.`,'landmark');
-  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'호텔 2개 완성!',`${tile.name}에 최고 단계인 호텔 2개가 완성되었습니다.`,'landmark');
+  player.money-=cost;tile.buildingLevel+=1;const landmark=tile.landmarkName||'대표 랜드마크';const buildingName=[null,`${landmark} 기초`,`${landmark} 건설 중`,`${landmark} 1동`,`${landmark} 2동`][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName} 단계를 완성했습니다.`);
+  if(tile.buildingLevel===3)notice(state,'랜드마크 완성!',`${tile.name}에 ${landmark} 1동이 완성되었습니다.`,'landmark');
+  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'랜드마크 2동 완성!',`${tile.name}에 ${landmark} 2동이 완성되었습니다.`,'landmark');
   finishSimpleTile(state);
 }
 
@@ -247,7 +258,7 @@ export function sellBuilding(state,tileId){
 export function sellAsset(state,tileId){
   requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
   if(!tile||tile.ownerId!==player.id)throw new Error('매각할 수 없는 자산입니다.');if(tile.buildingLevel>0)throw new Error('건물을 먼저 모두 매각하세요.');
-  const refund=Math.round(tile.purchasePrice*RULES.SELL_PROPERTY_RATE);tile.ownerId=null;player.money+=refund;removeOwnedId(player,tile);addLog(state,`${tile.name}을 매각해 ${formatMoney(refund)}을 확보했습니다.`);return refund;
+  const refund=Math.round(tile.purchasePrice*RULES.SELL_PROPERTY_RATE);tile.ownerId=null;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;player.money+=refund;removeOwnedId(player,tile);addLog(state,`${tile.name}을 매각해 ${formatMoney(refund)}을 확보했습니다.`);return refund;
 }
 
 export function sellSpecialCard(state,cardId){
@@ -286,7 +297,7 @@ export function declareBankruptcy(state){
   const cardValue=(player.specialCards||[]).reduce((sum,id)=>sum+(SPECIAL_CARD_INFO[id]?.sellPrice||0),0);
   if(player.money+liquidationValue(state,player.id)+cardValue>=debt.amount)throw new Error('매각 가능한 자산으로 아직 지불할 수 있습니다.');
   if(debt.recipientId){const target=state.players.find(item=>item.id===debt.recipientId);if(target)target.money+=player.money}
-  player.money=0;player.bankrupt=true;state.board.filter(tile=>tile.ownerId===player.id).forEach(tile=>{tile.ownerId=null;tile.buildingLevel=0});player.ownedProperties=[];player.specialAssets=[];player.specialCards=[];state.pendingDebt=null;
+  player.money=0;player.bankrupt=true;state.board.filter(tile=>tile.ownerId===player.id).forEach(tile=>{tile.ownerId=null;tile.buildingLevel=0;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null});player.ownedProperties=[];player.specialAssets=[];player.specialCards=[];state.pendingDebt=null;
   notice(state,'파산',`${player.name}이 게임에서 제외되었습니다.`,'danger');addLog(state,`${player.name}이 파산했습니다.`);
   const active=state.players.filter(item=>!item.bankrupt);if(active.length<=1){finishGame(state,'last-player');return}finishSimpleTile(state);
 }
@@ -294,12 +305,19 @@ export function declareBankruptcy(state){
 function nextActiveIndex(state,from){let next=from;do{next=(next+1)%state.players.length}while(state.players[next].bankrupt);return next}
 function prepareTurn(state){
   const player=currentPlayer(state);state.pendingMovement=null;state.pendingAction=null;state.pendingDebt=null;state.rolledDouble=false;state.rollTotal=0;state.islandEscapeThisTurn=false;state.phase=PHASES.WAITING_FOR_ROLL;
-  if(player.skipTurns>0){notice(state,'무인도 탈출 도전',`주사위를 굴려 더블이 나오면 즉시 탈출합니다. 남은 기회 ${player.skipTurns}번`,'warning');addLog(state,`${player.name}의 무인도 탈출 차례입니다.`)}
+}
+
+function tickWorldCupBonuses(state,playerId){
+  state.board.filter(tile=>tile.ownerId===playerId&&tile.worldCupTurns>0).forEach(tile=>{
+    if(tile.worldCupActivatedTurn===state.turnNumber){tile.worldCupActivatedTurn=null;return}
+    tile.worldCupTurns-=1;if(tile.worldCupTurns<=0){tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;addLog(state,`${tile.name} 월드컵 통행료 2배 효과가 끝났습니다.`)}
+  });
 }
 
 export function endTurn(state){
   requirePhase(state,PHASES.END_TURN);const oldIndex=state.currentPlayerIndex;
   const bonus=RULES.BONUS_TURN_ON_DOUBLE&&state.rolledDouble&&!state.islandEscapeThisTurn&&state.consecutiveDoubles<RULES.MAX_CONSECUTIVE_DOUBLES&&!currentPlayer(state).bankrupt;
+  tickWorldCupBonuses(state,currentPlayer(state).id);
   if(!bonus){state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
   prepareTurn(state);return {playerChanged:oldIndex!==state.currentPlayerIndex,bonusTurn:bonus};
 }
@@ -320,7 +338,7 @@ export function proposeTrade(state,proposal){
   state.trade={stage:'review',proposerId:proposer.id,partnerId:partner.id,offerCash,requestCash,offerAssetId:offered?.id||null,requestAssetId:requested?.id||null};
 }
 
-function transferTile(state,tileId,from,to){if(!tileId)return;const tile=state.board.find(item=>item.id===tileId);removeOwnedId(from,tile);tile.ownerId=to.id;(tile.type==='city'?to.ownedProperties:to.specialAssets).push(tile.id)}
+function transferTile(state,tileId,from,to){if(!tileId)return;const tile=state.board.find(item=>item.id===tileId);removeOwnedId(from,tile);tile.ownerId=to.id;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;(tile.type==='city'?to.ownedProperties:to.specialAssets).push(tile.id)}
 export function resolveTrade(state,accepted){
   requirePhase(state,PHASES.TRADE);if(state.trade?.stage!=='review')throw new Error('검토할 거래가 없습니다.');const trade=state.trade;
   const proposer=state.players.find(player=>player.id===trade.proposerId);const partner=state.players.find(player=>player.id===trade.partnerId);

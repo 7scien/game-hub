@@ -10,9 +10,9 @@ export function loadGame(storage=globalThis.localStorage){
   try{
     const value=JSON.parse(storage.getItem(RULES.AUTOSAVE_KEY));if(!isValidSavedGame(value))return null;
     value.players.forEach((player,index)=>{player.token=PLAYER_TOKENS[index]});
-    const freshBoard=createBoard();value.board=freshBoard.map((fresh,index)=>({...fresh,ownerId:value.board[index]?.ownerId??null,buildingLevel:Math.min(RULES.MAX_BUILDING_LEVEL,Math.max(0,Number(value.board[index]?.buildingLevel)||0))}));
+    const freshBoard=createBoard();value.board=freshBoard.map((fresh,index)=>({...fresh,ownerId:value.board[index]?.ownerId??null,buildingLevel:Math.min(RULES.MAX_BUILDING_LEVEL,Math.max(0,Number(value.board[index]?.buildingLevel)||0)),worldCupTurns:Math.max(0,Number(value.board[index]?.worldCupTurns)||0),worldCupActivatedTurn:value.board[index]?.worldCupActivatedTurn??null}));
     if(!Array.isArray(value.eventDeck)){value.eventDeck=EVENT_CARDS.map(card=>card.id);value.eventCursor=0}
-    const fullSaleId=EVENT_CARDS.find(card=>card.id==='full-price-sale')?.id;if(fullSaleId&&!value.eventDeck.includes(fullSaleId))value.eventDeck.push(fullSaleId);
+    EVENT_CARDS.forEach(card=>{if(!value.eventDeck.includes(card.id))value.eventDeck.push(card.id)});
     value.islandEscapeThisTurn=false;return value;
   }catch{return null}
 }

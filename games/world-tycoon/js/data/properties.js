@@ -1,5 +1,17 @@
 const roundTenThousand=value=>Math.max(10000,Math.round(value/10000)*10000);
 
+const LANDMARKS={
+  taipei:{landmarkName:'타이베이 101',landmarkShort:'101',landmarkGlyph:'▥'},'hong-kong':{landmarkName:'ICC 타워',landmarkShort:'ICC',landmarkGlyph:'▤'},manila:{landmarkName:'마닐라 시청',landmarkShort:'시청',landmarkGlyph:'♜'},
+  jeju:{landmarkName:'돌하르방',landmarkShort:'돌하르방',landmarkGlyph:'♟'},singapore:{landmarkName:'마리나 베이 샌즈',landmarkShort:'MBS',landmarkGlyph:'♒'},cairo:{landmarkName:'기자 대피라미드',landmarkShort:'피라미드',landmarkGlyph:'▲'},
+  istanbul:{landmarkName:'아야 소피아',landmarkShort:'아야소피아',landmarkGlyph:'☪'},athens:{landmarkName:'파르테논 신전',landmarkShort:'파르테논',landmarkGlyph:'Π'},copenhagen:{landmarkName:'로센보르성',landmarkShort:'로센보르',landmarkGlyph:'♛'},
+  stockholm:{landmarkName:'스톡홀름 시청',landmarkShort:'시청사',landmarkGlyph:'♜'},zurich:{landmarkName:'그로스뮌스터',landmarkShort:'대성당',landmarkGlyph:'♝'},berlin:{landmarkName:'브란덴부르크문',landmarkShort:'브란덴문',landmarkGlyph:'⊓'},
+  montreal:{landmarkName:'노트르담 대성당',landmarkShort:'노트르담',landmarkGlyph:'♰'},'buenos-aires':{landmarkName:'부에노스아이레스 오벨리스크',landmarkShort:'오벨리스크',landmarkGlyph:'♦'},'sao-paulo':{landmarkName:'상파울루 대성당',landmarkShort:'상파울루성당',landmarkGlyph:'♝'},
+  sydney:{landmarkName:'시드니 오페라하우스',landmarkShort:'오페라',landmarkGlyph:'◒'},busan:{landmarkName:'광안대교',landmarkShort:'광안대교',landmarkGlyph:'⌒'},hawaii:{landmarkName:'알로하 타워',landmarkShort:'알로하',landmarkGlyph:'♜'},
+  lisbon:{landmarkName:'벨렝탑',landmarkShort:'벨렝탑',landmarkGlyph:'♜'},madrid:{landmarkName:'시벨레스 궁전',landmarkShort:'시벨레스',landmarkGlyph:'♛'},tokyo:{landmarkName:'도쿄 스카이트리',landmarkShort:'스카이트리',landmarkGlyph:'♢'},
+  paris:{landmarkName:'에펠탑',landmarkShort:'에펠탑',landmarkGlyph:'♢'},rome:{landmarkName:'콜로세움',landmarkShort:'콜로세움',landmarkGlyph:'◉'},london:{landmarkName:'엘리자베스 타워',landmarkShort:'빅벤',landmarkGlyph:'♜'},
+  'new-york':{landmarkName:'엠파이어 스테이트 빌딩',landmarkShort:'ESB',landmarkGlyph:'▥'},'seoul-olympic':{landmarkName:'서울 올림픽주경기장',landmarkShort:'올림픽',landmarkGlyph:'◉'},
+};
+
 const city=(id,name,englishName,region,purchasePrice,{buildable=true,fixedRent=null}={})=>({
   id,
   name,
@@ -10,6 +22,7 @@ const city=(id,name,englishName,region,purchasePrice,{buildable=true,fixedRent=n
   baseRent:fixedRent??roundTenThousand(purchasePrice*.11),
   buildingCosts:buildable?[.55,.9,1.15,1.15].map(rate=>roundTenThousand(purchasePrice*rate)):[],
   rentByLevel:buildable?[.11,.32,1.35,2.45,3.55].map(rate=>roundTenThousand(purchasePrice*rate)):[fixedRent],
+  ...LANDMARKS[id],
 });
 
 export const PROPERTIES = [
