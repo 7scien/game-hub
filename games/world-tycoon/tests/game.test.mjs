@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishBuildMode,finishMovement,getBuildableOwnedCities,getGlobalEffectRounds,getLoanBalance,getNetWorth,getUnownedPurchasableAssets,isGlobalEffectActive,openBuildMode,openTrade,passAuction,
-  proposeTrade,repayBankLoan,resolveTile,resolveTrade,rollDice,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
+  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,castEarlyAuctionVote,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishBuildMode,finishMovement,getBuildableOwnedCities,getGlobalEffectRounds,getLoanBalance,getNetWorth,getUnownedPurchasableAssets,isGlobalEffectActive,openBuildMode,openTrade,passAuction,
+  proposeEarlyAuction,proposeTrade,repayBankLoan,resolveTile,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
 } from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
 import {PHASES,RULES,calculateRent,formatMoney} from '../js/rules.js';
@@ -100,6 +100,13 @@ test('전반전에는 건설 없이 대지 통행료만 내고 미분양 5개부
   assert.equal(state.gameStage,'SECOND_HALF');assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);assert.equal(getUnownedPurchasableAssets(state).length,0);
 });
 
+test('전반전에는 모든 플레이어가 동의하면 남은 자산 전체를 조기 경매한다',()=>{
+  const state=createGame(3,{mode:'full',rng:()=>.2});const remaining=getUnownedPurchasableAssets(state).length;const proposer=state.players[0];
+  proposeEarlyAuction(state);assert.equal(state.phase,PHASES.EARLY_AUCTION_VOTE);assert.deepEqual(state.earlyAuctionVote.approvedIds,[proposer.id]);assert.equal(state.earlyAuctionVote.remainingTileCount,remaining);
+  const firstApproval=castEarlyAuctionVote(state,true);assert.equal(firstApproval.finished,false);const rejected=castEarlyAuctionVote(state,false);assert.equal(rejected.approved,false);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);assert.equal(state.gameStage,'FIRST_HALF');
+  proposeEarlyAuction(state);castEarlyAuctionVote(state,true);const transition=castEarlyAuctionVote(state,true);assert.equal(transition.type,'auction-start');assert.equal(transition.early,true);assert.equal(transition.tiles.length,remaining);assert.equal(state.gameStage,'AUCTION');assert.equal(state.phase,PHASES.AUCTION);
+});
+
 test('후반전에는 자기 땅을 밟지 않아도 주사위 전에 자유 건설한다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});state.gameStage='SECOND_HALF';const player=state.players[0];const paris=state.board.find(tile=>tile.id==='paris');paris.ownerId=player.id;player.ownedProperties.push(paris.id);player.position=0;const before=player.money;
   assert.equal(getBuildableOwnedCities(state).some(tile=>tile.id==='paris'),true);openBuildMode(state);buildOwnedCity(state,'paris');assert.equal(paris.buildingLevel,1);assert.equal(player.position,0);assert.equal(player.money,before-paris.buildingCosts[0]);finishBuildMode(state);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
@@ -156,10 +163,10 @@ test('우주여행 초대권도 콜럼비아호 이용료를 정산한다',()=>{
   traveler.position=2;state.eventDeck=['space-invitation'];state.eventCursor=0;const before=owner.money;resolveTile(state);assert.equal(owner.money,before+columbia.baseRent);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
 });
 
-test('황금열쇠에 일제의 수탈과 911 테러를 포함한 34장 구성을 사용한다',()=>{
-  assert.equal(EVENT_CARDS.length,34);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
-  assert.equal(counts.move.length,12);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,9);
-  assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='전액대매출').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='월드컵 개최').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='일제의 수탈').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='911 테러').length,1);
+test('황금열쇠에 산업화와 제네바 협정을 포함한 36장 구성을 사용한다',()=>{
+  assert.equal(EVENT_CARDS.length,36);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
+  assert.equal(counts.move.length,12);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,11);
+  assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='전액대매출').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='월드컵 개최').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='일제의 수탈').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='911 테러').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='산업화').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='제네바 협정').length,1);
 });
 
 test('월드컵은 선택한 내 도시의 통행료를 다음 자신의 세 차례 동안 2배로 만든다',()=>{
@@ -178,14 +185,30 @@ test('일제의 수탈은 3라운드 동안 한국 땅 통행료를 도쿄 소�
   state.phase=PHASES.END_TURN;endTurn(state);for(let turn=0;turn<9;turn+=1){state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)}assert.equal(isGlobalEffectActive(state,'imperialExploitation'),false);
 });
 
-test('911 테러는 즉시 선택한 도시 건물을 파괴하고 2라운드 동안 특수 이동을 봉쇄한다',()=>{
-  const state=createGame(2,{mode:'full',rng:()=>.2});const attacker=state.players[0];const owner=state.players[1];const newYork=state.board.find(tile=>tile.id==='new-york');const concorde=state.board.find(tile=>tile.id==='concorde');
-  newYork.ownerId=owner.id;newYork.buildingLevel=4;owner.ownedProperties.push(newYork.id);concorde.ownerId=owner.id;owner.specialAssets.push(concorde.id);attacker.position=2;state.eventDeck=['nine-eleven'];state.eventCursor=0;resolveTile(state);
-  assert.equal(state.phase,PHASES.TERROR_TARGET_DECISION);assert.equal(getGlobalEffectRounds(state,'americanRage'),2);const result=chooseTerrorTarget(state,'new-york');assert.equal(result.previousLevel,4);assert.equal(result.buildingCount,2);assert.equal(newYork.buildingLevel,0);assert.equal(state.phase,PHASES.END_TURN);
+test('911 테러는 서로 다른 도시 두 곳의 건물을 파괴하고 2라운드 동안 특수 이동을 봉쇄한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const attacker=state.players[0];const owner=state.players[1];const newYork=state.board.find(tile=>tile.id==='new-york');const paris=state.board.find(tile=>tile.id==='paris');const concorde=state.board.find(tile=>tile.id==='concorde');
+  newYork.ownerId=owner.id;newYork.buildingLevel=5;newYork.industrialized=true;paris.ownerId=owner.id;paris.buildingLevel=3;owner.ownedProperties.push(newYork.id,paris.id);concorde.ownerId=owner.id;owner.specialAssets.push(concorde.id);attacker.position=2;state.eventDeck=['nine-eleven'];state.eventCursor=0;resolveTile(state);
+  assert.equal(state.phase,PHASES.TERROR_TARGET_DECISION);assert.equal(getGlobalEffectRounds(state,'americanRage'),2);const first=chooseTerrorTarget(state,'new-york');assert.equal(first.previousLevel,5);assert.equal(first.buildingCount,3);assert.equal(first.completed,false);assert.equal(newYork.buildingLevel,0);assert.equal(newYork.industrialized,true);assert.equal(state.phase,PHASES.TERROR_TARGET_DECISION);
+  const second=chooseTerrorTarget(state,'paris');assert.equal(second.completed,true);assert.equal(paris.buildingLevel,0);assert.equal(state.phase,PHASES.END_TURN);
   const attackerBefore=attacker.money;const ownerBefore=owner.money;attacker.position=concorde.index;resolveTile(state);assert.equal(attacker.money,attackerBefore);assert.equal(owner.money,ownerBefore);assert.equal(state.phase,PHASES.END_TURN);
   attacker.position=30;resolveTile(state);assert.equal(attacker.position,30);assert.equal(state.phase,PHASES.END_TURN);
   attacker.position=2;state.eventDeck=['tour-busan'];state.eventCursor=0;resolveTile(state);assert.equal(attacker.position,2);assert.equal(state.phase,PHASES.END_TURN);assert.match(state.notice.message,/이동 효과는 발동하지 않습니다/);
   endTurn(state);for(let turn=0;turn<4;turn+=1){state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)}assert.equal(isGlobalEffectActive(state,'americanRage'),false);
+});
+
+test('산업화는 무료 완성 건물 1동과 영구 3동 한도를 주고 통행료의 20%를 은행이 회수한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const owner=state.players[0];const visitor=state.players[1];const taipei=state.board.find(tile=>tile.id==='taipei');taipei.ownerId=owner.id;owner.ownedProperties.push(taipei.id);owner.position=2;state.eventDeck=['industrialization'];state.eventCursor=0;const ownerCash=owner.money;resolveTile(state);
+  assert.equal(state.phase,PHASES.INDUSTRIALIZATION_DECISION);chooseIndustrializationCity(state,'taipei');assert.equal(taipei.industrialized,true);assert.equal(taipei.buildingLevel,3);assert.equal(owner.money,ownerCash);
+  state.gameStage='SECOND_HALF';state.currentPlayerIndex=1;visitor.position=taipei.index;const rent=calculateRent(state,taipei,visitor);const visitorBefore=visitor.money;const ownerBefore=owner.money;resolveTile(state);assert.equal(visitor.money,visitorBefore-rent);assert.equal(owner.money,ownerBefore+Math.round(rent*.8));assert.match(state.feedback.message,/20% 은행 반환/);
+  state.currentPlayerIndex=0;owner.money=10000000;for(const level of [4,5]){state.phase=PHASES.BUILD_DECISION;state.pendingAction={type:'build',tileIndex:taipei.index};buildCurrentTile(state);assert.equal(taipei.buildingLevel,level)}assert.equal(getBuildableOwnedCities(state).includes(taipei),false);
+});
+
+test('제네바 협정은 1라운드 동안 무인도 출입을 막고 갇힌 플레이어를 풀어준다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const drawer=state.players[0];const trapped=state.players[1];trapped.position=10;trapped.skipTurns=1;trapped.islandFailedRolls=2;drawer.position=2;state.eventDeck=['geneva-convention'];state.eventCursor=0;resolveTile(state);
+  assert.equal(isGlobalEffectActive(state,'genevaConvention'),true);assert.equal(getGlobalEffectRounds(state,'genevaConvention'),1);assert.equal(trapped.skipTurns,0);assert.equal(trapped.islandFailedRolls,0);
+  state.phase=PHASES.WAITING_FOR_ROLL;state.consecutiveDoubles=2;rollDice(state,rngFor(0,0));const protectedRoll=completeRoll(state);assert.equal(protectedRoll.islandPrevented,true);assert.equal(drawer.position,2);assert.equal(state.phase,PHASES.MOVING);state.pendingMovement=null;
+  drawer.position=10;resolveTile(state);assert.equal(drawer.skipTurns,0);assert.equal(state.phase,PHASES.END_TURN);drawer.position=2;state.eventDeck=['go-island'];state.eventCursor=0;resolveTile(state);assert.equal(drawer.position,2);assert.match(state.notice.message,/출입이 금지/);
+  for(let turn=0;turn<3;turn+=1){state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)}assert.equal(isGlobalEffectActive(state,'genevaConvention'),false);
 });
 
 test('항공여행은 콩코드 이용료를 낸 뒤 타이페이로 이동한다',()=>{
@@ -228,7 +251,7 @@ test('반액·전액대매출은 현재 투자 가치가 가장 높은 부동산
   for(const tile of [busan,rome]){tile.ownerId=player.id;player.ownedProperties.push(tile.id)}const before=player.money;half.players[0].position=2;half.eventDeck=['half-price-sale-1'];half.eventCursor=0;resolveTile(half);
   assert.equal(busan.ownerId,null);assert.equal(rome.ownerId,player.id);assert.equal(player.money,before+busan.purchasePrice*.5);
   const full=createGame(2,{mode:'full',rng:()=>.2});const fullPlayer=full.players[0];const fullBusan=full.board.find(tile=>tile.id==='busan');const fullRome=full.board.find(tile=>tile.id==='rome');
-  fullBusan.ownerId=fullPlayer.id;fullRome.ownerId=fullPlayer.id;fullRome.buildingLevel=4;fullPlayer.ownedProperties.push(fullBusan.id,fullRome.id);const currentValue=fullRome.purchasePrice+fullRome.buildingCosts.reduce((sum,cost)=>sum+cost,0);const fullBefore=fullPlayer.money;fullPlayer.position=2;full.eventDeck=['full-price-sale'];full.eventCursor=0;resolveTile(full);
+  fullBusan.ownerId=fullPlayer.id;fullRome.ownerId=fullPlayer.id;fullRome.buildingLevel=4;fullPlayer.ownedProperties.push(fullBusan.id,fullRome.id);const currentValue=fullRome.purchasePrice+fullRome.buildingCosts.slice(0,4).reduce((sum,cost)=>sum+cost,0);const fullBefore=fullPlayer.money;fullPlayer.position=2;full.eventDeck=['full-price-sale'];full.eventCursor=0;resolveTile(full);
   assert.equal(fullRome.ownerId,null);assert.equal(fullBusan.ownerId,fullPlayer.id);assert.equal(fullPlayer.money,fullBefore+currentValue);
 });
 
@@ -243,6 +266,11 @@ test('건물 없는 자산과 현금을 플레이어끼리 거래한다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const tile=state.board[1];tile.ownerId=state.players[0].id;state.players[0].ownedProperties.push(tile.id);
   openTrade(state);proposeTrade(state,{partnerId:'player-2',offerCash:100000,requestCash:50000,offerAssetId:'taipei',requestAssetId:''});resolveTrade(state,true);
   assert.equal(tile.ownerId,'player-2');assert.equal(state.players[0].money,2880000);assert.equal(state.players[1].money,2980000);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
+});
+
+test('빚을 갚기 위한 자산 정리에서 땅은 제값에, 건물은 반값에 매각한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];const taipei=state.board.find(tile=>tile.id==='taipei');const athens=state.board.find(tile=>tile.id==='athens');taipei.ownerId=player.id;athens.ownerId=player.id;athens.buildingLevel=1;player.ownedProperties.push(taipei.id,athens.id);player.money=0;player.position=38;resolveTile(state);assert.equal(state.phase,PHASES.ASSET_MANAGEMENT);
+  const buildingRefund=sellBuilding(state,'athens');assert.equal(buildingRefund,athens.buildingCosts[0]*.5);const landRefund=sellAsset(state,'taipei');assert.equal(landRefund,taipei.purchasePrice);assert.equal(taipei.ownerId,null);
 });
 
 test('지불 능력이 없으면 파산하고 마지막 플레이어가 승리한다',()=>{
@@ -265,8 +293,8 @@ test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
 
 test('게임 상태는 서로 독립적인 두 저장 슬롯에 저장하고 불러올 수 있다',()=>{
   const values=new Map();const storage={setItem:(key,value)=>values.set(key,value),getItem:key=>values.get(key)??null,removeItem:key=>values.delete(key)};
-  const state=createGame(4,{mode:'45',rng:()=>.2,saveSlot:1});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup','imperial-exploitation','nine-eleven'].includes(id));delete state.players[0].islandFailedRolls;delete state.globalEffects;assert.equal(saveGame(state,storage),true);
-  const second=createGame(2,{mode:'full',rng:()=>.3,saveSlot:2});second.players[0].name='두 번째 게임';assert.equal(saveGame(second,storage),true);const [loaded,loadedSecond]=loadGames(storage);
-  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,5);assert.equal(loaded.saveSlot,1);assert.equal(loaded.players.length,4);assert.equal(loaded.players[0].islandFailedRolls,0);assert.equal(loaded.timer.remainingSeconds,2700);assert.equal(loadGame(storage,2).players[0].name,'두 번째 게임');assert.equal(loadedSecond.saveSlot,2);
-  assert.equal(loaded.board[1].buildingCosts.length,4);assert.ok(loaded.eventDeck.includes('full-price-sale'));assert.ok(loaded.eventDeck.includes('world-cup'));assert.ok(loaded.eventDeck.includes('imperial-exploitation'));assert.ok(loaded.eventDeck.includes('nine-eleven'));assert.deepEqual(loaded.globalEffects,{imperialExploitation:null,americanRage:null});
+  const state=createGame(4,{mode:'45',rng:()=>.2,saveSlot:1});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.board[1].buildingLevel=1;state.phase=PHASES.TERROR_TARGET_DECISION;state.pendingAction={type:'terror-attack'};state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup','imperial-exploitation','nine-eleven','industrialization','geneva-convention'].includes(id));delete state.board[1].industrialized;delete state.players[0].islandFailedRolls;delete state.globalEffects;assert.equal(saveGame(state,storage),true);
+  const second=createGame(2,{mode:'full',rng:()=>.3,saveSlot:2});second.players[0].name='두 번째 게임';second.board[1].industrialized=true;second.board[1].buildingLevel=5;assert.equal(saveGame(second,storage),true);const [loaded,loadedSecond]=loadGames(storage);
+  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,5);assert.equal(loaded.saveSlot,1);assert.equal(loaded.players.length,4);assert.equal(loaded.players[0].islandFailedRolls,0);assert.equal(loaded.pendingAction.remainingTargets,1);assert.deepEqual(loaded.pendingAction.selectedTileIds,[]);assert.equal(loaded.timer.remainingSeconds,2700);assert.equal(loadGame(storage,2).players[0].name,'두 번째 게임');assert.equal(loadedSecond.saveSlot,2);assert.equal(loadedSecond.board[1].industrialized,true);assert.equal(loadedSecond.board[1].buildingLevel,5);
+  assert.equal(loaded.board[1].buildingCosts.length,5);assert.equal(loaded.board[1].industrialized,false);assert.ok(loaded.eventDeck.includes('full-price-sale'));assert.ok(loaded.eventDeck.includes('world-cup'));assert.ok(loaded.eventDeck.includes('imperial-exploitation'));assert.ok(loaded.eventDeck.includes('nine-eleven'));assert.ok(loaded.eventDeck.includes('industrialization'));assert.ok(loaded.eventDeck.includes('geneva-convention'));assert.deepEqual(loaded.globalEffects,{imperialExploitation:null,americanRage:null,genevaConvention:null});
 });

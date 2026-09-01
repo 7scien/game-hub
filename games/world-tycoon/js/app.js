@@ -1,6 +1,6 @@
 import {
-  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
-  endTurn,finishBuildMode,finishMovement,openBuildMode,openTrade,passAuction,placeAuctionBid,proposeTrade,repayBankLoan,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
+  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,cancelTrade,castEarlyAuctionVote,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
+  endTurn,finishBuildMode,finishMovement,openBuildMode,openTrade,passAuction,placeAuctionBid,proposeEarlyAuction,proposeTrade,repayBankLoan,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
 } from './game.js';
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
@@ -29,7 +29,7 @@ async function handleRoll(){
   if(actionLocked)return;actionLocked=true;
   try{
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
-    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));await showDiceResult([...state.dice],state.rollTotal);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandAutoReleased)toast('세 번째 차례! 무인도에서 자동 탈출합니다.');else if(rollResult?.islandEscaped)toast('더블! 무인도를 탈출합니다.');
+    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));await showDiceResult([...state.dice],state.rollTotal);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandAutoReleased)toast('세 번째 차례! 무인도에서 자동 탈출합니다.');else if(rollResult?.islandEscaped)toast('더블! 무인도를 탈출합니다.');
     while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await new Promise(resolve=>setTimeout(resolve,55))}
     if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)commit(()=>finishMovement(state));
   }finally{actionLocked=false}
@@ -42,7 +42,7 @@ function handleEndTurn(){
 
 async function handleTerrorTarget(tileId){
   if(actionLocked)return;actionLocked=true;
-  try{const result=commit(()=>chooseTerrorTarget(state,tileId));if(result){await animateBuildingDestruction(result);toast(`${result.tileName}의 건물이 모두 파괴되었습니다.`)}}finally{actionLocked=false}
+  try{const result=commit(()=>chooseTerrorTarget(state,tileId));if(result){await animateBuildingDestruction(result);toast(result.completed?`${result.tileName}까지 폭격해 911 카드 효과가 끝났습니다.`:`${result.tileName}의 건물이 파괴되었습니다. ${result.remainingTargets}곳 더 선택하세요.`)}}finally{actionLocked=false}
 }
 
 async function handleBuyTile(){
@@ -53,6 +53,11 @@ async function handleBuyTile(){
 async function handleAuctionResult(action){
   if(actionLocked)return;actionLocked=true;
   try{const result=commit(action);if(result?.type==='auction-bid')await animateAuctionBid(result);if(result?.type==='auction-award'){await animateAuctionAward(result);if(result.finished)await animateSecondHalfStart()}}finally{actionLocked=false}
+}
+
+async function handleEarlyAuctionVote(approved){
+  if(actionLocked)return;actionLocked=true;
+  try{const result=commit(()=>castEarlyAuctionVote(state,approved));if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
 }
 
 document.addEventListener('submit',event=>{
@@ -84,11 +89,14 @@ document.addEventListener('click',event=>{
   if(action==='open-build-mode'){commit(()=>openBuildMode(state));return}
   if(action==='build-owned-city'){commit(()=>buildOwnedCity(state,target.dataset.tile));return}
   if(action==='finish-build-mode'){commit(()=>finishBuildMode(state));return}
+  if(action==='propose-early-auction'){commit(()=>proposeEarlyAuction(state));return}
+  if(action==='cast-early-auction-vote'){handleEarlyAuctionVote(target.dataset.approved==='true');return}
   if(action==='pass-auction'){handleAuctionResult(()=>passAuction(state));return}
   if(action==='repay-bank-loan'){commit(()=>repayBankLoan(state));return}
   if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
   if(action==='choose-world-cup-city'){commit(()=>chooseWorldCupCity(state,target.dataset.tile));return}
   if(action==='choose-terror-target'){handleTerrorTarget(target.dataset.tile);return}
+  if(action==='choose-industrialization-city'){commit(()=>chooseIndustrializationCity(state,target.dataset.tile));return}
   if(action==='decline-decision'){commit(()=>declineDecision(state));return}
   if(action==='end-turn'){handleEndTurn();return}
   if(action==='dismiss-notice'){commit(()=>dismissNotice(state));return}
@@ -109,6 +117,7 @@ document.addEventListener('keydown',event=>{
   if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="roll-dice"]')){event.preventDefault();handleRoll()}
   if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="choose-space-destination"]')){event.preventDefault();event.target.click()}
   if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="choose-terror-target"]')){event.preventDefault();event.target.click()}
+  if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-action="choose-industrialization-city"]')){event.preventDefault();event.target.click()}
 });
 
 setInterval(()=>{

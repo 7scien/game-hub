@@ -18,7 +18,7 @@ const removeSpecialCard=(player,cardId)=>{const index=player.specialCards.indexO
 const collectWelfareFund=(state,player)=>{const amount=state.welfareFund||0;player.money+=amount;state.welfareFund=0;return amount};
 const KOREAN_TILE_IDS=new Set(['jeju','busan','seoul-olympic']);
 const MOVEMENT_EFFECT_TYPES=new Set(['moveBy','moveTo','travelRoute','worldTour']);
-const EFFECT_NAMES={imperialExploitation:'일제의 수탈',americanRage:'미국의 분노'};
+const EFFECT_NAMES={imperialExploitation:'일제의 수탈',americanRage:'미국의 분노',genevaConvention:'제네바 협정'};
 const PURCHASABLE_TYPES=new Set(['city','facility']);
 const BANK_PHASES=new Set([PHASES.WAITING_FOR_ROLL,PHASES.BUY_DECISION,PHASES.BUILD_DECISION,PHASES.BUILD_ANYWHERE_DECISION,PHASES.PAYMENT_DECISION,PHASES.ASSET_MANAGEMENT,PHASES.END_TURN,PHASES.AUCTION]);
 
@@ -26,7 +26,7 @@ function activePlayerCount(state){return Math.max(1,state.players.filter(player=
 export function isGlobalEffectActive(state,key){return Boolean(state.globalEffects?.[key]?.remainingTurns>0)}
 export function getGlobalEffectRounds(state,key){const effect=state.globalEffects?.[key];return effect?.remainingTurns>0?Math.ceil(effect.remainingTurns/activePlayerCount(state)):0}
 function startGlobalEffect(state,key,rounds){
-  state.globalEffects??={imperialExploitation:null,americanRage:null};const duration=Math.max(1,Number(rounds)||1);
+  state.globalEffects??={imperialExploitation:null,americanRage:null,genevaConvention:null};const duration=Math.max(1,Number(rounds)||1);
   state.globalEffects[key]={remainingTurns:activePlayerCount(state)*duration,durationRounds:duration,activatedTurn:state.turnNumber};return state.globalEffects[key];
 }
 
@@ -39,9 +39,9 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
   }));
   const minutes=mode==='full'?null:Number(mode);
   const state={
-    version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),saveSlot:Math.min(RULES.SAVE_SLOT_COUNT,Math.max(1,Number(saveSlot)||1)),gameStage:'FIRST_HALF',auction:null,players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
+    version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),saveSlot:Math.min(RULES.SAVE_SLOT_COUNT,Math.max(1,Number(saveSlot)||1)),gameStage:'FIRST_HALF',auction:null,earlyAuctionVote:null,players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
     phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,islandEscapeThisTurn:false,pendingMovement:null,pendingAction:null,pendingDebt:null,
-    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null},trade:null,notice:null,feedback:null,log:[],sequence:1,
+    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null,genevaConvention:null},trade:null,notice:null,feedback:null,log:[],sequence:1,
     timer:{remainingSeconds:minutes===null?null:minutes*60},winnerIds:[],finishedReason:null,
   };
   addLog(state,`${players[0].name}의 전반전 토지 여행이 시작되었습니다.`);
@@ -50,7 +50,9 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
 
 export function getCurrentPlayer(state){return currentPlayer(state)}
 export function getAuctionBidder(state){return state.players.find(player=>player.id===state.auction?.turnPlayerId)??currentPlayer(state)}
+export function getEarlyAuctionVoter(state){return state.players.find(player=>player.id===state.earlyAuctionVote?.currentVoterId)??currentPlayer(state)}
 export function getUnownedPurchasableAssets(state){return state.board.filter(tile=>PURCHASABLE_TYPES.has(tile.type)&&!tile.ownerId)}
+export function maxBuildingLevel(tile){return tile?.industrialized?RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL:RULES.MAX_BUILDING_LEVEL}
 export function getLoanBalance(player){return (player?.bankLoan?.principal||0)+(player?.bankLoan?.interest||0)}
 function bankingPlayer(state){return state.phase===PHASES.AUCTION?getAuctionBidder(state):currentPlayer(state)}
 export function canUseBank(state){return state.status==='playing'&&BANK_PHASES.has(state.phase)&&!bankingPlayer(state).bankrupt}
@@ -120,6 +122,7 @@ export function completeRoll(state){
   }
   if(state.rolledDouble)state.consecutiveDoubles+=1;else state.consecutiveDoubles=0;
   if(state.consecutiveDoubles>=RULES.MAX_CONSECUTIVE_DOUBLES){
+    if(isGlobalEffectActive(state,'genevaConvention')){state.consecutiveDoubles=0;state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};notice(state,'제네바 협정','무인도 출입 금지 기간이라 연속 더블 제재 없이 이동합니다.','success');addLog(state,`${player.name}의 무인도 이동이 제네바 협정으로 취소되었습니다.`);return {islandPrevented:true}}
     player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=1;player.islandFailedRolls=0;
     notice(state,'무인도',`${RULES.MAX_CONSECUTIVE_DOUBLES}번 연속 더블로 무인도에 들어왔습니다.`,'warning');
     addLog(state,`${player.name}이 연속 더블로 무인도로 이동했습니다.`);state.pendingMovement=null;state.phase=PHASES.END_TURN;return;
@@ -165,7 +168,7 @@ function continueAfterPayment(state,action){
 
 function completeDebtPayment(state,debt){
   const payer=currentPlayer(state);payer.money-=debt.amount;
-  if(debt.recipientId){const target=state.players.find(player=>player.id===debt.recipientId);if(target&&!target.bankrupt)target.money+=debt.amount}
+  if(debt.recipientId){const target=state.players.find(player=>player.id===debt.recipientId);if(target&&!target.bankrupt)target.money+=debt.recipientAmount??debt.amount}
   if(debt.recipientIds)debt.recipientIds.forEach(id=>{const target=state.players.find(player=>player.id===id);if(target&&!target.bankrupt)target.money+=debt.shareAmount});
   if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+debt.amount;
   addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
@@ -173,8 +176,8 @@ function completeDebtPayment(state,debt){
   cashFeedback(state,title,-debt.amount,debt.reason,'danger');state.pendingDebt=null;continueAfterPayment(state,debt.afterPayment);
 }
 
-function prepareDebt(state,{amount,recipientId=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null}){
-  const payer=currentPlayer(state);const debt={amount:Math.round(amount),recipientId,recipientIds,shareAmount,reason,fundDeposit,afterPayment};
+function prepareDebt(state,{amount,recipientId=null,recipientAmount=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null}){
+  const payer=currentPlayer(state);const debt={amount:Math.round(amount),recipientId,recipientAmount:recipientId?Math.round(recipientAmount??amount):null,recipientIds,shareAmount,reason,fundDeposit,afterPayment};
   if(recipientId&&payer.specialCards.includes('toll-waiver')){state.pendingDebt=debt;state.phase=PHASES.PAYMENT_DECISION;return}
   if(payer.money>=debt.amount){completeDebtPayment(state,debt);return}
   state.pendingDebt=debt;state.phase=PHASES.ASSET_MANAGEMENT;
@@ -225,6 +228,7 @@ function applyEvent(state,card){
   }
   if(effect.type==='moveBy'){moveBy(state,effect.steps);if(player.bankrupt||state.status==='finished')return;state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return}
   if(effect.type==='moveTo'){
+    if(effect.tileId==='deserted-island'&&isGlobalEffectActive(state,'genevaConvention')){notice(state,card.title,'제네바 협정으로 무인도 출입이 금지되어 현재 위치에 머뭅니다.','success','golden-key');addLog(state,`${card.title}의 무인도 이동이 제네바 협정으로 취소되었습니다.`);finishSimpleTile(state);return}
     const index=findTileIndex(state.board,effect.tileId);moveTo(state,index,{collectPassBonus:effect.collectPassBonus!==false});
     if(player.bankrupt||state.status==='finished')return;
     if(effect.resolveTile===false){finishSimpleTile(state);return}state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return;
@@ -252,7 +256,15 @@ function applyEvent(state,card){
   if(effect.type==='terrorAttack'){
     startGlobalEffect(state,'americanRage',effect.rageRounds);const targets=state.board.filter(tile=>tile.type==='city'&&tile.buildingLevel>0);
     if(!targets.length){notice(state,card.title,`파괴할 건물이 없습니다. 미국의 분노 이동 봉쇄만 ${effect.rageRounds}라운드 동안 즉시 적용됩니다.`,'warning','golden-key');addLog(state,`미국의 분노가 ${effect.rageRounds}라운드 동안 적용됩니다.`);finishSimpleTile(state);return}
-    state.pendingAction={type:'terror-attack'};state.phase=PHASES.TERROR_TARGET_DECISION;addLog(state,`미국의 분노가 ${effect.rageRounds}라운드 동안 적용됩니다.`);return;
+    state.pendingAction={type:'terror-attack',remainingTargets:Math.min(Math.max(1,Number(effect.targetCount)||2),targets.length),selectedTileIds:[]};state.phase=PHASES.TERROR_TARGET_DECISION;addLog(state,`미국의 분노가 ${effect.rageRounds}라운드 동안 적용됩니다.`);return;
+  }
+  if(effect.type==='industrialization'){
+    const targets=state.board.filter(tile=>tile.type==='city'&&tile.ownerId===player.id&&tile.buildable!==false&&(!tile.industrialized||tile.buildingLevel<RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL));
+    if(!targets.length){notice(state,card.title,'산업화할 수 있는 보유 도시가 없습니다.','warning','golden-key');finishSimpleTile(state);return}
+    state.pendingAction={type:'industrialization'};state.phase=PHASES.INDUSTRIALIZATION_DECISION;return;
+  }
+  if(effect.type==='genevaConvention'){
+    startGlobalEffect(state,'genevaConvention',effect.rounds);state.players.forEach(item=>{if(state.board[item.position]?.id==='deserted-island'){item.skipTurns=0;item.islandFailedRolls=0}});notice(state,card.title,`즉시 발동했습니다. ${effect.rounds}라운드 동안 무인도 출입이 금지되고 갇힌 플레이어도 풀려납니다.`,'success','golden-key');addLog(state,`제네바 협정으로 무인도가 ${effect.rounds}라운드 동안 폐쇄됩니다.`);finishSimpleTile(state);return;
   }
   if(effect.type==='keepCard'){player.specialCards.push(effect.cardId);finishSimpleTile(state);return}
 }
@@ -272,7 +284,7 @@ export function resolveTile(state,depth=0){
       reason=recipientId?`일제의 수탈 · ${tile.name} 통행료 → ${tokyoOwner.name}`:`일제의 수탈 · ${tile.name} 통행료 은행 귀속`;
       addLog(state,recipientId?`${tile.name} 통행료가 도쿄 소유주 ${tokyoOwner.name}에게 귀속됩니다.`:`도쿄가 미소유 상태라 ${tile.name} 통행료를 은행이 회수합니다.`);
     }
-    const rent=state.gameStage==='FIRST_HALF'?Math.round(tile.baseRent*(tile.worldCupTurns>0?2:1)):calculateRent(state,tile,player);prepareDebt(state,{amount:rent,recipientId,reason});return;
+    const rent=state.gameStage==='FIRST_HALF'?Math.round(tile.baseRent*(tile.worldCupTurns>0?2:1)):calculateRent(state,tile,player);const recipientAmount=tile.industrialized&&recipientId?Math.round(rent*RULES.INDUSTRIALIZED_OWNER_SHARE):rent;if(tile.industrialized)reason=`산업화 · ${reason} (20% 은행 반환)`;prepareDebt(state,{amount:rent,recipientId,recipientAmount,reason});return;
   }
   if(tile.type==='facility'){
     if(!tile.ownerId){state.pendingAction={type:'buy',tileIndex:tile.index};state.phase=PHASES.BUY_DECISION;return}
@@ -282,7 +294,7 @@ export function resolveTile(state,depth=0){
   if(tile.type==='event'){applyEvent(state,drawEvent(state));return}
   if(tile.type==='tax'){prepareDebt(state,{amount:tile.amount,reason:tile.name,fundDeposit:tile.id==='social-welfare-tax'});return}
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
-  if(tile.type==='wait'){player.skipTurns=1;player.islandFailedRolls=0;notice(state,tile.name,'무인도에 들어왔습니다. 더블이나 탈출권으로 먼저 나갈 수 있고, 세 번째 차례에는 자동으로 탈출합니다.','warning');finishSimpleTile(state);return}
+  if(tile.type==='wait'){if(isGlobalEffectActive(state,'genevaConvention')){player.skipTurns=0;player.islandFailedRolls=0;notice(state,'제네바 협정','무인도 출입 금지 기간이라 머무르지 않고 지나갑니다.','success');addLog(state,`${player.name}이 제네바 협정으로 무인도에 갇히지 않았습니다.`);finishSimpleTile(state);return}player.skipTurns=1;player.islandFailedRolls=0;notice(state,tile.name,'무인도에 들어왔습니다. 더블이나 탈출권으로 먼저 나갈 수 있고, 세 번째 차례에는 자동으로 탈출합니다.','warning');finishSimpleTile(state);return}
   if(tile.id==='space-travel'){beginSpaceTravel(state);return}
   if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);if(player.bankrupt||state.status==='finished')return;notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
@@ -307,8 +319,14 @@ export function chooseWorldCupCity(state,tileId){
 export function chooseTerrorTarget(state,tileId){
   requirePhase(state,PHASES.TERROR_TARGET_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
   if(state.pendingAction?.type!=='terror-attack'||!tile||tile.type!=='city'||tile.buildingLevel<1)throw new Error('건물이 있는 도시를 선택하세요.');
-  const result={tileIndex:tile.index,tileId:tile.id,tileName:tile.name,landmarkName:tile.landmarkName||'랜드마크',landmarkGlyph:tile.landmarkGlyph||'▥',previousLevel:tile.buildingLevel,buildingCount:tile.buildingLevel===RULES.MAX_BUILDING_LEVEL?2:1};
-  tile.buildingLevel=0;state.pendingAction=null;state.phase=PHASES.END_TURN;state.notice=null;addLog(state,`${player.name}이 ${tile.name}을 지정해 ${result.landmarkName} 건물을 모두 파괴했습니다.`);return result;
+  const result={tileIndex:tile.index,tileId:tile.id,tileName:tile.name,landmarkName:tile.landmarkName||'랜드마크',landmarkGlyph:tile.landmarkGlyph||'▥',previousLevel:tile.buildingLevel,buildingCount:Math.max(1,tile.buildingLevel-2)};
+  tile.buildingLevel=0;state.pendingAction.selectedTileIds.push(tile.id);state.pendingAction.remainingTargets-=1;const completed=state.pendingAction.remainingTargets<=0||!state.board.some(item=>item.type==='city'&&item.buildingLevel>0);result.completed=completed;result.remainingTargets=completed?0:state.pendingAction.remainingTargets;state.notice=null;addLog(state,`${player.name}이 ${tile.name}을 지정해 ${result.landmarkName} 건물을 모두 파괴했습니다.`);if(completed){state.pendingAction=null;state.phase=PHASES.END_TURN}return result;
+}
+
+export function chooseIndustrializationCity(state,tileId){
+  requirePhase(state,PHASES.INDUSTRIALIZATION_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
+  if(state.pendingAction?.type!=='industrialization'||!tile||tile.type!=='city'||tile.ownerId!==player.id||tile.buildable===false||tile.buildingLevel>=RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL)throw new Error('산업화할 수 있는 내 도시를 선택하세요.');
+  const previousLevel=tile.buildingLevel;tile.industrialized=true;tile.buildingLevel=previousLevel<3?3:Math.min(RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL,previousLevel+1);state.pendingAction=null;state.phase=PHASES.END_TURN;notice(state,'산업화 완료',`${tile.name}에 은행이 ${tile.landmarkName||'대표 랜드마크'} 1동을 무료로 세웠습니다. 이 도시는 영구적으로 3동까지 개발할 수 있고 통행료 수익의 20%를 은행에 반환합니다.`,'landmark');addLog(state,`${player.name}의 ${tile.name}이 산업화되어 건물 ${tile.buildingLevel-2}동을 보유합니다.`);return {tile,previousLevel,newLevel:tile.buildingLevel};
 }
 
 function auctionMinimum(tile){return Math.max(RULES.AUCTION_MIN_INCREMENT,Math.ceil(tile.purchasePrice*.5/RULES.AUCTION_MIN_INCREMENT)*RULES.AUCTION_MIN_INCREMENT)}
@@ -321,7 +339,16 @@ function prepareNextAuction(state){
   const tileId=auction.queue.shift();const tile=state.board.find(item=>item.id===tileId);const bidders=auctionPlayerIds(state);const starter=bidders[auction.completed%bidders.length];auction.currentTileId=tileId;auction.minimumBid=auctionMinimum(tile);auction.currentBid=0;auction.highestBidderId=null;auction.activeBidderIds=bidders;auction.turnPlayerId=starter;state.phase=PHASES.AUCTION;state.pendingAction={type:'auction',tileIndex:tile.index};
 }
 function beginLandAuction(state){
-  const remaining=getUnownedPurchasableAssets(state);const tiles=remaining.map(tile=>({id:tile.id,index:tile.index,name:tile.name,icon:tile.icon}));state.gameStage='AUCTION';state.auction={queue:remaining.map(tile=>tile.id),completed:0,resumePlayerIndex:nextActiveIndex(state,state.currentPlayerIndex),currentTileId:null,minimumBid:0,currentBid:0,highestBidderId:null,activeBidderIds:[],turnPlayerId:null};prepareNextAuction(state);notice(state,'전반전 종료',`미분양 자산 ${remaining.length}개를 차례대로 경매합니다. 모든 경매가 끝나면 후반전이 시작됩니다.`,'event');addLog(state,`남은 자산 ${remaining.length}개의 경매가 시작되었습니다.`);return {type:'auction-start',tiles};
+  const remaining=getUnownedPurchasableAssets(state);const tiles=remaining.map(tile=>({id:tile.id,index:tile.index,name:tile.name,icon:tile.icon}));state.gameStage='AUCTION';state.earlyAuctionVote=null;state.auction={queue:remaining.map(tile=>tile.id),completed:0,resumePlayerIndex:nextActiveIndex(state,state.currentPlayerIndex),currentTileId:null,minimumBid:0,currentBid:0,highestBidderId:null,activeBidderIds:[],turnPlayerId:null};prepareNextAuction(state);notice(state,'전반전 종료',`미분양 자산 ${remaining.length}개를 차례대로 경매합니다. 모든 경매가 끝나면 후반전이 시작됩니다.`,'event');addLog(state,`남은 자산 ${remaining.length}개의 경매가 시작되었습니다.`);return {type:'auction-start',tiles};
+}
+export function proposeEarlyAuction(state){
+  requirePhase(state,PHASES.WAITING_FOR_ROLL);if(state.gameStage!=='FIRST_HALF')throw new Error('조기 경매 투표는 전반전에만 제안할 수 있습니다.');const remaining=getUnownedPurchasableAssets(state);if(!remaining.length)throw new Error('경매할 미분양 자산이 없습니다.');const voters=auctionPlayerIds(state);const proposer=currentPlayer(state);state.earlyAuctionVote={proposerId:proposer.id,voterIds:voters,approvedIds:[proposer.id],currentVoterId:nextAuctionPlayerId(state,proposer.id,voters.filter(id=>id!==proposer.id)),remainingTileCount:remaining.length};state.pendingAction={type:'early-auction-vote'};state.phase=PHASES.EARLY_AUCTION_VOTE;addLog(state,`${proposer.name}이 남은 자산 ${remaining.length}개의 조기 경매를 제안했습니다.`);return state.earlyAuctionVote;
+}
+export function castEarlyAuctionVote(state,approved){
+  requirePhase(state,PHASES.EARLY_AUCTION_VOTE);const vote=state.earlyAuctionVote;const voter=getEarlyAuctionVoter(state);if(!vote||!vote.voterIds.includes(voter.id))throw new Error('진행 중인 조기 경매 투표가 없습니다.');
+  if(!approved){state.earlyAuctionVote=null;state.pendingAction=null;state.phase=PHASES.WAITING_FOR_ROLL;notice(state,'조기 경매 부결',`${voter.name}이 동의하지 않아 전반전을 계속합니다.`,'warning');addLog(state,`${voter.name}의 반대로 조기 경매 투표가 부결되었습니다.`);return {approved:false,finished:true}}
+  if(!vote.approvedIds.includes(voter.id))vote.approvedIds.push(voter.id);const nextId=vote.voterIds.find(id=>!vote.approvedIds.includes(id));if(nextId){vote.currentVoterId=nextId;addLog(state,`${voter.name}이 조기 경매에 동의했습니다.`);return {approved:true,finished:false}}
+  addLog(state,'모든 플레이어가 조기 경매에 동의했습니다.');const result=beginLandAuction(state);result.early=true;return result;
 }
 function finishAuctionAsset(state,winnerId,amount){
   const auction=state.auction;const tile=state.board.find(item=>item.id===auction.currentTileId);const winner=state.players.find(player=>player.id===winnerId);if(!winner||winner.money<amount)throw new Error('낙찰 금액을 지불할 수 없습니다.');winner.money-=amount;tile.ownerId=winner.id;(tile.type==='city'?winner.ownedProperties:winner.specialAssets).push(tile.id);auction.completed+=1;addLog(state,`${winner.name}이 ${tile.name}을 ${formatMoney(amount)}에 낙찰받았습니다.`);const finished=auction.queue.length===0;prepareNextAuction(state);notice(state,finished?'마지막 낙찰':'낙찰 완료',`${winner.name}이 ${tile.name}을 ${formatMoney(amount)}에 낙찰받았습니다.${finished?' 후반전을 시작합니다.':''}`,'success');return {type:'auction-award',tile,winner,amount,finished};
@@ -348,11 +375,11 @@ export function buyCurrentTile(state){
 
 export function declineDecision(state){requirePhase(state,PHASES.BUY_DECISION,PHASES.BUILD_DECISION);finishSimpleTile(state)}
 
-export function getBuildableOwnedCities(state,playerId=currentPlayer(state).id){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===playerId&&tile.buildable!==false&&tile.buildingLevel<RULES.MAX_BUILDING_LEVEL)}
+export function getBuildableOwnedCities(state,playerId=currentPlayer(state).id){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===playerId&&tile.buildable!==false&&tile.buildingLevel<maxBuildingLevel(tile))}
 function developCity(state,player,tile){
-  if(state.gameStage!=='SECOND_HALF')throw new Error('건설은 경매가 끝난 후반전부터 가능합니다.');if(!tile||tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 대표 랜드마크 2동이 완성되었습니다.');
-  const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');player.money-=cost;tile.buildingLevel+=1;const landmark=tile.landmarkName||'대표 랜드마크';const buildingName=[null,`${landmark} 기초`,`${landmark} 건설 중`,`${landmark} 1동`,`${landmark} 2동`][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName} 단계를 완성했습니다.`);
-  if(tile.buildingLevel===3)notice(state,'랜드마크 완성!',`${tile.name}에 ${landmark} 1동이 완성되었습니다.`,'landmark');if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'랜드마크 2동 완성!',`${tile.name}에 ${landmark} 2동이 완성되었습니다.`,'landmark');return tile;
+  if(state.gameStage!=='SECOND_HALF')throw new Error('건설은 경매가 끝난 후반전부터 가능합니다.');if(!tile||tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');const maxLevel=maxBuildingLevel(tile);if(tile.buildingLevel>=maxLevel)throw new Error(`이미 대표 랜드마크 ${maxLevel-2}동이 완성되었습니다.`);
+  const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');player.money-=cost;tile.buildingLevel+=1;const landmark=tile.landmarkName||'대표 랜드마크';const buildingName=[null,`${landmark} 기초`,`${landmark} 건설 중`,`${landmark} 1동`,`${landmark} 2동`,`${landmark} 3동`][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName} 단계를 완성했습니다.`);
+  if(tile.buildingLevel===3)notice(state,'랜드마크 완성!',`${tile.name}에 ${landmark} 1동이 완성되었습니다.`,'landmark');if(tile.buildingLevel>=4)notice(state,`랜드마크 ${tile.buildingLevel-2}동 완성!`,`${tile.name}에 ${landmark} ${tile.buildingLevel-2}동이 완성되었습니다.`,'landmark');return tile;
 }
 
 export function buildCurrentTile(state){
@@ -431,7 +458,7 @@ function tickWorldCupBonuses(state,playerId){
 
 function tickGlobalEffects(state){
   if(!state.globalEffects)return;
-  for(const key of ['imperialExploitation','americanRage']){
+  for(const key of ['imperialExploitation','americanRage','genevaConvention']){
     const effect=state.globalEffects[key];if(!effect?.remainingTurns)continue;
     if(effect.activatedTurn===state.turnNumber){effect.activatedTurn=null;continue}
     effect.remainingTurns-=1;

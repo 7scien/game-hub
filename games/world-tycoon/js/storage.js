@@ -11,12 +11,13 @@ export function isValidSavedGame(value){
 export function loadGame(storage=globalThis.localStorage,slot=1){
   try{
     const normalizedSlot=Math.min(RULES.SAVE_SLOT_COUNT,Math.max(1,Number(slot)||1));const raw=storage.getItem(slotKey(normalizedSlot))??(normalizedSlot===1?storage.getItem(RULES.LEGACY_AUTOSAVE_KEY):null);const value=JSON.parse(raw);if(!isValidSavedGame(value))return null;
-    value.version=RULES.SAVE_VERSION;value.saveSlot=normalizedSlot;value.gameStage=value.gameStage||'SECOND_HALF';value.auction=value.auction||null;
+    value.version=RULES.SAVE_VERSION;value.saveSlot=normalizedSlot;value.gameStage=value.gameStage||'SECOND_HALF';value.auction=value.auction||null;value.earlyAuctionVote=value.earlyAuctionVote||null;
     value.players.forEach((player,index)=>{player.token=PLAYER_TOKENS[index];player.lapsCompleted=Math.max(0,Number(player.lapsCompleted)||0);player.islandFailedRolls=Math.min(RULES.ISLAND_MAX_TRAPPED_TURNS-1,Math.max(0,Number(player.islandFailedRolls)||0));player.bankLoan=normalizeLoan(player.bankLoan)});
-    const freshBoard=createBoard();value.board=freshBoard.map((fresh,index)=>({...fresh,ownerId:value.board[index]?.ownerId??null,buildingLevel:Math.min(RULES.MAX_BUILDING_LEVEL,Math.max(0,Number(value.board[index]?.buildingLevel)||0)),worldCupTurns:Math.max(0,Number(value.board[index]?.worldCupTurns)||0),worldCupActivatedTurn:value.board[index]?.worldCupActivatedTurn??null}));
+    const freshBoard=createBoard();value.board=freshBoard.map((fresh,index)=>{const saved=value.board[index]||{};const industrialized=Boolean(saved.industrialized);const maxLevel=industrialized?RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL:RULES.MAX_BUILDING_LEVEL;return {...fresh,ownerId:saved.ownerId??null,buildingLevel:Math.min(maxLevel,Math.max(0,Number(saved.buildingLevel)||0)),industrialized,worldCupTurns:Math.max(0,Number(saved.worldCupTurns)||0),worldCupActivatedTurn:saved.worldCupActivatedTurn??null}});
     if(!Array.isArray(value.eventDeck)){value.eventDeck=EVENT_CARDS.map(card=>card.id);value.eventCursor=0}
     EVENT_CARDS.forEach(card=>{if(!value.eventDeck.includes(card.id))value.eventDeck.push(card.id)});
-    const savedEffects=value.globalEffects||{};value.globalEffects={imperialExploitation:normalizeEffect(savedEffects.imperialExploitation),americanRage:normalizeEffect(savedEffects.americanRage)};
+    const savedEffects=value.globalEffects||{};value.globalEffects={imperialExploitation:normalizeEffect(savedEffects.imperialExploitation),americanRage:normalizeEffect(savedEffects.americanRage),genevaConvention:normalizeEffect(savedEffects.genevaConvention)};
+    if(value.phase===PHASES.TERROR_TARGET_DECISION&&value.pendingAction?.type==='terror-attack'){const targets=value.board.filter(tile=>tile.type==='city'&&tile.buildingLevel>0).length;value.pendingAction.selectedTileIds=Array.isArray(value.pendingAction.selectedTileIds)?value.pendingAction.selectedTileIds:[];value.pendingAction.remainingTargets=Math.min(targets,Math.max(1,Number(value.pendingAction.remainingTargets)||2))}
     value.islandEscapeThisTurn=false;return value;
   }catch{return null}
 }
