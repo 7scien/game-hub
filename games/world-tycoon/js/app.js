@@ -5,16 +5,16 @@ import {
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {
-  animateAuctionAward,animateAuctionBid,animateBuildingDestruction,animateHalftimeAuction,animateSecondHalfStart,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
+  animateAuctionAward,animateAuctionBid,animateBuildingDestruction,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateSecondHalfStart,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
-let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;
+let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;
 
 function refreshSaves(){savedGames=loadGames()}
 function persist(){if(state?.status==='playing')saveGame(state);else if(state?.status==='finished')clearGame(globalThis.localStorage,state.saveSlot)}
 function render(){
-  if(state){const feedback=state.feedback;state.feedback=null;renderGame(root,state);if(feedback){showMoneyFeedback(feedback);persist()}}else renderStart(root,{savedGames,setup,playerCount,selectedSlot});
+  if(state){const feedback=state.feedback;const noticeAnimation=state.notice?.animation;const noticeId=state.notice?.id;state.feedback=null;renderGame(root,state);if(feedback){showMoneyFeedback(feedback);persist()}if(noticeAnimation?.type==='genevaConvention'&&noticeId!==lastAnimatedNoticeId){lastAnimatedNoticeId=noticeId;setTimeout(()=>animateGenevaConvention(noticeAnimation),720)}}else renderStart(root,{savedGames,setup,playerCount,selectedSlot});
 }
 function commit(action,{rerender=true}={}){
   try{const result=action();persist();if(rerender)render();return result}catch(error){toast(error.message||'행동을 완료하지 못했습니다.');return null}
@@ -48,6 +48,17 @@ async function handleTerrorTarget(tileId){
 async function handleBuyTile(){
   if(actionLocked)return;actionLocked=true;
   try{const result=commit(()=>buyCurrentTile(state));if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
+}
+
+async function handleBuildTile(tileId=null){
+  if(actionLocked)return;const tile=tileId?state.board.find(item=>item.id===tileId):state.board[state.pendingAction?.tileIndex];if(!tile)return;
+  actionLocked=true;const previousLevel=tile.buildingLevel;
+  try{const result=commit(()=>tileId?buildOwnedCity(state,tileId):buildCurrentTile(state));if(result)await animateLandmarkConstruction({tileIndex:result.index,tileName:result.name,landmarkName:result.landmarkName,landmarkGlyph:result.landmarkGlyph,previousLevel,newLevel:result.buildingLevel})}finally{actionLocked=false}
+}
+
+async function handleIndustrialization(tileId){
+  if(actionLocked)return;actionLocked=true;
+  try{const result=commit(()=>chooseIndustrializationCity(state,tileId));if(result)await animateIndustrialization(result)}finally{actionLocked=false}
 }
 
 async function handleAuctionResult(action){
@@ -85,9 +96,9 @@ document.addEventListener('click',event=>{
   if(!state)return;
   if(action==='roll-dice'){handleRoll();return}
   if(action==='buy-tile'){handleBuyTile();return}
-  if(action==='build-tile'){commit(()=>buildCurrentTile(state));return}
+  if(action==='build-tile'){handleBuildTile();return}
   if(action==='open-build-mode'){commit(()=>openBuildMode(state));return}
-  if(action==='build-owned-city'){commit(()=>buildOwnedCity(state,target.dataset.tile));return}
+  if(action==='build-owned-city'){handleBuildTile(target.dataset.tile);return}
   if(action==='finish-build-mode'){commit(()=>finishBuildMode(state));return}
   if(action==='propose-early-auction'){commit(()=>proposeEarlyAuction(state));return}
   if(action==='cast-early-auction-vote'){handleEarlyAuctionVote(target.dataset.approved==='true');return}
@@ -96,7 +107,7 @@ document.addEventListener('click',event=>{
   if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
   if(action==='choose-world-cup-city'){commit(()=>chooseWorldCupCity(state,target.dataset.tile));return}
   if(action==='choose-terror-target'){handleTerrorTarget(target.dataset.tile);return}
-  if(action==='choose-industrialization-city'){commit(()=>chooseIndustrializationCity(state,target.dataset.tile));return}
+  if(action==='choose-industrialization-city'){handleIndustrialization(target.dataset.tile);return}
   if(action==='decline-decision'){commit(()=>declineDecision(state));return}
   if(action==='end-turn'){handleEndTurn();return}
   if(action==='dismiss-notice'){commit(()=>dismissNotice(state));return}

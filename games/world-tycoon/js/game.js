@@ -6,7 +6,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const currentPlayer=state=>state.players[state.currentPlayerIndex];
 const addLog=(state,message)=>{state.log.unshift({id:`log-${state.sequence++}`,message});state.log=state.log.slice(0,10)};
 const notice=(state,title,message,tone='info',source=null)=>{state.notice={id:`notice-${state.sequence++}`,title,message,tone,source}};
-const cashFeedback=(state,title,amount,message,tone)=>{state.feedback={id:`feedback-${state.sequence++}`,title,amount,message,tone}};
+const cashFeedback=(state,title,amount,message,tone,details=null)=>{state.feedback={id:`feedback-${state.sequence++}`,title,amount,message,tone,...(details||{})}};
 const shuffled=(items,rng)=>items.map(item=>({item,sort:rng()})).sort((a,b)=>a.sort-b.sort).map(entry=>entry.item);
 
 export const SPECIAL_CARD_INFO={
@@ -168,12 +168,14 @@ function continueAfterPayment(state,action){
 
 function completeDebtPayment(state,debt){
   const payer=currentPlayer(state);payer.money-=debt.amount;
-  if(debt.recipientId){const target=state.players.find(player=>player.id===debt.recipientId);if(target&&!target.bankrupt)target.money+=debt.recipientAmount??debt.amount}
+  const ownerAmount=debt.recipientId?debt.recipientAmount??debt.amount:0;
+  if(debt.recipientId){const target=state.players.find(player=>player.id===debt.recipientId);if(target&&!target.bankrupt)target.money+=ownerAmount}
   if(debt.recipientIds)debt.recipientIds.forEach(id=>{const target=state.players.find(player=>player.id===id);if(target&&!target.bankrupt)target.money+=debt.shareAmount});
   if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+debt.amount;
   addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
   const title=debt.recipientId?'통행료 지불':debt.fundDeposit?'사회복지기금 납부':'현금 지불';
-  cashFeedback(state,title,-debt.amount,debt.reason,'danger');state.pendingDebt=null;continueAfterPayment(state,debt.afterPayment);
+  const bankAmount=Math.max(0,debt.amount-ownerAmount);const industrialSplit=debt.recipientId&&bankAmount>0?{payerId:payer.id,recipientId:debt.recipientId,ownerAmount,bankAmount}:null;
+  cashFeedback(state,title,-debt.amount,debt.reason,'danger',industrialSplit?{industrialSplit}:null);state.pendingDebt=null;continueAfterPayment(state,debt.afterPayment);
 }
 
 function prepareDebt(state,{amount,recipientId=null,recipientAmount=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null}){
@@ -264,7 +266,8 @@ function applyEvent(state,card){
     state.pendingAction={type:'industrialization'};state.phase=PHASES.INDUSTRIALIZATION_DECISION;return;
   }
   if(effect.type==='genevaConvention'){
-    startGlobalEffect(state,'genevaConvention',effect.rounds);state.players.forEach(item=>{if(state.board[item.position]?.id==='deserted-island'){item.skipTurns=0;item.islandFailedRolls=0}});notice(state,card.title,`즉시 발동했습니다. ${effect.rounds}라운드 동안 무인도 출입이 금지되고 갇힌 플레이어도 풀려납니다.`,'success','golden-key');addLog(state,`제네바 협정으로 무인도가 ${effect.rounds}라운드 동안 폐쇄됩니다.`);finishSimpleTile(state);return;
+    const releasedPlayers=state.players.filter(item=>state.board[item.position]?.id==='deserted-island'&&item.skipTurns>0).map(item=>({id:item.id,name:item.name,color:item.color,token:item.token}));
+    startGlobalEffect(state,'genevaConvention',effect.rounds);state.players.forEach(item=>{if(state.board[item.position]?.id==='deserted-island'){item.skipTurns=0;item.islandFailedRolls=0}});notice(state,card.title,`즉시 발동했습니다. ${effect.rounds}라운드 동안 무인도 출입이 금지되고 갇힌 플레이어도 풀려납니다.`,'success','golden-key');state.notice.animation={type:'genevaConvention',rounds:effect.rounds,releasedPlayers};addLog(state,`제네바 협정으로 무인도가 ${effect.rounds}라운드 동안 폐쇄됩니다.`);finishSimpleTile(state);return;
   }
   if(effect.type==='keepCard'){player.specialCards.push(effect.cardId);finishSimpleTile(state);return}
 }
@@ -384,7 +387,7 @@ function developCity(state,player,tile){
 
 export function buildCurrentTile(state){
   requirePhase(state,PHASES.BUILD_DECISION);const player=currentPlayer(state);const tile=state.board[state.pendingAction.tileIndex];
-  developCity(state,player,tile);finishSimpleTile(state);
+  developCity(state,player,tile);finishSimpleTile(state);return tile;
 }
 
 export function openBuildMode(state){requirePhase(state,PHASES.WAITING_FOR_ROLL);if(state.gameStage!=='SECOND_HALF')throw new Error('후반전부터 자유 건설을 사용할 수 있습니다.');if(!getBuildableOwnedCities(state).length)throw new Error('지금 개발할 수 있는 보유 도시가 없습니다.');state.phase=PHASES.BUILD_ANYWHERE_DECISION;state.pendingAction={type:'build-anywhere'};}
