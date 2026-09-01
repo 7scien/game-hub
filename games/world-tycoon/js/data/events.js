@@ -35,7 +35,7 @@ export const EVENT_CARDS = [
   {id:'imperial-exploitation',category:'special',title:'일제의 수탈',text:'즉시 발동합니다. 앞으로 3라운드 동안 제주도·부산·서울 통행료는 해당 땅 주인이 아니라 도쿄 소유주에게 귀속됩니다.',effect:{type:'imperialExploitation',rounds:3}},
   {id:'nine-eleven',category:'special',title:'911 테러',text:'즉시 건물이 있는 도시를 최대 두 곳 지정해 그곳의 모든 건물을 파괴합니다. 이후 2라운드 동안 미국의 분노로 모든 특수 이동과 이동수단 이용이 금지됩니다.',effect:{type:'terrorAttack',rageRounds:2,targetCount:2}},
   {id:'industrialization',category:'special',title:'산업화',text:'즉시 내 도시 하나를 선택합니다. 은행이 완성 건물 1동을 무료로 세우고, 이 도시는 영구적으로 3동까지 개발할 수 있습니다. 통행료 수익의 20%는 은행에 반환합니다.',effect:{type:'industrialization'}},
-  {id:'geneva-convention',category:'special',title:'제네바 협정',text:'즉시 1라운드 동안 무인도 출입을 금지합니다. 이미 무인도에 있는 플레이어도 풀려납니다.',effect:{type:'genevaConvention',rounds:1}},
+  {id:'geneva-convention',category:'special',title:'제네바 협정',text:'즉시 2라운드 동안 무인도 출입을 금지합니다. 이미 무인도에 있는 플레이어도 풀려납니다.',effect:{type:'genevaConvention',rounds:2}},
   {id:'toll-waiver-1',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
   {id:'toll-waiver-2',category:'special',title:'우대권',text:'보관했다가 상대방 통행료를 한 번 면제받습니다. 은행에 30만 원에 팔 수도 있습니다.',effect:{type:'keepCard',cardId:'toll-waiver'}},
 ];

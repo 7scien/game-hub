@@ -203,12 +203,12 @@ test('산업화는 무료 완성 건물 1동과 영구 3동 한도를 주고 통
   state.currentPlayerIndex=0;owner.money=10000000;for(const level of [4,5]){state.phase=PHASES.BUILD_DECISION;state.pendingAction={type:'build',tileIndex:taipei.index};buildCurrentTile(state);assert.equal(taipei.buildingLevel,level)}assert.equal(getBuildableOwnedCities(state).includes(taipei),false);
 });
 
-test('제네바 협정은 1라운드 동안 무인도 출입을 막고 갇힌 플레이어를 풀어준다',()=>{
+test('제네바 협정은 2라운드 동안 무인도 출입을 막고 갇힌 플레이어를 풀어준다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const drawer=state.players[0];const trapped=state.players[1];trapped.position=10;trapped.skipTurns=1;trapped.islandFailedRolls=2;drawer.position=2;state.eventDeck=['geneva-convention'];state.eventCursor=0;resolveTile(state);
-  assert.equal(isGlobalEffectActive(state,'genevaConvention'),true);assert.equal(getGlobalEffectRounds(state,'genevaConvention'),1);assert.equal(trapped.skipTurns,0);assert.equal(trapped.islandFailedRolls,0);
+  assert.equal(isGlobalEffectActive(state,'genevaConvention'),true);assert.equal(getGlobalEffectRounds(state,'genevaConvention'),2);assert.equal(trapped.skipTurns,0);assert.equal(trapped.islandFailedRolls,0);
   state.phase=PHASES.WAITING_FOR_ROLL;state.consecutiveDoubles=2;rollDice(state,rngFor(0,0));const protectedRoll=completeRoll(state);assert.equal(protectedRoll.islandPrevented,true);assert.equal(drawer.position,2);assert.equal(state.phase,PHASES.MOVING);state.pendingMovement=null;
   drawer.position=10;resolveTile(state);assert.equal(drawer.skipTurns,0);assert.equal(state.phase,PHASES.END_TURN);drawer.position=2;state.eventDeck=['go-island'];state.eventCursor=0;resolveTile(state);assert.equal(drawer.position,2);assert.match(state.notice.message,/출입이 금지/);
-  for(let turn=0;turn<3;turn+=1){state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)}assert.equal(isGlobalEffectActive(state,'genevaConvention'),false);
+  for(let turn=0;turn<5;turn+=1){state.phase=PHASES.END_TURN;state.rolledDouble=false;endTurn(state)}assert.equal(isGlobalEffectActive(state,'genevaConvention'),false);
 });
 
 test('항공여행은 콩코드 이용료를 낸 뒤 타이페이로 이동한다',()=>{
