@@ -5,7 +5,7 @@ import {
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {
-  animateBuildingDestruction,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
+  animateAuctionAward,animateAuctionBid,animateBuildingDestruction,animateHalftimeAuction,animateSecondHalfStart,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
@@ -45,10 +45,20 @@ async function handleTerrorTarget(tileId){
   try{const result=commit(()=>chooseTerrorTarget(state,tileId));if(result){await animateBuildingDestruction(result);toast(`${result.tileName}의 건물이 모두 파괴되었습니다.`)}}finally{actionLocked=false}
 }
 
+async function handleBuyTile(){
+  if(actionLocked)return;actionLocked=true;
+  try{const result=commit(()=>buyCurrentTile(state));if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
+}
+
+async function handleAuctionResult(action){
+  if(actionLocked)return;actionLocked=true;
+  try{const result=commit(action);if(result?.type==='auction-bid')await animateAuctionBid(result);if(result?.type==='auction-award'){await animateAuctionAward(result);if(result.finished)await animateSecondHalfStart()}}finally{actionLocked=false}
+}
+
 document.addEventListener('submit',event=>{
   if(event.target.matches('[data-setup-form]')){event.preventDefault();startGame(event.target);return}
   if(event.target.matches('[data-loan-form]')){event.preventDefault();const data=new FormData(event.target);commit(()=>takeBankLoan(state,data.get('loanAmount')));return}
-  if(event.target.matches('[data-auction-bid-form]')){event.preventDefault();const data=new FormData(event.target);commit(()=>placeAuctionBid(state,data.get('auctionBid')));return}
+  if(event.target.matches('[data-auction-bid-form]')){event.preventDefault();const data=new FormData(event.target);handleAuctionResult(()=>placeAuctionBid(state,data.get('auctionBid')));return}
   if(event.target.matches('[data-trade-form]')){
     event.preventDefault();const data=new FormData(event.target);commit(()=>proposeTrade(state,Object.fromEntries(data.entries())));
   }
@@ -69,12 +79,12 @@ document.addEventListener('click',event=>{
   if(action==='confirm-new-game'){selectedSlot=state?.saveSlot||selectedSlot;clearGame(globalThis.localStorage,selectedSlot);state=null;refreshSaves();setup=true;render();return}
   if(!state)return;
   if(action==='roll-dice'){handleRoll();return}
-  if(action==='buy-tile'){commit(()=>buyCurrentTile(state));return}
+  if(action==='buy-tile'){handleBuyTile();return}
   if(action==='build-tile'){commit(()=>buildCurrentTile(state));return}
   if(action==='open-build-mode'){commit(()=>openBuildMode(state));return}
   if(action==='build-owned-city'){commit(()=>buildOwnedCity(state,target.dataset.tile));return}
   if(action==='finish-build-mode'){commit(()=>finishBuildMode(state));return}
-  if(action==='pass-auction'){commit(()=>passAuction(state));return}
+  if(action==='pass-auction'){handleAuctionResult(()=>passAuction(state));return}
   if(action==='repay-bank-loan'){commit(()=>repayBankLoan(state));return}
   if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
   if(action==='choose-world-cup-city'){commit(()=>chooseWorldCupCity(state,target.dataset.tile));return}

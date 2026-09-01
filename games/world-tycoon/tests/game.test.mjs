@@ -92,9 +92,11 @@ test('전반전에는 건설 없이 대지 통행료만 내고 미분양 5개부
   const taipei=state.board.find(tile=>tile.id==='taipei');visitor.position=taipei.index;state.currentPlayerIndex=1;const before=visitor.money;resolveTile(state);assert.equal(visitor.money,before-taipei.baseRent);assert.equal(state.feedback.message.includes('대지 통행료'),true);
   state.currentPlayerIndex=0;state.phase=PHASES.WAITING_FOR_ROLL;assert.throws(()=>openBuildMode(state),/후반전/);
   for(const tile of state.board.filter(tile=>['city','facility'].includes(tile.type)&&!tile.ownerId).slice(0,-6)){tile.ownerId=owner.id;(tile.type==='city'?owner.ownedProperties:owner.specialAssets).push(tile.id)}
-  const target=getUnownedPurchasableAssets(state)[0];owner.position=target.index;state.phase=PHASES.BUY_DECISION;state.pendingAction={type:'buy',tileIndex:target.index};buyCurrentTile(state);
+  const target=getUnownedPurchasableAssets(state)[0];owner.position=target.index;state.phase=PHASES.BUY_DECISION;state.pendingAction={type:'buy',tileIndex:target.index};const transition=buyCurrentTile(state);
+  assert.equal(transition.type,'auction-start');assert.equal(transition.tiles.length,5);
   assert.equal(state.gameStage,'AUCTION');assert.equal(state.phase,PHASES.AUCTION);assert.equal(getUnownedPurchasableAssets(state).length,5);
-  let guard=0;while(state.gameStage==='AUCTION'&&guard<12){passAuction(state);guard+=1}
+  let guard=0;let lastAuctionResult=null;while(state.gameStage==='AUCTION'&&guard<12){lastAuctionResult=passAuction(state);guard+=1}
+  assert.equal(lastAuctionResult.type,'auction-award');assert.equal(lastAuctionResult.finished,true);
   assert.equal(state.gameStage,'SECOND_HALF');assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);assert.equal(getUnownedPurchasableAssets(state).length,0);
 });
 
