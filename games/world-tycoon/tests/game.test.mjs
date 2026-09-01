@@ -214,11 +214,13 @@ test('우대권을 보관하고 현금으로 통행료를 낼 수도 있다',()=
   assert.equal(traveler.money,before-taipei.baseRent);assert.deepEqual(traveler.specialCards,['toll-waiver']);assert.equal(state.phase,PHASES.END_TURN);
 });
 
-test('무인도에서는 매 차례 주사위를 굴리고 더블 또는 탈출권으로 직접 탈출한다',()=>{
-  const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=10;resolveTile(state);assert.equal(player.skipTurns,1);assert.equal(state.notice.title,'무인도');
-  state.notice=null;state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,.2));const failed=completeRoll(state);assert.equal(failed.islandEscaped,false);assert.equal(player.skipTurns,1);assert.equal(state.notice,null);assert.equal(state.phase,PHASES.END_TURN);
-  state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(.4,.4));const escaped=completeRoll(state);assert.equal(escaped.islandEscaped,true);assert.equal(player.skipTurns,0);assert.equal(state.phase,PHASES.MOVING);
-  const cardState=createGame(2,{mode:'full',rng:()=>.2});const cardPlayer=cardState.players[0];cardPlayer.position=10;cardPlayer.skipTurns=1;cardPlayer.specialCards=['island-escape'];useSpecialCard(cardState,'island-escape');assert.equal(cardPlayer.skipTurns,0);assert.deepEqual(cardPlayer.specialCards,[]);assert.equal(cardState.phase,PHASES.WAITING_FOR_ROLL);
+test('무인도에서는 더블이나 탈출권으로 먼저 나가고 세 번째 차례에 자동 탈출한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=10;resolveTile(state);assert.equal(player.skipTurns,1);assert.equal(player.islandFailedRolls,0);assert.equal(state.notice.title,'무인도');
+  state.notice=null;state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,.2));const firstFailed=completeRoll(state);assert.equal(firstFailed.islandEscaped,false);assert.equal(player.islandFailedRolls,1);assert.equal(player.skipTurns,1);assert.equal(state.notice,null);assert.equal(state.phase,PHASES.END_TURN);
+  state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,.2));const secondFailed=completeRoll(state);assert.equal(secondFailed.islandEscaped,false);assert.equal(player.islandFailedRolls,2);assert.equal(player.skipTurns,1);assert.equal(state.phase,PHASES.END_TURN);
+  state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(.2,.4));const autoReleased=completeRoll(state);assert.equal(autoReleased.islandEscaped,true);assert.equal(autoReleased.islandAutoReleased,true);assert.equal(player.skipTurns,0);assert.equal(player.islandFailedRolls,0);assert.equal(state.pendingMovement.total,5);assert.equal(state.phase,PHASES.MOVING);
+  const doubleState=createGame(2,{mode:'full',rng:()=>.2});const doublePlayer=doubleState.players[0];doublePlayer.position=10;resolveTile(doubleState);doubleState.phase=PHASES.WAITING_FOR_ROLL;rollDice(doubleState,rngFor(.4,.4));const escaped=completeRoll(doubleState);assert.equal(escaped.islandEscaped,true);assert.equal(escaped.islandAutoReleased,false);assert.equal(doublePlayer.skipTurns,0);assert.equal(doublePlayer.islandFailedRolls,0);assert.equal(doubleState.phase,PHASES.MOVING);
+  const cardState=createGame(2,{mode:'full',rng:()=>.2});const cardPlayer=cardState.players[0];cardPlayer.position=10;cardPlayer.skipTurns=1;cardPlayer.islandFailedRolls=2;cardPlayer.specialCards=['island-escape'];useSpecialCard(cardState,'island-escape');assert.equal(cardPlayer.skipTurns,0);assert.equal(cardPlayer.islandFailedRolls,0);assert.deepEqual(cardPlayer.specialCards,[]);assert.equal(cardState.phase,PHASES.WAITING_FOR_ROLL);
 });
 
 test('반액·전액대매출은 현재 투자 가치가 가장 높은 부동산을 대상으로 한다',()=>{
@@ -263,8 +265,8 @@ test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
 
 test('게임 상태는 서로 독립적인 두 저장 슬롯에 저장하고 불러올 수 있다',()=>{
   const values=new Map();const storage={setItem:(key,value)=>values.set(key,value),getItem:key=>values.get(key)??null,removeItem:key=>values.delete(key)};
-  const state=createGame(4,{mode:'45',rng:()=>.2,saveSlot:1});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup','imperial-exploitation','nine-eleven'].includes(id));delete state.globalEffects;assert.equal(saveGame(state,storage),true);
+  const state=createGame(4,{mode:'45',rng:()=>.2,saveSlot:1});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup','imperial-exploitation','nine-eleven'].includes(id));delete state.players[0].islandFailedRolls;delete state.globalEffects;assert.equal(saveGame(state,storage),true);
   const second=createGame(2,{mode:'full',rng:()=>.3,saveSlot:2});second.players[0].name='두 번째 게임';assert.equal(saveGame(second,storage),true);const [loaded,loadedSecond]=loadGames(storage);
-  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,5);assert.equal(loaded.saveSlot,1);assert.equal(loaded.players.length,4);assert.equal(loaded.timer.remainingSeconds,2700);assert.equal(loadGame(storage,2).players[0].name,'두 번째 게임');assert.equal(loadedSecond.saveSlot,2);
+  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,5);assert.equal(loaded.saveSlot,1);assert.equal(loaded.players.length,4);assert.equal(loaded.players[0].islandFailedRolls,0);assert.equal(loaded.timer.remainingSeconds,2700);assert.equal(loadGame(storage,2).players[0].name,'두 번째 게임');assert.equal(loadedSecond.saveSlot,2);
   assert.equal(loaded.board[1].buildingCosts.length,4);assert.ok(loaded.eventDeck.includes('full-price-sale'));assert.ok(loaded.eventDeck.includes('world-cup'));assert.ok(loaded.eventDeck.includes('imperial-exploitation'));assert.ok(loaded.eventDeck.includes('nine-eleven'));assert.deepEqual(loaded.globalEffects,{imperialExploitation:null,americanRage:null});
 });

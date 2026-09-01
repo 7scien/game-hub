@@ -12,7 +12,7 @@ export function loadGame(storage=globalThis.localStorage,slot=1){
   try{
     const normalizedSlot=Math.min(RULES.SAVE_SLOT_COUNT,Math.max(1,Number(slot)||1));const raw=storage.getItem(slotKey(normalizedSlot))??(normalizedSlot===1?storage.getItem(RULES.LEGACY_AUTOSAVE_KEY):null);const value=JSON.parse(raw);if(!isValidSavedGame(value))return null;
     value.version=RULES.SAVE_VERSION;value.saveSlot=normalizedSlot;value.gameStage=value.gameStage||'SECOND_HALF';value.auction=value.auction||null;
-    value.players.forEach((player,index)=>{player.token=PLAYER_TOKENS[index];player.lapsCompleted=Math.max(0,Number(player.lapsCompleted)||0);player.bankLoan=normalizeLoan(player.bankLoan)});
+    value.players.forEach((player,index)=>{player.token=PLAYER_TOKENS[index];player.lapsCompleted=Math.max(0,Number(player.lapsCompleted)||0);player.islandFailedRolls=Math.min(RULES.ISLAND_MAX_TRAPPED_TURNS-1,Math.max(0,Number(player.islandFailedRolls)||0));player.bankLoan=normalizeLoan(player.bankLoan)});
     const freshBoard=createBoard();value.board=freshBoard.map((fresh,index)=>({...fresh,ownerId:value.board[index]?.ownerId??null,buildingLevel:Math.min(RULES.MAX_BUILDING_LEVEL,Math.max(0,Number(value.board[index]?.buildingLevel)||0)),worldCupTurns:Math.max(0,Number(value.board[index]?.worldCupTurns)||0),worldCupActivatedTurn:value.board[index]?.worldCupActivatedTurn??null}));
     if(!Array.isArray(value.eventDeck)){value.eventDeck=EVENT_CARDS.map(card=>card.id);value.eventCursor=0}
     EVENT_CARDS.forEach(card=>{if(!value.eventDeck.includes(card.id))value.eventDeck.push(card.id)});

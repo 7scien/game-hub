@@ -35,7 +35,7 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
   const players=Array.from({length:playerCount},(_,index)=>({
     id:`player-${index+1}`,name:(names[index]||`플레이어 ${index+1}`).trim().slice(0,12)||`플레이어 ${index+1}`,
     color:PLAYER_COLORS[index],token:PLAYER_TOKENS[index],money:RULES.STARTING_MONEY,position:0,ownedProperties:[],specialAssets:[],specialCards:[],
-    bankrupt:false,skipTurns:0,lapsCompleted:0,bankLoan:null,
+    bankrupt:false,skipTurns:0,islandFailedRolls:0,lapsCompleted:0,bankLoan:null,
   }));
   const minutes=mode==='full'?null:Number(mode);
   const state={
@@ -112,13 +112,15 @@ export function completeRoll(state){
   requirePhase(state,PHASES.ROLLING);const player=currentPlayer(state);state.phase=PHASES.MOVING;
   if(player.skipTurns>0&&state.board[player.position]?.id==='deserted-island'){
     state.consecutiveDoubles=0;
-    if(state.rolledDouble){player.skipTurns=0;state.islandEscapeThisTurn=true;state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};addLog(state,`${player.name}이 더블로 무인도를 탈출했습니다.`);return {islandEscaped:true}}
+    if(state.rolledDouble){player.skipTurns=0;player.islandFailedRolls=0;state.islandEscapeThisTurn=true;state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};addLog(state,`${player.name}이 더블로 무인도를 탈출했습니다.`);return {islandEscaped:true,islandAutoReleased:false}}
+    player.islandFailedRolls=(Number(player.islandFailedRolls)||0)+1;
+    if(player.islandFailedRolls>=RULES.ISLAND_MAX_TRAPPED_TURNS){player.skipTurns=0;player.islandFailedRolls=0;state.islandEscapeThisTurn=true;state.pendingMovement={playerId:player.id,total:state.rollTotal,remaining:state.rollTotal};addLog(state,`${player.name}이 세 번째 차례를 맞아 무인도에서 자동 탈출했습니다.`);return {islandEscaped:true,islandAutoReleased:true}}
     else{state.pendingMovement=null;state.phase=PHASES.END_TURN;addLog(state,`${player.name}이 더블을 만들지 못해 무인도에 남았습니다.`)}
     return {islandEscaped:false};
   }
   if(state.rolledDouble)state.consecutiveDoubles+=1;else state.consecutiveDoubles=0;
   if(state.consecutiveDoubles>=RULES.MAX_CONSECUTIVE_DOUBLES){
-    player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=1;
+    player.position=findTileIndex(state.board,'deserted-island');player.skipTurns=1;player.islandFailedRolls=0;
     notice(state,'무인도',`${RULES.MAX_CONSECUTIVE_DOUBLES}번 연속 더블로 무인도에 들어왔습니다.`,'warning');
     addLog(state,`${player.name}이 연속 더블로 무인도로 이동했습니다.`);state.pendingMovement=null;state.phase=PHASES.END_TURN;return;
   }
@@ -280,7 +282,7 @@ export function resolveTile(state,depth=0){
   if(tile.type==='event'){applyEvent(state,drawEvent(state));return}
   if(tile.type==='tax'){prepareDebt(state,{amount:tile.amount,reason:tile.name,fundDeposit:tile.id==='social-welfare-tax'});return}
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
-  if(tile.type==='wait'){player.skipTurns=1;notice(state,tile.name,'무인도에 들어왔습니다. 다음 차례부터 더블이나 탈출권으로 나갈 수 있습니다.','warning');finishSimpleTile(state);return}
+  if(tile.type==='wait'){player.skipTurns=1;player.islandFailedRolls=0;notice(state,tile.name,'무인도에 들어왔습니다. 더블이나 탈출권으로 먼저 나갈 수 있고, 세 번째 차례에는 자동으로 탈출합니다.','warning');finishSimpleTile(state);return}
   if(tile.id==='space-travel'){beginSpaceTravel(state);return}
   if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);if(player.bankrupt||state.status==='finished')return;notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
@@ -390,7 +392,7 @@ export function useSpecialCard(state,cardId){
   }
   if(cardId==='island-escape'){
     requirePhase(state,PHASES.WAITING_FOR_ROLL);if(player.skipTurns<1||state.board[player.position]?.id!=='deserted-island')throw new Error('무인도에 갇힌 차례에만 사용할 수 있습니다.');
-    if(!removeSpecialCard(player,cardId))throw new Error('보유한 무인도 탈출권이 없습니다.');player.skipTurns=0;addLog(state,`${player.name}이 무인도 탈출권을 사용했습니다.`);notice(state,'무인도 탈출권 사용','이제 주사위를 굴려 정상적으로 이동할 수 있습니다.','success');return;
+    if(!removeSpecialCard(player,cardId))throw new Error('보유한 무인도 탈출권이 없습니다.');player.skipTurns=0;player.islandFailedRolls=0;addLog(state,`${player.name}이 무인도 탈출권을 사용했습니다.`);notice(state,'무인도 탈출권 사용','이제 주사위를 굴려 정상적으로 이동할 수 있습니다.','success');return;
   }
   throw new Error('지금 사용할 수 없는 카드입니다.');
 }
