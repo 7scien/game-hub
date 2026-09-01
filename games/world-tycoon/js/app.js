@@ -1,19 +1,20 @@
 import {
-  advanceMovement,buildCurrentTile,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
-  endTurn,finishMovement,openTrade,proposeTrade,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,updateClock,useSpecialCard,
+  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,cancelTrade,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
+  endTurn,finishBuildMode,finishMovement,openBuildMode,openTrade,passAuction,placeAuctionBid,proposeTrade,repayBankLoan,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
 } from './game.js';
-import {clearGame,loadGame,saveGame} from './storage.js';
+import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {
   animateBuildingDestruction,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
-let state=null;let savedGame=loadGame();let setup=Boolean(!savedGame);let playerCount=2;let actionLocked=false;let clockTicks=0;
+let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;
 
-function persist(){if(state?.status==='playing')saveGame(state);else if(state?.status==='finished')clearGame()}
+function refreshSaves(){savedGames=loadGames()}
+function persist(){if(state?.status==='playing')saveGame(state);else if(state?.status==='finished')clearGame(globalThis.localStorage,state.saveSlot)}
 function render(){
-  if(state){const feedback=state.feedback;state.feedback=null;renderGame(root,state);if(feedback){showMoneyFeedback(feedback);persist()}}else renderStart(root,{savedGame,setup,playerCount});
+  if(state){const feedback=state.feedback;state.feedback=null;renderGame(root,state);if(feedback){showMoneyFeedback(feedback);persist()}}else renderStart(root,{savedGames,setup,playerCount,selectedSlot});
 }
 function commit(action,{rerender=true}={}){
   try{const result=action();persist();if(rerender)render();return result}catch(error){toast(error.message||'행동을 완료하지 못했습니다.');return null}
@@ -21,7 +22,7 @@ function commit(action,{rerender=true}={}){
 
 function startGame(form){
   const data=new FormData(form);const names=Array.from({length:playerCount},(_,index)=>data.get(`player-${index}`));const mode=data.get('mode')||'30';
-  state=createGame(playerCount,{mode,names});savedGame=null;persist();render();
+  state=createGame(playerCount,{mode,names,saveSlot:selectedSlot});persist();render();
 }
 
 async function handleRoll(){
@@ -46,6 +47,8 @@ async function handleTerrorTarget(tileId){
 
 document.addEventListener('submit',event=>{
   if(event.target.matches('[data-setup-form]')){event.preventDefault();startGame(event.target);return}
+  if(event.target.matches('[data-loan-form]')){event.preventDefault();const data=new FormData(event.target);commit(()=>takeBankLoan(state,data.get('loanAmount')));return}
+  if(event.target.matches('[data-auction-bid-form]')){event.preventDefault();const data=new FormData(event.target);commit(()=>placeAuctionBid(state,data.get('auctionBid')));return}
   if(event.target.matches('[data-trade-form]')){
     event.preventDefault();const data=new FormData(event.target);commit(()=>proposeTrade(state,Object.fromEntries(data.entries())));
   }
@@ -57,16 +60,22 @@ document.addEventListener('click',event=>{
   if(action==='choose-player-count'){
     playerCount=Number(target.dataset.players);document.querySelectorAll('[data-action="choose-player-count"]').forEach(button=>button.classList.toggle('active',button===target));document.querySelectorAll('[data-name-field]').forEach(field=>field.classList.toggle('hidden',Number(field.dataset.nameField)>=playerCount));return;
   }
-  if(action==='continue-game'){state=savedGame;savedGame=null;persist();render();return}
-  if(action==='new-game'||action==='new-game-from-finish'){if(state)clearGame();state=null;savedGame=null;setup=true;render();return}
+  if(action==='continue-game'){const slot=Math.min(2,Math.max(1,Number(target.dataset.slot)||1));state=savedGames[slot-1];selectedSlot=slot;persist();render();return}
+  if(action==='new-game'||action==='new-game-from-finish'){selectedSlot=Math.min(2,Math.max(1,Number(target.dataset.slot)||state?.saveSlot||selectedSlot));state=null;setup=true;render();return}
   if(action==='open-help'){showFreeModal(renderHelp());return}
   if(action==='open-menu'){showFreeModal(renderMenu());return}
   if(action==='close-free-modal'){closeFreeModal();return}
-  if(action==='confirm-new-game'){clearGame();state=null;savedGame=null;setup=true;render();return}
+  if(action==='choose-save-slot'){closeFreeModal();persist();state=null;refreshSaves();setup=false;render();return}
+  if(action==='confirm-new-game'){selectedSlot=state?.saveSlot||selectedSlot;clearGame(globalThis.localStorage,selectedSlot);state=null;refreshSaves();setup=true;render();return}
   if(!state)return;
   if(action==='roll-dice'){handleRoll();return}
   if(action==='buy-tile'){commit(()=>buyCurrentTile(state));return}
   if(action==='build-tile'){commit(()=>buildCurrentTile(state));return}
+  if(action==='open-build-mode'){commit(()=>openBuildMode(state));return}
+  if(action==='build-owned-city'){commit(()=>buildOwnedCity(state,target.dataset.tile));return}
+  if(action==='finish-build-mode'){commit(()=>finishBuildMode(state));return}
+  if(action==='pass-auction'){commit(()=>passAuction(state));return}
+  if(action==='repay-bank-loan'){commit(()=>repayBankLoan(state));return}
   if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
   if(action==='choose-world-cup-city'){commit(()=>chooseWorldCupCity(state,target.dataset.tile));return}
   if(action==='choose-terror-target'){handleTerrorTarget(target.dataset.tile);return}

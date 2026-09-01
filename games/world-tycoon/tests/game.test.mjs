@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  advanceMovement,buildCurrentTile,buyCurrentTile,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishMovement,getGlobalEffectRounds,getNetWorth,isGlobalEffectActive,openTrade,
-  proposeTrade,resolveTile,resolveTrade,rollDice,sellSpecialCard,settleDebt,updateClock,useSpecialCard,
+  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishBuildMode,finishMovement,getBuildableOwnedCities,getGlobalEffectRounds,getLoanBalance,getNetWorth,getUnownedPurchasableAssets,isGlobalEffectActive,openBuildMode,openTrade,passAuction,
+  proposeTrade,repayBankLoan,resolveTile,resolveTrade,rollDice,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
 } from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
 import {PHASES,RULES,calculateRent,formatMoney} from '../js/rules.js';
-import {isValidSavedGame,loadGame,saveGame} from '../js/storage.js';
+import {isValidSavedGame,loadGame,loadGames,saveGame} from '../js/storage.js';
 
 const rngFor=(...values)=>{let index=0;return ()=>values[index++]??.1};
 const finishDiceMovement=state=>{completeRoll(state);while(state.phase===PHASES.MOVING)advanceMovement(state);if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)finishMovement(state)};
@@ -15,6 +15,7 @@ test('2~4인 게임을 원화 경제와 데이터 기반 보드로 생성한다'
   for(const count of [2,3,4]){
     const state=createGame(count,{mode:'30',rng:()=>.2});
     assert.equal(state.players.length,count);assert.equal(state.board.length,40);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
+    assert.equal(state.gameStage,'FIRST_HALF');assert.equal(state.saveSlot,1);
     assert.equal(state.timer.remainingSeconds,1800);assert.equal(state.players[0].money,2930000);assert.equal(state.welfareFund,0);
     assert.ok(state.players.every(player=>player.token==='✈'));
   }
@@ -77,12 +78,36 @@ test('출발점을 통과하면 20만 원을 받고 도착한 도시를 살 수 
 });
 
 test('건설 가능한 도시는 대표 랜드마크 기초·건설 중·1동·2동으로 개발한다',()=>{
-  const state=createGame(2,{mode:'full',rng:()=>.2});const tile=state.board[1];tile.ownerId=state.players[0].id;state.players[0].ownedProperties.push(tile.id);state.players[0].money=10000000;
+  const state=createGame(2,{mode:'full',rng:()=>.2});state.gameStage='SECOND_HALF';const tile=state.board[1];tile.ownerId=state.players[0].id;state.players[0].ownedProperties.push(tile.id);state.players[0].money=10000000;
   for(let level=1;level<=4;level++){
     state.phase=PHASES.BUILD_DECISION;state.pendingAction={type:'build',tileIndex:1};buildCurrentTile(state);assert.equal(tile.buildingLevel,level);
   }
   assert.equal(calculateRent(state,tile,state.players[1]),tile.rentByLevel[4]);assert.equal(state.notice.title,'랜드마크 2동 완성!');
   const jeju=state.board.find(item=>item.id==='jeju');jeju.ownerId=state.players[0].id;state.players[0].ownedProperties.push(jeju.id);state.players[0].position=jeju.index;resolveTile(state);assert.equal(state.phase,PHASES.END_TURN);
+});
+
+test('전반전에는 건설 없이 대지 통행료만 내고 미분양 5개부터 경매한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const owner=state.players[0];const visitor=state.players[1];owner.money=10000000;visitor.money=10000000;
+  const regionCities=state.board.filter(tile=>tile.type==='city'&&tile.region==='asia');for(const tile of regionCities){tile.ownerId=owner.id;owner.ownedProperties.push(tile.id)}
+  const taipei=state.board.find(tile=>tile.id==='taipei');visitor.position=taipei.index;state.currentPlayerIndex=1;const before=visitor.money;resolveTile(state);assert.equal(visitor.money,before-taipei.baseRent);assert.equal(state.feedback.message.includes('대지 통행료'),true);
+  state.currentPlayerIndex=0;state.phase=PHASES.WAITING_FOR_ROLL;assert.throws(()=>openBuildMode(state),/후반전/);
+  for(const tile of state.board.filter(tile=>['city','facility'].includes(tile.type)&&!tile.ownerId).slice(0,-6)){tile.ownerId=owner.id;(tile.type==='city'?owner.ownedProperties:owner.specialAssets).push(tile.id)}
+  const target=getUnownedPurchasableAssets(state)[0];owner.position=target.index;state.phase=PHASES.BUY_DECISION;state.pendingAction={type:'buy',tileIndex:target.index};buyCurrentTile(state);
+  assert.equal(state.gameStage,'AUCTION');assert.equal(state.phase,PHASES.AUCTION);assert.equal(getUnownedPurchasableAssets(state).length,5);
+  let guard=0;while(state.gameStage==='AUCTION'&&guard<12){passAuction(state);guard+=1}
+  assert.equal(state.gameStage,'SECOND_HALF');assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);assert.equal(getUnownedPurchasableAssets(state).length,0);
+});
+
+test('후반전에는 자기 땅을 밟지 않아도 주사위 전에 자유 건설한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});state.gameStage='SECOND_HALF';const player=state.players[0];const paris=state.board.find(tile=>tile.id==='paris');paris.ownerId=player.id;player.ownedProperties.push(paris.id);player.position=0;const before=player.money;
+  assert.equal(getBuildableOwnedCities(state).some(tile=>tile.id==='paris'),true);openBuildMode(state);buildOwnedCity(state,'paris');assert.equal(paris.buildingLevel,1);assert.equal(player.position,0);assert.equal(player.money,before-paris.buildingCosts[0]);finishBuildMode(state);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
+});
+
+test('은행은 최대 100만 원을 10% 이자로 빌려주고 최초 대출 3바퀴째 만기 처리한다',()=>{
+  const state=createGame(3,{mode:'full',rng:()=>.2});const player=state.players[0];takeBankLoan(state,600000);assert.equal(getLoanBalance(player),660000);assert.equal(player.bankLoan.dueLap,3);player.lapsCompleted=1;takeBankLoan(state,400000);assert.equal(getLoanBalance(player),1100000);assert.equal(player.bankLoan.dueLap,3);assert.throws(()=>takeBankLoan(state,10000),/10만 원/);assert.equal(getNetWorth(state,player.id),RULES.STARTING_MONEY-100000);
+  repayBankLoan(state);assert.equal(player.bankLoan,null);assert.equal(player.money,RULES.STARTING_MONEY-100000);
+  player.lapsCompleted=0;takeBankLoan(state,1000000);player.lapsCompleted=2;player.position=39;player.money=0;state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,0));completeRoll(state);advanceMovement(state);
+  assert.equal(player.bankrupt,true);assert.equal(state.phase,PHASES.END_TURN);assert.match(state.notice.message,/은행 대출 만기 불이행/);
 });
 
 test('지역 완성 보너스와 탈것의 고정 이용료를 계산한다',()=>{
@@ -234,9 +259,10 @@ test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
   const result=endTurn(state);assert.equal(result.bonusTurn,true);assert.equal(state.currentPlayerIndex,0);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
 });
 
-test('게임 상태는 새 저장 형식으로 저장하고 불러올 수 있다',()=>{
+test('게임 상태는 서로 독립적인 두 저장 슬롯에 저장하고 불러올 수 있다',()=>{
   const values=new Map();const storage={setItem:(key,value)=>values.set(key,value),getItem:key=>values.get(key)??null,removeItem:key=>values.delete(key)};
-  const state=createGame(4,{mode:'45',rng:()=>.2});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup','imperial-exploitation','nine-eleven'].includes(id));delete state.globalEffects;assert.equal(saveGame(state,storage),true);const loaded=loadGame(storage);
-  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,4);assert.equal(loaded.players.length,4);assert.equal(loaded.timer.remainingSeconds,2700);
+  const state=createGame(4,{mode:'45',rng:()=>.2,saveSlot:1});state.board[1].buildingCosts=state.board[1].buildingCosts.slice(0,3);state.eventDeck=state.eventDeck.filter(id=>!['full-price-sale','world-cup','imperial-exploitation','nine-eleven'].includes(id));delete state.globalEffects;assert.equal(saveGame(state,storage),true);
+  const second=createGame(2,{mode:'full',rng:()=>.3,saveSlot:2});second.players[0].name='두 번째 게임';assert.equal(saveGame(second,storage),true);const [loaded,loadedSecond]=loadGames(storage);
+  assert.ok(isValidSavedGame(loaded));assert.equal(loaded.version,5);assert.equal(loaded.saveSlot,1);assert.equal(loaded.players.length,4);assert.equal(loaded.timer.remainingSeconds,2700);assert.equal(loadGame(storage,2).players[0].name,'두 번째 게임');assert.equal(loadedSecond.saveSlot,2);
   assert.equal(loaded.board[1].buildingCosts.length,4);assert.ok(loaded.eventDeck.includes('full-price-sale'));assert.ok(loaded.eventDeck.includes('world-cup'));assert.ok(loaded.eventDeck.includes('imperial-exploitation'));assert.ok(loaded.eventDeck.includes('nine-eleven'));assert.deepEqual(loaded.globalEffects,{imperialExploitation:null,americanRage:null});
 });

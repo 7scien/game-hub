@@ -19,6 +19,8 @@ const collectWelfareFund=(state,player)=>{const amount=state.welfareFund||0;play
 const KOREAN_TILE_IDS=new Set(['jeju','busan','seoul-olympic']);
 const MOVEMENT_EFFECT_TYPES=new Set(['moveBy','moveTo','travelRoute','worldTour']);
 const EFFECT_NAMES={imperialExploitation:'일제의 수탈',americanRage:'미국의 분노'};
+const PURCHASABLE_TYPES=new Set(['city','facility']);
+const BANK_PHASES=new Set([PHASES.WAITING_FOR_ROLL,PHASES.BUY_DECISION,PHASES.BUILD_DECISION,PHASES.BUILD_ANYWHERE_DECISION,PHASES.PAYMENT_DECISION,PHASES.ASSET_MANAGEMENT,PHASES.END_TURN,PHASES.AUCTION]);
 
 function activePlayerCount(state){return Math.max(1,state.players.filter(player=>!player.bankrupt).length)}
 export function isGlobalEffectActive(state,key){return Boolean(state.globalEffects?.[key]?.remainingTurns>0)}
@@ -28,25 +30,30 @@ function startGlobalEffect(state,key,rounds){
   state.globalEffects[key]={remainingTurns:activePlayerCount(state)*duration,durationRounds:duration,activatedTurn:state.turnNumber};return state.globalEffects[key];
 }
 
-export function createGame(playerCount,{mode='30',names=[],rng=Math.random}={}){
+export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveSlot=1}={}){
   if(![2,3,4].includes(playerCount))throw new Error('플레이 인원은 2~4명이어야 합니다.');
   const players=Array.from({length:playerCount},(_,index)=>({
     id:`player-${index+1}`,name:(names[index]||`플레이어 ${index+1}`).trim().slice(0,12)||`플레이어 ${index+1}`,
     color:PLAYER_COLORS[index],token:PLAYER_TOKENS[index],money:RULES.STARTING_MONEY,position:0,ownedProperties:[],specialAssets:[],specialCards:[],
-    bankrupt:false,skipTurns:0,
+    bankrupt:false,skipTurns:0,lapsCompleted:0,bankLoan:null,
   }));
   const minutes=mode==='full'?null:Number(mode);
   const state={
-    version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
+    version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),saveSlot:Math.min(RULES.SAVE_SLOT_COUNT,Math.max(1,Number(saveSlot)||1)),gameStage:'FIRST_HALF',auction:null,players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
     phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,islandEscapeThisTurn:false,pendingMovement:null,pendingAction:null,pendingDebt:null,
     eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null},trade:null,notice:null,feedback:null,log:[],sequence:1,
     timer:{remainingSeconds:minutes===null?null:minutes*60},winnerIds:[],finishedReason:null,
   };
-  addLog(state,`${players[0].name}의 여행이 시작되었습니다.`);
+  addLog(state,`${players[0].name}의 전반전 토지 여행이 시작되었습니다.`);
   return state;
 }
 
 export function getCurrentPlayer(state){return currentPlayer(state)}
+export function getAuctionBidder(state){return state.players.find(player=>player.id===state.auction?.turnPlayerId)??currentPlayer(state)}
+export function getUnownedPurchasableAssets(state){return state.board.filter(tile=>PURCHASABLE_TYPES.has(tile.type)&&!tile.ownerId)}
+export function getLoanBalance(player){return (player?.bankLoan?.principal||0)+(player?.bankLoan?.interest||0)}
+function bankingPlayer(state){return state.phase===PHASES.AUCTION?getAuctionBidder(state):currentPlayer(state)}
+export function canUseBank(state){return state.status==='playing'&&BANK_PHASES.has(state.phase)&&!bankingPlayer(state).bankrupt}
 function requirePhase(state,...phases){if(!phases.includes(state.phase))throw new Error('지금은 이 행동을 할 수 없습니다.')}
 
 export function rollDice(state,rng=Math.random){
@@ -56,20 +63,48 @@ export function rollDice(state,rng=Math.random){
   return [...state.dice];
 }
 
+function releasePlayerAssets(state,player){
+  state.board.filter(tile=>tile.ownerId===player.id).forEach(tile=>{tile.ownerId=null;tile.buildingLevel=0;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null});player.ownedProperties=[];player.specialAssets=[];player.specialCards=[];player.bankLoan=null;
+}
+
+function bankruptPlayer(state,player,reason){
+  player.money=0;player.bankrupt=true;releasePlayerAssets(state,player);state.pendingDebt=null;state.pendingMovement=null;notice(state,'파산',`${player.name}이 ${reason}(으)로 게임에서 제외되었습니다.`,'danger');addLog(state,`${player.name}이 ${reason}(으)로 파산했습니다.`);
+  const active=state.players.filter(item=>!item.bankrupt);if(active.length<=1){finishGame(state,'last-player');return}state.phase=PHASES.END_TURN;
+}
+
+export function takeBankLoan(state,amount){
+  if(!canUseBank(state))throw new Error('자기 차례의 행동 가능한 시간에만 대출할 수 있습니다.');const player=bankingPlayer(state);const requested=Math.round(Number(amount)/10000)*10000;
+  if(!Number.isFinite(requested)||requested<100000)throw new Error('대출은 10만 원 이상, 1만 원 단위로 신청하세요.');const currentPrincipal=player.bankLoan?.principal||0;
+  if(currentPrincipal+requested>RULES.BANK_LOAN_MAX)throw new Error(`대출 원금은 최대 ${formatMoney(RULES.BANK_LOAN_MAX)}입니다.`);
+  const interest=Math.round(requested*RULES.BANK_LOAN_INTEREST_RATE);const dueLap=player.bankLoan?.dueLap??player.lapsCompleted+RULES.BANK_LOAN_TERM_LAPS;
+  player.bankLoan={principal:currentPrincipal+requested,interest:(player.bankLoan?.interest||0)+interest,dueLap};player.money+=requested;addLog(state,`${player.name}이 은행에서 ${formatMoney(requested)}을 빌렸습니다. 만기는 ${dueLap}번째 바퀴입니다.`);cashFeedback(state,'은행 대출',requested,`상환액 ${formatMoney(getLoanBalance(player))} · ${Math.max(0,dueLap-player.lapsCompleted)}바퀴 남음`,'success');return player.bankLoan;
+}
+
+export function repayBankLoan(state){
+  if(!canUseBank(state))throw new Error('자기 차례의 행동 가능한 시간에만 상환할 수 있습니다.');const player=bankingPlayer(state);const amount=getLoanBalance(player);if(!amount)throw new Error('상환할 은행 대출이 없습니다.');if(player.money<amount)throw new Error('원금과 이자를 모두 상환할 현금이 부족합니다.');
+  player.money-=amount;player.bankLoan=null;addLog(state,`${player.name}이 은행 대출 ${formatMoney(amount)}을 모두 상환했습니다.`);cashFeedback(state,'대출 상환',-amount,'원금과 이자를 모두 갚았습니다.','danger');return amount;
+}
+
+function settleMatureLoan(state,player){
+  const amount=getLoanBalance(player);if(!amount||player.lapsCompleted<player.bankLoan.dueLap)return false;
+  if(player.money>=amount){player.money-=amount;player.bankLoan=null;addLog(state,`${player.name}의 3바퀴 대출이 만기되어 ${formatMoney(amount)}을 자동 상환했습니다.`);cashFeedback(state,'대출 만기 상환',-amount,'3바퀴 만기 원금과 이자를 갚았습니다.','danger');return false}
+  bankruptPlayer(state,player,'은행 대출 만기 불이행');return true;
+}
+
 function passStart(state,player,count=1){
-  const reward=RULES.PASS_START_BONUS*count;player.money+=reward;addLog(state,`${player.name}이 출발 지점을 통과해 ${formatMoney(reward)}을 받았습니다.`);
-  cashFeedback(state,'월급 지급',reward,'출발지를 통과했습니다.','success');
+  const reward=RULES.PASS_START_BONUS*count;player.money+=reward;player.lapsCompleted=(player.lapsCompleted||0)+count;addLog(state,`${player.name}이 출발 지점을 통과해 ${formatMoney(reward)}을 받았습니다. (${player.lapsCompleted}바퀴)`);
+  cashFeedback(state,'월급 지급',reward,`출발지를 통과했습니다. · ${player.lapsCompleted}바퀴`,'success');return settleMatureLoan(state,player);
 }
 
 function moveBy(state,steps,{collectPassBonus=true}={}){
   const player=currentPlayer(state);const length=state.board.length;const raw=player.position+steps;
-  if(steps>0&&collectPassBonus){const laps=Math.floor(raw/length);if(laps>0)passStart(state,player,laps)}
+  if(steps>0&&collectPassBonus){const laps=Math.floor(raw/length);if(laps>0&&passStart(state,player,laps))return}
   player.position=((raw%length)+length)%length;
 }
 
 function moveTo(state,targetIndex,{collectPassBonus=true}={}){
   const player=currentPlayer(state);
-  if(collectPassBonus&&targetIndex<=player.position&&targetIndex!==player.position)passStart(state,player);
+  if(collectPassBonus&&targetIndex<=player.position&&targetIndex!==player.position&&passStart(state,player))return;
   player.position=targetIndex;
 }
 
@@ -93,7 +128,7 @@ export function completeRoll(state){
 export function advanceMovement(state){
   requirePhase(state,PHASES.MOVING);const movement=state.pendingMovement;
   if(!movement||movement.playerId!==currentPlayer(state).id||movement.remaining<1)throw new Error('진행 중인 이동이 없습니다.');
-  moveBy(state,1);movement.remaining-=1;if(movement.remaining===0)state.phase=PHASES.RESOLVING_TILE;
+  moveBy(state,1);if(currentPlayer(state).bankrupt||state.phase===PHASES.GAME_OVER){state.pendingMovement=null;return {remaining:0,position:currentPlayer(state).position,bankrupt:true}}movement.remaining-=1;if(movement.remaining===0)state.phase=PHASES.RESOLVING_TILE;
   return {remaining:movement.remaining,position:currentPlayer(state).position};
 }
 
@@ -120,6 +155,7 @@ function continueAfterPayment(state,action){
   }
   if(action.type==='moveTo'){
     moveTo(state,findTileIndex(state.board,action.tileId),{collectPassBonus:action.collectPassBonus!==false});
+    if(currentPlayer(state).bankrupt||state.status==='finished')return;
     state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return;
   }
   finishSimpleTile(state);
@@ -162,6 +198,7 @@ function sellMostExpensive(state,player,rate,saleName){
 function travelRoute(state,effect){
   if(isGlobalEffectActive(state,'americanRage')){notice(state,'미국의 분노','이동 봉쇄로 이번 항공·선박 여행은 취소됩니다. 이용료도 내지 않습니다.','warning','golden-key');finishSimpleTile(state);return}
   const player=currentPlayer(state);const vehicleIndex=findTileIndex(state.board,effect.vehicleTileId);moveTo(state,vehicleIndex);
+  if(player.bankrupt||state.status==='finished')return;
   const vehicle=state.board[vehicleIndex];const afterPayment={type:'moveTo',tileId:effect.destinationTileId};
   if(vehicle.ownerId&&vehicle.ownerId!==player.id){prepareDebt(state,{amount:vehicle.baseRent,recipientId:vehicle.ownerId,reason:`${vehicle.name} 이용료`,afterPayment});return}
   continueAfterPayment(state,afterPayment);
@@ -184,14 +221,15 @@ function applyEvent(state,card){
     if(effect.amount>=0){player.money+=effect.amount;finishSimpleTile(state)}else prepareDebt(state,{amount:-effect.amount,reason:card.title});
     return;
   }
-  if(effect.type==='moveBy'){moveBy(state,effect.steps);state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return}
+  if(effect.type==='moveBy'){moveBy(state,effect.steps);if(player.bankrupt||state.status==='finished')return;state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return}
   if(effect.type==='moveTo'){
     const index=findTileIndex(state.board,effect.tileId);moveTo(state,index,{collectPassBonus:effect.collectPassBonus!==false});
+    if(player.bankrupt||state.status==='finished')return;
     if(effect.resolveTile===false){finishSimpleTile(state);return}state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return;
   }
   if(effect.type==='travelRoute'){travelRoute(state,effect);return}
   if(effect.type==='worldTour'){
-    passStart(state,player);const fund=collectWelfareFund(state,player);addLog(state,`${player.name}이 세계일주를 마치고 사회복지기금 ${formatMoney(fund)}을 받았습니다.`);finishSimpleTile(state);return;
+    if(passStart(state,player))return;const fund=collectWelfareFund(state,player);addLog(state,`${player.name}이 세계일주를 마치고 사회복지기금 ${formatMoney(fund)}을 받았습니다.`);finishSimpleTile(state);return;
   }
   if(effect.type==='collectEach'){
     let total=0;state.players.filter(other=>other.id!==player.id&&!other.bankrupt).forEach(other=>{const paid=Math.min(other.money,effect.amount);other.money-=paid;total+=paid});
@@ -225,14 +263,14 @@ export function resolveTile(state,depth=0){
   }
   if(tile.type==='city'){
     if(!tile.ownerId){state.pendingAction={type:'buy',tileIndex:tile.index};state.phase=PHASES.BUY_DECISION;return}
-    if(tile.ownerId===player.id){if(tile.buildable===false){finishSimpleTile(state);return}state.pendingAction={type:'build',tileIndex:tile.index};state.phase=PHASES.BUILD_DECISION;return}
-    let recipientId=tile.ownerId;let reason=`${tile.name} 통행료`;
+    if(tile.ownerId===player.id){if(state.gameStage==='FIRST_HALF'||tile.buildable===false){finishSimpleTile(state);return}state.pendingAction={type:'build',tileIndex:tile.index};state.phase=PHASES.BUILD_DECISION;return}
+    let recipientId=tile.ownerId;let reason=state.gameStage==='FIRST_HALF'?`${tile.name} 대지 통행료`:`${tile.name} 통행료`;
     if(isGlobalEffectActive(state,'imperialExploitation')&&KOREAN_TILE_IDS.has(tile.id)){
       const tokyo=state.board.find(item=>item.id==='tokyo');const tokyoOwner=state.players.find(item=>item.id===tokyo?.ownerId&&!item.bankrupt);recipientId=tokyoOwner?.id??null;
       reason=recipientId?`일제의 수탈 · ${tile.name} 통행료 → ${tokyoOwner.name}`:`일제의 수탈 · ${tile.name} 통행료 은행 귀속`;
       addLog(state,recipientId?`${tile.name} 통행료가 도쿄 소유주 ${tokyoOwner.name}에게 귀속됩니다.`:`도쿄가 미소유 상태라 ${tile.name} 통행료를 은행이 회수합니다.`);
     }
-    prepareDebt(state,{amount:calculateRent(state,tile,player),recipientId,reason});return;
+    const rent=state.gameStage==='FIRST_HALF'?Math.round(tile.baseRent*(tile.worldCupTurns>0?2:1)):calculateRent(state,tile,player);prepareDebt(state,{amount:rent,recipientId,reason});return;
   }
   if(tile.type==='facility'){
     if(!tile.ownerId){state.pendingAction={type:'buy',tileIndex:tile.index};state.phase=PHASES.BUY_DECISION;return}
@@ -244,7 +282,7 @@ export function resolveTile(state,depth=0){
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
   if(tile.type==='wait'){player.skipTurns=1;notice(state,tile.name,'무인도에 들어왔습니다. 다음 차례부터 더블이나 탈출권으로 나갈 수 있습니다.','warning');finishSimpleTile(state);return}
   if(tile.id==='space-travel'){beginSpaceTravel(state);return}
-  if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
+  if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);if(player.bankrupt||state.status==='finished')return;notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
   finishSimpleTile(state);
 }
@@ -254,7 +292,7 @@ export function chooseSpaceTravelDestination(state,targetIndex){
   if(isGlobalEffectActive(state,'americanRage'))throw new Error('미국의 분노가 지속되는 동안 우주여행을 이용할 수 없습니다.');
   if(state.pendingAction?.type!=='space-travel'||origin?.id!=='space-travel')throw new Error('지금은 우주여행 목적지를 정할 수 없습니다.');
   if(!Number.isInteger(index)||!destination||destination.type!=='city')throw new Error('게임판에서 이동할 도시를 선택하세요.');
-  moveTo(state,index);state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
+  moveTo(state,index);if(player.bankrupt||state.status==='finished')return destination;state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
   return destination;
 }
 
@@ -271,25 +309,58 @@ export function chooseTerrorTarget(state,tileId){
   tile.buildingLevel=0;state.pendingAction=null;state.phase=PHASES.END_TURN;state.notice=null;addLog(state,`${player.name}이 ${tile.name}을 지정해 ${result.landmarkName} 건물을 모두 파괴했습니다.`);return result;
 }
 
+function auctionMinimum(tile){return Math.max(RULES.AUCTION_MIN_INCREMENT,Math.ceil(tile.purchasePrice*.5/RULES.AUCTION_MIN_INCREMENT)*RULES.AUCTION_MIN_INCREMENT)}
+function auctionPlayerIds(state){return state.players.filter(player=>!player.bankrupt).map(player=>player.id)}
+function nextAuctionPlayerId(state,fromId,candidates){
+  const start=state.players.findIndex(player=>player.id===fromId);for(let step=1;step<=state.players.length;step+=1){const id=state.players[(start+step)%state.players.length].id;if(candidates.includes(id))return id}return candidates[0]??null;
+}
+function prepareNextAuction(state){
+  const auction=state.auction;if(!auction?.queue.length){state.gameStage='SECOND_HALF';state.currentPlayerIndex=auction?.resumePlayerIndex??state.currentPlayerIndex;state.auction=null;prepareTurn(state);notice(state,'후반전 시작','모든 자산의 경매가 끝났습니다. 이제 자기 차례에 주사위를 굴리기 전 어느 보유 도시든 자유롭게 개발할 수 있습니다.','landmark');addLog(state,'경매가 끝나 후반전이 시작되었습니다.');return}
+  const tileId=auction.queue.shift();const tile=state.board.find(item=>item.id===tileId);const bidders=auctionPlayerIds(state);const starter=bidders[auction.completed%bidders.length];auction.currentTileId=tileId;auction.minimumBid=auctionMinimum(tile);auction.currentBid=0;auction.highestBidderId=null;auction.activeBidderIds=bidders;auction.turnPlayerId=starter;state.phase=PHASES.AUCTION;state.pendingAction={type:'auction',tileIndex:tile.index};
+}
+function beginLandAuction(state){
+  const remaining=getUnownedPurchasableAssets(state);state.gameStage='AUCTION';state.auction={queue:remaining.map(tile=>tile.id),completed:0,resumePlayerIndex:nextActiveIndex(state,state.currentPlayerIndex),currentTileId:null,minimumBid:0,currentBid:0,highestBidderId:null,activeBidderIds:[],turnPlayerId:null};prepareNextAuction(state);notice(state,'전반전 종료',`미분양 자산 ${remaining.length}개를 차례대로 경매합니다. 모든 경매가 끝나면 후반전이 시작됩니다.`,'event');addLog(state,`남은 자산 ${remaining.length}개의 경매가 시작되었습니다.`);
+}
+function finishAuctionAsset(state,winnerId,amount){
+  const auction=state.auction;const tile=state.board.find(item=>item.id===auction.currentTileId);const winner=state.players.find(player=>player.id===winnerId);if(!winner||winner.money<amount)throw new Error('낙찰 금액을 지불할 수 없습니다.');winner.money-=amount;tile.ownerId=winner.id;(tile.type==='city'?winner.ownedProperties:winner.specialAssets).push(tile.id);auction.completed+=1;addLog(state,`${winner.name}이 ${tile.name}을 ${formatMoney(amount)}에 낙찰받았습니다.`);const finished=auction.queue.length===0;prepareNextAuction(state);notice(state,finished?'마지막 낙찰':'낙찰 완료',`${winner.name}이 ${tile.name}을 ${formatMoney(amount)}에 낙찰받았습니다.${finished?' 후반전을 시작합니다.':''}`,'success');return {tile,winner,amount,finished};
+}
+export function placeAuctionBid(state,amount){
+  requirePhase(state,PHASES.AUCTION);const auction=state.auction;const bidder=getAuctionBidder(state);const bid=Math.round(Number(amount)/RULES.AUCTION_MIN_INCREMENT)*RULES.AUCTION_MIN_INCREMENT;const required=auction.currentBid?auction.currentBid+RULES.AUCTION_MIN_INCREMENT:auction.minimumBid;
+  if(!auction.activeBidderIds.includes(bidder.id)||bidder.id===auction.highestBidderId)throw new Error('지금 입찰할 차례가 아닙니다.');if(!Number.isFinite(bid)||bid<required)throw new Error(`최소 입찰가는 ${formatMoney(required)}입니다.`);if(bid>bidder.money)throw new Error('보유 현금보다 많이 입찰할 수 없습니다.');auction.currentBid=bid;auction.highestBidderId=bidder.id;
+  const contenders=auction.activeBidderIds.filter(id=>id!==bidder.id);if(!contenders.length)return finishAuctionAsset(state,bidder.id,bid);auction.turnPlayerId=nextAuctionPlayerId(state,bidder.id,contenders);return {bidder,amount:bid};
+}
+export function passAuction(state){
+  requirePhase(state,PHASES.AUCTION);const auction=state.auction;const bidder=getAuctionBidder(state);if(bidder.id===auction.highestBidderId)throw new Error('현재 최고 입찰자는 패스할 수 없습니다.');auction.activeBidderIds=auction.activeBidderIds.filter(id=>id!==bidder.id);addLog(state,`${bidder.name}이 ${state.board.find(tile=>tile.id===auction.currentTileId).name} 경매에서 패스했습니다.`);
+  if(auction.highestBidderId&&auction.activeBidderIds.length===1)return finishAuctionAsset(state,auction.highestBidderId,auction.currentBid);
+  if(!auction.highestBidderId&&auction.activeBidderIds.length===1){const last=state.players.find(player=>player.id===auction.activeBidderIds[0]);if(last.money>=auction.minimumBid)return finishAuctionAsset(state,last.id,auction.minimumBid)}
+  if(!auction.activeBidderIds.length){auction.minimumBid=Math.max(RULES.AUCTION_MIN_INCREMENT,Math.floor(auction.minimumBid*.8/RULES.AUCTION_MIN_INCREMENT)*RULES.AUCTION_MIN_INCREMENT);auction.activeBidderIds=auctionPlayerIds(state);auction.turnPlayerId=auction.activeBidderIds[0];notice(state,'유찰','모두 패스해 최저가를 낮추고 같은 자산을 다시 경매합니다.','warning');return null}
+  const candidates=auction.activeBidderIds.filter(id=>id!==auction.highestBidderId);auction.turnPlayerId=nextAuctionPlayerId(state,bidder.id,candidates);return null;
+}
+
 export function buyCurrentTile(state){
   requirePhase(state,PHASES.BUY_DECISION);const player=currentPlayer(state);const tile=state.board[state.pendingAction.tileIndex];
   if(tile.ownerId)throw new Error('이미 소유자가 있는 자산입니다.');if(player.money<tile.purchasePrice)throw new Error('구매할 현금이 부족합니다.');
   player.money-=tile.purchasePrice;tile.ownerId=player.id;(tile.type==='city'?player.ownedProperties:player.specialAssets).push(tile.id);
-  addLog(state,`${player.name}이 ${tile.name}을 ${formatMoney(tile.purchasePrice)}에 인수했습니다.`);finishSimpleTile(state);
+  addLog(state,`${player.name}이 ${tile.name}을 ${formatMoney(tile.purchasePrice)}에 인수했습니다.`);if(state.gameStage==='FIRST_HALF'&&getUnownedPurchasableAssets(state).length===RULES.FIRST_HALF_AUCTION_REMAINDER){beginLandAuction(state);return}finishSimpleTile(state);
 }
 
 export function declineDecision(state){requirePhase(state,PHASES.BUY_DECISION,PHASES.BUILD_DECISION);finishSimpleTile(state)}
 
+export function getBuildableOwnedCities(state,playerId=currentPlayer(state).id){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===playerId&&tile.buildable!==false&&tile.buildingLevel<RULES.MAX_BUILDING_LEVEL)}
+function developCity(state,player,tile){
+  if(state.gameStage!=='SECOND_HALF')throw new Error('건설은 경매가 끝난 후반전부터 가능합니다.');if(!tile||tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 대표 랜드마크 2동이 완성되었습니다.');
+  const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');player.money-=cost;tile.buildingLevel+=1;const landmark=tile.landmarkName||'대표 랜드마크';const buildingName=[null,`${landmark} 기초`,`${landmark} 건설 중`,`${landmark} 1동`,`${landmark} 2동`][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName} 단계를 완성했습니다.`);
+  if(tile.buildingLevel===3)notice(state,'랜드마크 완성!',`${tile.name}에 ${landmark} 1동이 완성되었습니다.`,'landmark');if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'랜드마크 2동 완성!',`${tile.name}에 ${landmark} 2동이 완성되었습니다.`,'landmark');return tile;
+}
+
 export function buildCurrentTile(state){
   requirePhase(state,PHASES.BUILD_DECISION);const player=currentPlayer(state);const tile=state.board[state.pendingAction.tileIndex];
-  if(tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');
-  if(tile.buildingLevel>=RULES.MAX_BUILDING_LEVEL)throw new Error('이미 대표 랜드마크 2동이 완성되었습니다.');
-  const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');
-  player.money-=cost;tile.buildingLevel+=1;const landmark=tile.landmarkName||'대표 랜드마크';const buildingName=[null,`${landmark} 기초`,`${landmark} 건설 중`,`${landmark} 1동`,`${landmark} 2동`][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName} 단계를 완성했습니다.`);
-  if(tile.buildingLevel===3)notice(state,'랜드마크 완성!',`${tile.name}에 ${landmark} 1동이 완성되었습니다.`,'landmark');
-  if(tile.buildingLevel===RULES.MAX_BUILDING_LEVEL)notice(state,'랜드마크 2동 완성!',`${tile.name}에 ${landmark} 2동이 완성되었습니다.`,'landmark');
-  finishSimpleTile(state);
+  developCity(state,player,tile);finishSimpleTile(state);
 }
+
+export function openBuildMode(state){requirePhase(state,PHASES.WAITING_FOR_ROLL);if(state.gameStage!=='SECOND_HALF')throw new Error('후반전부터 자유 건설을 사용할 수 있습니다.');if(!getBuildableOwnedCities(state).length)throw new Error('지금 개발할 수 있는 보유 도시가 없습니다.');state.phase=PHASES.BUILD_ANYWHERE_DECISION;state.pendingAction={type:'build-anywhere'};}
+export function buildOwnedCity(state,tileId){requirePhase(state,PHASES.BUILD_ANYWHERE_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);developCity(state,player,tile);state.phase=PHASES.BUILD_ANYWHERE_DECISION;state.pendingAction={type:'build-anywhere'};return tile}
+export function finishBuildMode(state){requirePhase(state,PHASES.BUILD_ANYWHERE_DECISION);state.pendingAction=null;state.phase=PHASES.WAITING_FOR_ROLL}
 
 function removeOwnedId(player,tile){const list=tile.type==='city'?player.ownedProperties:player.specialAssets;const index=list.indexOf(tile.id);if(index>=0)list.splice(index,1)}
 
@@ -341,9 +412,7 @@ export function declareBankruptcy(state){
   const cardValue=(player.specialCards||[]).reduce((sum,id)=>sum+(SPECIAL_CARD_INFO[id]?.sellPrice||0),0);
   if(player.money+liquidationValue(state,player.id)+cardValue>=debt.amount)throw new Error('매각 가능한 자산으로 아직 지불할 수 있습니다.');
   if(debt.recipientId){const target=state.players.find(item=>item.id===debt.recipientId);if(target)target.money+=player.money}
-  player.money=0;player.bankrupt=true;state.board.filter(tile=>tile.ownerId===player.id).forEach(tile=>{tile.ownerId=null;tile.buildingLevel=0;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null});player.ownedProperties=[];player.specialAssets=[];player.specialCards=[];state.pendingDebt=null;
-  notice(state,'파산',`${player.name}이 게임에서 제외되었습니다.`,'danger');addLog(state,`${player.name}이 파산했습니다.`);
-  const active=state.players.filter(item=>!item.bankrupt);if(active.length<=1){finishGame(state,'last-player');return}finishSimpleTile(state);
+  bankruptPlayer(state,player,'지불 불능');
 }
 
 function nextActiveIndex(state,from){let next=from;do{next=(next+1)%state.players.length}while(state.players[next].bankrupt);return next}

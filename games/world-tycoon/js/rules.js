@@ -2,14 +2,15 @@ import {REGION_STYLES} from './data/board.js';
 
 export const PHASES={
   WAITING_FOR_ROLL:'WAITING_FOR_ROLL',ROLLING:'ROLLING',MOVING:'MOVING',RESOLVING_TILE:'RESOLVING_TILE',
-  BUY_DECISION:'BUY_DECISION',BUILD_DECISION:'BUILD_DECISION',TRAVEL_DECISION:'TRAVEL_DECISION',WORLD_CUP_DECISION:'WORLD_CUP_DECISION',TERROR_TARGET_DECISION:'TERROR_TARGET_DECISION',PAYMENT_DECISION:'PAYMENT_DECISION',TRADE:'TRADE',ASSET_MANAGEMENT:'ASSET_MANAGEMENT',
+  BUY_DECISION:'BUY_DECISION',BUILD_DECISION:'BUILD_DECISION',BUILD_ANYWHERE_DECISION:'BUILD_ANYWHERE_DECISION',AUCTION:'AUCTION',TRAVEL_DECISION:'TRAVEL_DECISION',WORLD_CUP_DECISION:'WORLD_CUP_DECISION',TERROR_TARGET_DECISION:'TERROR_TARGET_DECISION',PAYMENT_DECISION:'PAYMENT_DECISION',TRADE:'TRADE',ASSET_MANAGEMENT:'ASSET_MANAGEMENT',
   END_TURN:'END_TURN',GAME_OVER:'GAME_OVER',
 };
 
 export const RULES={
   STARTING_MONEY:2930000,PASS_START_BONUS:200000,MAX_BUILDING_LEVEL:4,GROUP_COMPLETION_MULTIPLIER:1.5,
   SELL_PROPERTY_RATE:.5,SELL_BUILDING_RATE:.5,BONUS_TURN_ON_DOUBLE:true,MAX_CONSECUTIVE_DOUBLES:3,
-  FACILITY_MULTIPLIERS:[0,1,1,1,1],AUTOSAVE_KEY:'world-tycoon-save-v4',SAVE_VERSION:4,
+  FIRST_HALF_AUCTION_REMAINDER:5,AUCTION_MIN_INCREMENT:10000,BANK_LOAN_MAX:1000000,BANK_LOAN_INTEREST_RATE:.1,BANK_LOAN_TERM_LAPS:3,
+  FACILITY_MULTIPLIERS:[0,1,1,1,1],AUTOSAVE_KEY_PREFIX:'world-tycoon-save-v5-slot-',LEGACY_AUTOSAVE_KEY:'world-tycoon-save-v4',SAVE_SLOT_COUNT:2,SAVE_VERSION:5,
 };
 
 export const PLAYER_COLORS=['#ff5d7d','#4ed6ff','#ffd65a','#8c7bff'];
@@ -48,7 +49,8 @@ export function buildingValue(tile){
 export function netWorth(state,playerId){
   const player=state.players.find(item=>item.id===playerId);
   if(!player||player.bankrupt)return 0;
-  return Math.round(player.money+state.board.filter(tile=>tile.ownerId===playerId).reduce((sum,tile)=>sum+(tile.purchasePrice||0)+buildingValue(tile),0));
+  const debt=(player.bankLoan?.principal||0)+(player.bankLoan?.interest||0);
+  return Math.round(player.money+state.board.filter(tile=>tile.ownerId===playerId).reduce((sum,tile)=>sum+(tile.purchasePrice||0)+buildingValue(tile),0)-debt);
 }
 
 export function liquidationValue(state,playerId){
