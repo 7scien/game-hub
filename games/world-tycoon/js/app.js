@@ -5,7 +5,7 @@ import {
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {
-  animateAuctionAward,animateAuctionBid,animateBuildingDestruction,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateSecondHalfStart,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showDiceResult,showFreeModal,showMoneyFeedback,toast,updateTimer,
+  animateAuctionAward,animateAuctionBid,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateSecondHalfStart,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
@@ -29,7 +29,7 @@ async function handleRoll(){
   if(actionLocked)return;actionLocked=true;
   try{
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
-    const playerId=state.players[state.currentPlayerIndex].id;await new Promise(resolve=>setTimeout(resolve,720));await showDiceResult([...state.dice],state.rollTotal);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandAutoReleased)toast('세 번째 차례! 무인도에서 자동 탈출합니다.');else if(rollResult?.islandEscaped)toast('더블! 무인도를 탈출합니다.');
+    const playerId=state.players[state.currentPlayerIndex].id;const dice=[...state.dice];const total=state.rollTotal;await animateDiceThrow(dice,total);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandAutoReleased)toast('세 번째 차례! 무인도에서 자동 탈출합니다.');else if(rollResult?.islandEscaped)toast('더블! 무인도를 탈출합니다.');
     while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await new Promise(resolve=>setTimeout(resolve,55))}
     if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)commit(()=>finishMovement(state));
   }finally{actionLocked=false}
@@ -68,7 +68,13 @@ async function handleAuctionResult(action){
 
 async function handleEarlyAuctionVote(approved){
   if(actionLocked)return;actionLocked=true;
-  try{const result=commit(()=>castEarlyAuctionVote(state,approved));if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
+  const vote=state.earlyAuctionVote;const voter=state.players.find(player=>player.id===vote?.currentVoterId);const total=vote?.voterIds?.length||state.players.filter(player=>!player.bankrupt).length;const approvedCount=(vote?.approvedIds?.length||0)+(approved?1:0);
+  try{const result=commit(()=>castEarlyAuctionVote(state,approved));if(result&&approved&&voter)await animateEarlyAuctionConsent({player:voter,approvedCount,total,final:result.type==='auction-start'});if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
+}
+
+async function handleProposeEarlyAuction(){
+  if(actionLocked)return;actionLocked=true;const proposer=state.players[state.currentPlayerIndex];
+  try{const vote=commit(()=>proposeEarlyAuction(state));if(vote)await animateEarlyAuctionConsent({player:proposer,approvedCount:1,total:vote.voterIds.length,final:false})}finally{actionLocked=false}
 }
 
 document.addEventListener('submit',event=>{
@@ -100,7 +106,7 @@ document.addEventListener('click',event=>{
   if(action==='open-build-mode'){commit(()=>openBuildMode(state));return}
   if(action==='build-owned-city'){handleBuildTile(target.dataset.tile);return}
   if(action==='finish-build-mode'){commit(()=>finishBuildMode(state));return}
-  if(action==='propose-early-auction'){commit(()=>proposeEarlyAuction(state));return}
+  if(action==='propose-early-auction'){handleProposeEarlyAuction();return}
   if(action==='cast-early-auction-vote'){handleEarlyAuctionVote(target.dataset.approved==='true');return}
   if(action==='pass-auction'){handleAuctionResult(()=>passAuction(state));return}
   if(action==='repay-bank-loan'){commit(()=>repayBankLoan(state));return}
