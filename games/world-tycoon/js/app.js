@@ -5,19 +5,30 @@ import {
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {
-  animateAuctionAward,animateAuctionBid,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateSecondHalfStart,animateTokenStep,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
+  animateAuctionAward,animateAuctionBid,animateBankruptcy,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateRegionMonopoly,animateSecondHalfStart,animateTokenStep,animateWorldCup,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
-let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;
+let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;let cinematicQueue=Promise.resolve();
 
 function refreshSaves(){savedGames=loadGames()}
 function persist(){if(state?.status==='playing')saveGame(state);else if(state?.status==='finished')clearGame(globalThis.localStorage,state.saveSlot)}
+function queueCinematic(play){cinematicQueue=cinematicQueue.then(play).catch(()=>{});return cinematicQueue}
+function captureBankruptcyCandidates(){
+  if(!state)return new Map();const recipientId=state.pendingDebt?.recipientId||null;
+  return new Map(state.players.filter(player=>!player.bankrupt).map(player=>[player.id,{player:{id:player.id,name:player.name,color:player.color,token:player.token},recipientId,assets:state.board.filter(tile=>tile.ownerId===player.id).map(tile=>{const rect=document.querySelector(`[data-tile-index="${tile.index}"]`)?.getBoundingClientRect();return {index:tile.index,name:tile.name,icon:tile.icon,landmarkGlyph:tile.landmarkGlyph,buildingLevel:tile.buildingLevel,rect:rect?{left:rect.left,top:rect.top,width:rect.width,height:rect.height}:null}})}]));
+}
+function completedMonopolies(){
+  if(!state)return new Map();const regions=new Map();state.board.filter(tile=>tile.type==='city').forEach(tile=>{if(!regions.has(tile.region))regions.set(tile.region,[]);regions.get(tile.region).push(tile)});const completed=new Map();
+  regions.forEach((tiles,region)=>{const ownerId=tiles[0]?.ownerId;if(!ownerId||!tiles.every(tile=>tile.ownerId===ownerId))return;const player=state.players.find(item=>item.id===ownerId);if(!player||player.bankrupt)return;completed.set(`${ownerId}:${region}`,{region,player:{id:player.id,name:player.name,color:player.color,token:player.token},tiles:tiles.map(tile=>({index:tile.index,name:tile.name,icon:tile.icon}))})});return completed;
+}
+async function animateNewMonopolies(before){for(const [key,result] of completedMonopolies())if(!before.has(key))await queueCinematic(()=>animateRegionMonopoly(result))}
 function render(){
   if(state){const feedback=state.feedback;const noticeAnimation=state.notice?.animation;const noticeId=state.notice?.id;state.feedback=null;renderGame(root,state);if(feedback){showMoneyFeedback(feedback);persist()}if(noticeAnimation?.type==='genevaConvention'&&noticeId!==lastAnimatedNoticeId){lastAnimatedNoticeId=noticeId;setTimeout(()=>animateGenevaConvention(noticeAnimation),720)}}else renderStart(root,{savedGames,setup,playerCount,selectedSlot});
 }
 function commit(action,{rerender=true}={}){
-  try{const result=action();persist();if(rerender)render();return result}catch(error){toast(error.message||'행동을 완료하지 못했습니다.');return null}
+  const bankruptcyBefore=captureBankruptcyCandidates();
+  try{const result=action();const bankruptcies=state?state.players.filter(player=>player.bankrupt&&bankruptcyBefore.has(player.id)).map(player=>({...bankruptcyBefore.get(player.id),reason:state.notice?.message||`${player.name}이 파산했습니다.`})):[];persist();if(rerender)render();bankruptcies.forEach(animation=>queueCinematic(()=>animateBankruptcy(animation)));return result}catch(error){toast(error.message||'행동을 완료하지 못했습니다.');return null}
 }
 
 function startGame(form){
@@ -47,7 +58,7 @@ async function handleTerrorTarget(tileId){
 
 async function handleBuyTile(){
   if(actionLocked)return;actionLocked=true;
-  try{const result=commit(()=>buyCurrentTile(state));if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
+  const monopolies=completedMonopolies();try{const result=commit(()=>buyCurrentTile(state));await animateNewMonopolies(monopolies);if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
 }
 
 async function handleBuildTile(tileId=null){
@@ -63,7 +74,17 @@ async function handleIndustrialization(tileId){
 
 async function handleAuctionResult(action){
   if(actionLocked)return;actionLocked=true;
-  try{const result=commit(action);if(result?.type==='auction-bid')await animateAuctionBid(result);if(result?.type==='auction-award'){await animateAuctionAward(result);if(result.finished)await animateSecondHalfStart()}}finally{actionLocked=false}
+  const monopolies=completedMonopolies();try{const result=commit(action);if(result?.type==='auction-bid')await animateAuctionBid(result);if(result?.type==='auction-award'){await animateAuctionAward(result);await animateNewMonopolies(monopolies);if(result.finished)await animateSecondHalfStart()}}finally{actionLocked=false}
+}
+
+async function handleWorldCupCity(tileId){
+  if(actionLocked)return;actionLocked=true;
+  try{const tile=commit(()=>chooseWorldCupCity(state,tileId));if(tile){const player=state.players.find(item=>item.id===tile.ownerId);await queueCinematic(()=>animateWorldCup({tile,player,turns:tile.worldCupTurns}))}}finally{actionLocked=false}
+}
+
+async function handleTradeResolution(accepted){
+  if(actionLocked)return;actionLocked=true;const monopolies=completedMonopolies();
+  try{commit(()=>resolveTrade(state,accepted));if(accepted)await animateNewMonopolies(monopolies)}finally{actionLocked=false}
 }
 
 async function handleEarlyAuctionVote(approved){
@@ -111,7 +132,7 @@ document.addEventListener('click',event=>{
   if(action==='pass-auction'){handleAuctionResult(()=>passAuction(state));return}
   if(action==='repay-bank-loan'){commit(()=>repayBankLoan(state));return}
   if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
-  if(action==='choose-world-cup-city'){commit(()=>chooseWorldCupCity(state,target.dataset.tile));return}
+  if(action==='choose-world-cup-city'){handleWorldCupCity(target.dataset.tile);return}
   if(action==='choose-terror-target'){handleTerrorTarget(target.dataset.tile);return}
   if(action==='choose-industrialization-city'){handleIndustrialization(target.dataset.tile);return}
   if(action==='decline-decision'){commit(()=>declineDecision(state));return}
@@ -125,8 +146,8 @@ document.addEventListener('click',event=>{
   if(action==='declare-bankruptcy'){commit(()=>declareBankruptcy(state));return}
   if(action==='open-trade'){commit(()=>openTrade(state));return}
   if(action==='cancel-trade'){commit(()=>cancelTrade(state));return}
-  if(action==='accept-trade'){commit(()=>resolveTrade(state,true));return}
-  if(action==='reject-trade'){commit(()=>resolveTrade(state,false));return}
+  if(action==='accept-trade'){handleTradeResolution(true);return}
+  if(action==='reject-trade'){handleTradeResolution(false);return}
 });
 
 document.addEventListener('keydown',event=>{
