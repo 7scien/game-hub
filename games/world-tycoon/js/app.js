@@ -4,16 +4,17 @@ import {
 } from './game.js';
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
+import {animateIslandEscape,animatePurchase,animateSpaceFlight,animateTollWaiver} from './animations.js';
 import {
   animateAuctionAward,animateAuctionBid,animateBankruptcy,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateRegionMonopoly,animateSecondHalfStart,animateTokenStep,animateWorldCup,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
-let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;let cinematicQueue=Promise.resolve();
+let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;let cinematicQueue=Promise.resolve();let cinematicPending=0;
 
 function refreshSaves(){savedGames=loadGames()}
 function persist(){if(state?.status==='playing')saveGame(state);else if(state?.status==='finished')clearGame(globalThis.localStorage,state.saveSlot)}
-function queueCinematic(play){cinematicQueue=cinematicQueue.then(play).catch(()=>{});return cinematicQueue}
+function queueCinematic(play){cinematicPending+=1;cinematicQueue=cinematicQueue.then(play).catch(()=>{}).finally(()=>{cinematicPending-=1});return cinematicQueue}
 function captureBankruptcyCandidates(){
   if(!state)return new Map();const recipientId=state.pendingDebt?.recipientId||null;
   return new Map(state.players.filter(player=>!player.bankrupt).map(player=>[player.id,{player:{id:player.id,name:player.name,color:player.color,token:player.token},recipientId,assets:state.board.filter(tile=>tile.ownerId===player.id).map(tile=>{const rect=document.querySelector(`[data-tile-index="${tile.index}"]`)?.getBoundingClientRect();return {index:tile.index,name:tile.name,icon:tile.icon,landmarkGlyph:tile.landmarkGlyph,buildingLevel:tile.buildingLevel,rect:rect?{left:rect.left,top:rect.top,width:rect.width,height:rect.height}:null}})}]));
@@ -24,7 +25,12 @@ function completedMonopolies(){
 }
 async function animateNewMonopolies(before){for(const [key,result] of completedMonopolies())if(!before.has(key))await queueCinematic(()=>animateRegionMonopoly(result))}
 function render(){
-  if(state){const feedback=state.feedback;const noticeAnimation=state.notice?.animation;const noticeId=state.notice?.id;state.feedback=null;renderGame(root,state);if(feedback){showMoneyFeedback(feedback);persist()}if(noticeAnimation?.type==='genevaConvention'&&noticeId!==lastAnimatedNoticeId){lastAnimatedNoticeId=noticeId;setTimeout(()=>animateGenevaConvention(noticeAnimation),720)}}else renderStart(root,{savedGames,setup,playerCount,selectedSlot});
+  if(state){
+    const feedbacks=[...(state.feedbackQueue||[]),...(state.feedback?[state.feedback]:[])];const viewState=state;const noticeAnimation=state.notice?.animation;const noticeId=state.notice?.id;
+    state.feedback=null;state.feedbackQueue=[];renderGame(root,feedbacks.length?{...state,notice:null}:state);
+    if(feedbacks.length){persist();queueCinematic(async()=>{try{for(const feedback of feedbacks)await showMoneyFeedback(feedback)}finally{if(state===viewState)render()}})}
+    else if(noticeAnimation?.type==='genevaConvention'&&noticeId!==lastAnimatedNoticeId){lastAnimatedNoticeId=noticeId;queueCinematic(async()=>{await new Promise(resolve=>setTimeout(resolve,720));await animateGenevaConvention(noticeAnimation)})}
+  }else renderStart(root,{savedGames,setup,playerCount,selectedSlot});
 }
 function commit(action,{rerender=true}={}){
   const bankruptcyBefore=captureBankruptcyCandidates();
@@ -37,11 +43,11 @@ function startGame(form){
 }
 
 async function handleRoll(){
-  if(actionLocked)return;actionLocked=true;
+  if(actionLocked||cinematicPending)return;actionLocked=true;
   try{
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
-    const playerId=state.players[state.currentPlayerIndex].id;const dice=[...state.dice];const total=state.rollTotal;await animateDiceThrow(dice,total);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandAutoReleased)toast('세 번째 차례! 무인도에서 자동 탈출합니다.');else if(rollResult?.islandEscaped)toast('더블! 무인도를 탈출합니다.');
-    while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await new Promise(resolve=>setTimeout(resolve,55))}
+    const player=state.players[state.currentPlayerIndex];const playerId=player.id;const dice=[...state.dice];const total=state.rollTotal;await animateDiceThrow(dice,total);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandEscaped)await queueCinematic(()=>animateIslandEscape({player,method:rollResult.islandAutoReleased?'automatic':'double'}));
+    while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await cinematicQueue;await new Promise(resolve=>setTimeout(resolve,55))}
     if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)commit(()=>finishMovement(state));
   }finally{actionLocked=false}
 }
@@ -58,7 +64,18 @@ async function handleTerrorTarget(tileId){
 
 async function handleBuyTile(){
   if(actionLocked)return;actionLocked=true;
-  const monopolies=completedMonopolies();try{const result=commit(()=>buyCurrentTile(state));await animateNewMonopolies(monopolies);if(result?.type==='auction-start')await animateHalftimeAuction(result)}finally{actionLocked=false}
+  const monopolies=completedMonopolies();const player=state.players[state.currentPlayerIndex];const tile=state.board[state.pendingAction?.tileIndex];
+  try{const result=commit(()=>buyCurrentTile(state),{rerender:false});if(result){await queueCinematic(()=>animatePurchase({tile,player}));render();await animateNewMonopolies(monopolies);if(result.type==='auction-start')await queueCinematic(()=>animateHalftimeAuction(result))}}finally{actionLocked=false}
+}
+
+async function handleSpaceDestination(index){
+  if(actionLocked)return;actionLocked=true;const player=state.players[state.currentPlayerIndex];const fromIndex=player.position;
+  try{const tile=commit(()=>chooseSpaceTravelDestination(state,index),{rerender:false});if(tile){if(!player.bankrupt)await queueCinematic(()=>animateSpaceFlight({fromIndex,toIndex:tile.index,tileName:tile.name,player}));render()}}finally{actionLocked=false}
+}
+
+async function handleSpecialCard(cardId){
+  if(actionLocked)return;actionLocked=true;const player=state.players[state.currentPlayerIndex];const amount=state.pendingDebt?.amount||0;
+  try{const used=commit(()=>{useSpecialCard(state,cardId);return true},{rerender:false});if(used){await queueCinematic(()=>cardId==='toll-waiver'?animateTollWaiver({player,amount}):animateIslandEscape({player}));render()}}finally{actionLocked=false}
 }
 
 async function handleBuildTile(tileId=null){
@@ -99,6 +116,7 @@ async function handleProposeEarlyAuction(){
 }
 
 document.addEventListener('submit',event=>{
+  if((actionLocked||cinematicPending)&&event.target.matches('[data-setup-form],[data-loan-form],[data-auction-bid-form],[data-trade-form]')){event.preventDefault();return}
   if(event.target.matches('[data-setup-form]')){event.preventDefault();startGame(event.target);return}
   if(event.target.matches('[data-loan-form]')){event.preventDefault();const data=new FormData(event.target);commit(()=>takeBankLoan(state,data.get('loanAmount')));return}
   if(event.target.matches('[data-auction-bid-form]')){event.preventDefault();const data=new FormData(event.target);handleAuctionResult(()=>placeAuctionBid(state,data.get('auctionBid')));return}
@@ -109,7 +127,7 @@ document.addEventListener('submit',event=>{
 
 document.addEventListener('click',event=>{
   const target=event.target.closest('[data-action]');if(!target)return;const action=target.dataset.action;
-  if(actionLocked&&action!=='open-help')return;
+  if((actionLocked||cinematicPending)&&!['open-help','close-free-modal'].includes(action))return;
   if(action==='choose-player-count'){
     playerCount=Number(target.dataset.players);document.querySelectorAll('[data-action="choose-player-count"]').forEach(button=>button.classList.toggle('active',button===target));document.querySelectorAll('[data-name-field]').forEach(field=>field.classList.toggle('hidden',Number(field.dataset.nameField)>=playerCount));return;
   }
@@ -131,7 +149,7 @@ document.addEventListener('click',event=>{
   if(action==='cast-early-auction-vote'){handleEarlyAuctionVote(target.dataset.approved==='true');return}
   if(action==='pass-auction'){handleAuctionResult(()=>passAuction(state));return}
   if(action==='repay-bank-loan'){commit(()=>repayBankLoan(state));return}
-  if(action==='choose-space-destination'){commit(()=>chooseSpaceTravelDestination(state,Number(target.dataset.destinationIndex)));return}
+  if(action==='choose-space-destination'){handleSpaceDestination(Number(target.dataset.destinationIndex));return}
   if(action==='choose-world-cup-city'){handleWorldCupCity(target.dataset.tile);return}
   if(action==='choose-terror-target'){handleTerrorTarget(target.dataset.tile);return}
   if(action==='choose-industrialization-city'){handleIndustrialization(target.dataset.tile);return}
@@ -141,7 +159,7 @@ document.addEventListener('click',event=>{
   if(action==='sell-building'){commit(()=>sellBuilding(state,target.dataset.tile));return}
   if(action==='sell-asset'){commit(()=>sellAsset(state,target.dataset.tile));return}
   if(action==='sell-special-card'){commit(()=>sellSpecialCard(state,target.dataset.card));return}
-  if(action==='use-special-card'){commit(()=>useSpecialCard(state,target.dataset.card));return}
+  if(action==='use-special-card'){handleSpecialCard(target.dataset.card);return}
   if(action==='settle-debt'){commit(()=>settleDebt(state));return}
   if(action==='declare-bankruptcy'){commit(()=>declareBankruptcy(state));return}
   if(action==='open-trade'){commit(()=>openTrade(state));return}
@@ -159,7 +177,7 @@ document.addEventListener('keydown',event=>{
 });
 
 setInterval(()=>{
-  if(!state||state.status!=='playing')return;
+  if(!state||state.status!=='playing'||actionLocked||cinematicPending)return;
   const ended=updateClock(state,1);clockTicks+=1;if(ended){persist();render();return}updateTimer(state);if(clockTicks%10===0)persist();
 },1000);
 

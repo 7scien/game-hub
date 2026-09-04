@@ -1,0 +1,32 @@
+/* Short, board-anchored feedback. Icons reuse the game's native symbol style. */
+.tycoon-motion{position:fixed;inset:0;z-index:47000;pointer-events:none;overflow:hidden;--motion-accent:#67edd0;font-family:inherit;color:#f5fffd}
+.tycoon-motion-purchase,.tycoon-motion-waiver{background:#020b1594;backdrop-filter:blur(2px)}
+.motion-deed,.motion-special-card{position:absolute;left:50%;top:46%;width:min(360px,calc(100vw - 40px));max-height:calc(100dvh - 32px);overflow:hidden;box-sizing:border-box;transform:translate(-50%,-50%);padding:24px;border:1px solid #95dfc9;border-radius:18px;background:#0b2430;box-shadow:0 22px 70px #0009;text-align:center}
+.motion-deed{border-top:7px solid var(--motion-owner);background:#f2fbf7;color:#123b31;text-align:left}
+.motion-deed small,.motion-special-card small{font-size:14px;font-weight:800;letter-spacing:.08em}
+.motion-deed h2,.motion-special-card h2{margin:8px 0 2px;font-size:clamp(24px,5vw,36px);line-height:1.15;word-break:keep-all}
+.motion-deed p{margin:0;color:#4c7567;font-size:13px}
+.motion-deed dl{margin:20px 0 50px;display:grid;gap:10px;font-size:14px}
+.motion-deed dl div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #abcabc;padding-bottom:8px}
+.motion-deed dd{margin:0;font-weight:850;overflow-wrap:anywhere}
+.motion-deed-stamp{position:absolute;right:24px;bottom:20px;padding:7px 15px;border:3px double #bb293e;border-radius:6px;color:#b41e34;font-size:22px;transform:rotate(-8deg)}
+.motion-target-ring{position:fixed;width:64px;height:64px;border:3px solid var(--motion-accent);border-radius:50%;box-shadow:0 0 20px var(--motion-accent);transform:translate(-50%,-50%);display:grid;place-items:center;opacity:0}
+.motion-target-ring b{padding:4px 8px;border-radius:20px;background:#063b34;color:#e6fff5;font-size:14px;white-space:nowrap}
+.motion-transfer-route{position:absolute;left:50%;top:max(18px,env(safe-area-inset-top));transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px 12px;padding:10px 18px;border:1px solid #56bdab;border-radius:16px;background:#082b2ef5;box-shadow:0 10px 30px #0008;font-size:14px;font-weight:750}
+.motion-transfer-route strong{color:#92ffcf;font-size:18px;white-space:nowrap}.motion-transfer-route span{overflow-wrap:anywhere}
+.tycoon-motion-toll{--motion-accent:#ffd373}.tycoon-motion-toll .motion-transfer-route{border-color:#b2904b}.tycoon-motion-toll .motion-transfer-route strong{color:#ffe299}
+.money-feedback{top:max(94px,18%)}.money-feedback small,.money-feedback span{font-size:14px}
+.motion-money-path{position:fixed;height:2px;transform-origin:left center;background:linear-gradient(90deg,transparent,var(--motion-accent));opacity:0}
+.motion-money-chip{position:fixed;width:32px;height:32px;display:grid;place-items:center;border:1px solid #efffb8;border-radius:50%;background:#f5ce64;color:#473300;box-shadow:0 0 16px #ffe09366;font-size:19px;font-weight:950;transform:translate(-50%,-50%);opacity:0}
+.tycoon-motion-space{--motion-accent:#adbeff}.motion-flight-caption{position:absolute;left:50%;top:12%;transform:translateX(-50%);padding:12px 22px;display:grid;gap:5px;justify-items:center;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;text-align:center;border:1px solid #9dc9e0;border-radius:18px;background:#081f35f2;box-shadow:0 12px 35px #0008}
+.motion-flight-caption small{font-size:14px;color:#9ce8dc}.motion-flight-caption strong{font-size:clamp(24px,5vw,38px);line-height:1.2;word-break:keep-all}.motion-flight-caption span{font-size:14px}
+.motion-rocket,.motion-escape-plane,.motion-unlock{position:fixed;font-size:48px;line-height:1;transform:translate(-50%,-50%);filter:drop-shadow(0 0 12px #b6bfff);opacity:0}
+.motion-flight-dot{position:fixed;width:6px;height:6px;background:#c7d7ff;border-radius:50%;box-shadow:0 0 10px #b1c5ff;opacity:0}
+.motion-special-card{display:grid;justify-items:center;gap:7px;border:2px solid #65e5c7;background:radial-gradient(circle at 50% 20%,#17534e,#0a1c30 70%)}
+.motion-shield{font-size:68px;line-height:1.2;filter:drop-shadow(0 0 15px #66decb)}.motion-special-card del{margin-top:8px;font-size:22px;color:#eabebd;text-decoration-thickness:3px}.motion-special-card>strong{font-size:30px;color:#82ffd8}.motion-special-card p{margin:0;font-size:14px;color:#c1d9de}
+.dice-double-badge{display:inline-block;padding:5px 16px;margin-top:9px;border:1px solid #fff3a6;border-radius:999px;color:#392609;background:#ffdc70;box-shadow:0 0 24px #ffd26177;font-size:20px;font-weight:950;line-height:1.2}
+.dice-throw-animation:not(.settled) .dice-double-badge{visibility:hidden}.dice-throw-animation.settled .dice-double-badge{animation:double-badge-pop .48s cubic-bezier(.2,.8,.2,1) both}
+@keyframes double-badge-pop{0%{transform:scale(.5);opacity:0}65%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
+.motion-reduced .motion-target-ring,.motion-reduced .motion-money-chip,.motion-reduced .motion-money-path,.motion-reduced .motion-rocket,.motion-reduced .motion-flight-dot,.motion-reduced .motion-unlock,.motion-reduced .motion-escape-plane{display:none}
+@media(max-height:500px){.motion-deed,.motion-special-card{padding:16px;top:50%}.motion-deed dl{margin:12px 0 42px}.motion-shield{font-size:42px}.motion-special-card{gap:3px}.motion-special-card h2{font-size:24px}.motion-special-card>strong{font-size:24px}.motion-flight-caption{top:5%}}
+@media(prefers-reduced-motion:reduce){.dice-double-badge{animation:none!important}.money-feedback{transition:none!important}}

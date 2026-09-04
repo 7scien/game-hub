@@ -1,6 +1,7 @@
 import {boardPosition,createBoard} from './board.js';
 import {SPECIAL_CARD_INFO,canUseBank,getAuctionBidder,getBuildableOwnedCities,getCurrentPlayer,getEarlyAuctionVoter,getGlobalEffectRounds,getLoanBalance,getNetWorth,getTradeableAssets,getUnownedPurchasableAssets,isGlobalEffectActive,maxBuildingLevel} from './game.js';
 import {PHASES,RULES,formatMoney,regionMeta} from './rules.js';
+import {animateMoneyTransfer} from './animations.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const phaseLabel={
@@ -196,7 +197,7 @@ export function updateTimer(state){const timer=document.querySelector('[data-tim
 
 export function showDiceResult(dice,total){
   document.querySelector('.dice-result-feedback')?.remove();const element=document.createElement('div');element.className='dice-result-feedback';element.setAttribute('role','status');element.setAttribute('aria-live','assertive');
-  element.innerHTML=`<small>DICE RESULT</small><div>${die(dice[0])}${die(dice[1])}</div><strong>${total}칸 이동</strong><span>${dice[0]} + ${dice[1]} = ${total}</span>`;document.body.append(element);requestAnimationFrame(()=>element.classList.add('show'));
+  element.innerHTML=`<small>DICE RESULT</small><div>${die(dice[0])}${die(dice[1])}</div><strong>${total}칸 이동</strong><span>${dice[0]} + ${dice[1]} = ${total}</span>${dice[0]===dice[1]?'<b class="dice-double-badge">더블!</b>':''}`;document.body.append(element);requestAnimationFrame(()=>element.classList.add('show'));
   return new Promise(resolve=>setTimeout(()=>{element.classList.remove('show');setTimeout(()=>{element.remove();resolve()},240)},1050));
 }
 
@@ -211,6 +212,7 @@ function cinematicDie(value,index){
 export async function animateDiceThrow(dice,total){
   if(reducedMotion())return showDiceResult(dice,total);document.querySelector('.dice-throw-animation')?.remove();const center=document.querySelector('.board-center')?.getBoundingClientRect();const landingX=center?center.left+center.width*.52:globalThis.innerWidth*.48;const landingY=center?center.top+center.height*.55:globalThis.innerHeight*.53;const spacing=Math.min(118,Math.max(90,(center?.width||300)*.24));
   const layer=document.createElement('div');layer.className='dice-throw-animation';layer.setAttribute('role','status');layer.setAttribute('aria-label',`주사위 두 개가 오른쪽 위에서 가볍게 굴러 판 중앙에 떨어집니다. 결과는 ${dice[0]}과 ${dice[1]}, 합계 ${total}입니다.`);layer.innerHTML=`<span class="cinematic-dice-shadow shadow-one" style="left:${landingX-spacing/2}px;top:${landingY+31}px"></span><span class="cinematic-dice-shadow shadow-two" style="left:${landingX+spacing/2}px;top:${landingY+35}px"></span>${cinematicDie(dice[0],0)}${cinematicDie(dice[1],1)}<span class="dice-landing-total"><small>DICE RESULT</small><b>${total}</b><em>${dice[0]} + ${dice[1]} · ${total}칸</em></span>`;document.body.append(layer);
+  if(dice[0]===dice[1]){const badge=document.createElement('span');badge.className='dice-double-badge';badge.textContent='더블!';layer.querySelector('.dice-landing-total').append(badge)}
   const elements=[...layer.querySelectorAll('.cinematic-die')];const animations=elements.flatMap((element,index)=>{const targetX=landingX+(index?spacing/2:-spacing/2);const targetY=landingY+(index?5:0);element.style.left=`${targetX}px`;element.style.top=`${targetY}px`;const startAnchorX=globalThis.innerWidth-70-(index?0:spacing*1.08);const startX=startAnchorX-targetX;const startY=54-targetY;const cube=element.querySelector('.cinematic-die-cube');const move=(x,y,z)=>`translate3d(calc(-50% + ${x}px),calc(-50% + ${y}px),${z}px)`;const rotate=(x,y,z)=>`rotateX(${x}deg) rotateY(${y}deg) rotateZ(${z}deg)`;const finalX=-8;const finalY=index?-10:10;const finalZ=index?2:-2;const delay=index*95;
     const flight=element.animate([{transform:move(startX,startY,118)},{transform:move(startX-12,startY+7,112),offset:.1},{transform:move(startX+7,startY-3,120),offset:.2},{transform:move(startX-9,startY+8,108),offset:.3},{transform:move(startX*.48,startY*.44,74),offset:.47},{transform:move(0,17,0),offset:.64},{transform:move(index?13:-12,-35,58),offset:.76},{transform:move(index?3:-3,7,0),offset:.9},{transform:move(0,0,0)}],{duration:1660,delay,easing:'cubic-bezier(.18,.64,.18,1)',fill:'forwards'}).finished.catch(()=>{});
     const spin=cube.animate([{transform:rotate(-386-index*24,506+index*31,-138)},{transform:rotate(-364-index*24,538+index*31,-116),offset:.1},{transform:rotate(-405-index*24,491+index*31,-151),offset:.2},{transform:rotate(-371-index*24,533+index*31,-120),offset:.3},{transform:rotate(-234,index?286:316,-78),offset:.47},{transform:rotate(finalX+57,finalY+46,finalZ+38),offset:.64},{transform:rotate(finalX-43,finalY+53,finalZ-19),offset:.76},{transform:rotate(finalX+11,finalY-9,finalZ+8),offset:.9},{transform:rotate(finalX,finalY,finalZ)}],{duration:1660,delay,easing:'cubic-bezier(.18,.64,.18,1)',fill:'forwards'}).finished.catch(()=>{});return [flight,spin]});requestAnimationFrame(()=>layer.classList.add('show'));await Promise.all(animations);layer.classList.add('settled');await pause(780);layer.remove();
@@ -270,10 +272,11 @@ export async function animateIndustrialRentSplit(feedback){
   const layer=document.createElement('div');layer.className='industrial-rent-split';layer.setAttribute('role','status');layer.setAttribute('aria-label',`산업화 통행료 중 소유주에게 ${formatMoney(split.ownerAmount)}, 은행에 ${formatMoney(split.bankAmount)}이 이동합니다.`);layer.innerHTML=`<span class="rent-split-origin" style="left:${originX}px;top:${originY}px">통행료 분배</span><span class="rent-share owner-share" style="left:${originX}px;top:${originY}px;--share-x:${ownerX-originX}px;--share-y:${ownerY-originY}px"><b>80%</b><small>${formatMoney(split.ownerAmount)}</small></span><span class="rent-share bank-share" style="left:${originX}px;top:${originY}px;--share-x:${bankX-originX}px;--share-y:${bankY-originY}px"><b>20%</b><small>${formatMoney(split.bankAmount)}</small></span>`;document.body.append(layer);await pause(1450);layer.remove();
 }
 
-export function showMoneyFeedback(feedback){
+export async function showMoneyFeedback(feedback){
   if(!feedback)return;document.querySelector('.money-feedback')?.remove();const element=document.createElement('div');element.className=`money-feedback tone-${feedback.tone||'info'}`;
   const sign=feedback.amount>0?'+':'−';element.innerHTML=`<small>${escapeHtml(feedback.title)}</small><strong>${sign}${formatMoney(Math.abs(feedback.amount))}</strong><span>${escapeHtml(feedback.message)}</span>`;document.body.append(element);
-  requestAnimationFrame(()=>element.classList.add('show'));if(feedback.industrialSplit)animateIndustrialRentSplit(feedback);setTimeout(()=>{element.classList.remove('show');setTimeout(()=>element.remove(),260)},1900);
+  element.setAttribute('role','status');requestAnimationFrame(()=>element.classList.add('show'));
+  try{await Promise.all([pause(reducedMotion()?800:1300),feedback.industrialSplit?animateIndustrialRentSplit(feedback):animateMoneyTransfer(feedback.transfer)]);element.classList.remove('show');await pause(reducedMotion()?0:180)}finally{element.remove()}
 }
 
 const reducedMotion=()=>globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;

@@ -6,7 +6,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const currentPlayer=state=>state.players[state.currentPlayerIndex];
 const addLog=(state,message)=>{state.log.unshift({id:`log-${state.sequence++}`,message});state.log=state.log.slice(0,10)};
 const notice=(state,title,message,tone='info',source=null)=>{state.notice={id:`notice-${state.sequence++}`,title,message,tone,source}};
-const cashFeedback=(state,title,amount,message,tone,details=null)=>{state.feedback={id:`feedback-${state.sequence++}`,title,amount,message,tone,...(details||{})}};
+const cashFeedback=(state,title,amount,message,tone,details=null)=>{if(state.feedback)(state.feedbackQueue??=[]).push(state.feedback);state.feedback={id:`feedback-${state.sequence++}`,title,amount,message,tone,...(details||{})}};
 const shuffled=(items,rng)=>items.map(item=>({item,sort:rng()})).sort((a,b)=>a.sort-b.sort).map(entry=>entry.item);
 
 export const SPECIAL_CARD_INFO={
@@ -41,7 +41,7 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
   const state={
     version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),saveSlot:Math.min(RULES.SAVE_SLOT_COUNT,Math.max(1,Number(saveSlot)||1)),gameStage:'FIRST_HALF',auction:null,earlyAuctionVote:null,players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
     phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,islandEscapeThisTurn:false,pendingMovement:null,pendingAction:null,pendingDebt:null,
-    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null,genevaConvention:null},trade:null,notice:null,feedback:null,log:[],sequence:1,
+    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null,genevaConvention:null},trade:null,notice:null,feedback:null,feedbackQueue:[],log:[],sequence:1,
     timer:{remainingSeconds:minutes===null?null:minutes*60},winnerIds:[],finishedReason:null,
   };
   addLog(state,`${players[0].name}의 전반전 토지 여행이 시작되었습니다.`);
@@ -95,7 +95,7 @@ function settleMatureLoan(state,player){
 
 function passStart(state,player,count=1){
   const reward=RULES.PASS_START_BONUS*count;player.money+=reward;player.lapsCompleted=(player.lapsCompleted||0)+count;addLog(state,`${player.name}이 출발 지점을 통과해 ${formatMoney(reward)}을 받았습니다. (${player.lapsCompleted}바퀴)`);
-  cashFeedback(state,'월급 지급',reward,`출발지를 통과했습니다. · ${player.lapsCompleted}바퀴`,'success');return settleMatureLoan(state,player);
+  cashFeedback(state,'월급 지급',reward,`출발지를 통과했습니다. · ${player.lapsCompleted}바퀴`,'success',{transfer:{type:'salary',recipientId:player.id,recipientName:player.name,amount:reward}});return settleMatureLoan(state,player);
 }
 
 function moveBy(state,steps,{collectPassBonus=true}={}){
@@ -175,7 +175,9 @@ function completeDebtPayment(state,debt){
   addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
   const title=debt.recipientId?'통행료 지불':debt.fundDeposit?'사회복지기금 납부':'현금 지불';
   const bankAmount=Math.max(0,debt.amount-ownerAmount);const industrialSplit=debt.recipientId&&bankAmount>0?{payerId:payer.id,recipientId:debt.recipientId,ownerAmount,bankAmount}:null;
-  cashFeedback(state,title,-debt.amount,debt.reason,'danger',industrialSplit?{industrialSplit}:null);state.pendingDebt=null;continueAfterPayment(state,debt.afterPayment);
+  const recipient=state.players.find(target=>target.id===debt.recipientId);
+  const transfer=debt.recipientId?{type:'toll',payerId:payer.id,payerName:payer.name,recipientId:debt.recipientId,recipientName:recipient?.name||'소유주',amount:debt.amount}:null;
+  cashFeedback(state,title,-debt.amount,debt.reason,'danger',{industrialSplit,transfer});state.pendingDebt=null;continueAfterPayment(state,debt.afterPayment);
 }
 
 function prepareDebt(state,{amount,recipientId=null,recipientAmount=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null}){

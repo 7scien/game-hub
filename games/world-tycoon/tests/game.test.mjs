@@ -11,6 +11,32 @@ import {isValidSavedGame,loadGame,loadGames,saveGame} from '../js/storage.js';
 const rngFor=(...values)=>{let index=0;return ()=>values[index++]??.1};
 const finishDiceMovement=state=>{completeRoll(state);while(state.phase===PHASES.MOVING)advanceMovement(state);if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)finishMovement(state)};
 
+test('월급과 도착지 통행료 알림을 순서대로 보존하고 송금 대상을 기록한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const [visitor,owner]=state.players;const tile=state.board[1];
+  tile.ownerId=owner.id;owner.ownedProperties.push(tile.id);visitor.position=39;
+  const visitorBefore=visitor.money;const ownerBefore=owner.money;
+  rollDice(state,rngFor(0,.01));finishDiceMovement(state);
+  assert.equal(state.feedbackQueue.length,1);assert.equal(state.feedbackQueue[0].title,'월급 지급');
+  assert.deepEqual(state.feedbackQueue[0].transfer,{type:'salary',recipientId:visitor.id,recipientName:visitor.name,amount:200000});
+  assert.deepEqual(state.feedback.transfer,{type:'toll',payerId:visitor.id,payerName:visitor.name,recipientId:owner.id,recipientName:owner.name,amount:tile.baseRent});
+  assert.equal(visitor.money,visitorBefore+200000-tile.baseRent);assert.equal(owner.money,ownerBefore+tile.baseRent);
+});
+
+test('월급과 대출 만기 상환이 같은 순간이어도 두 알림을 보존한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];
+  player.position=39;player.lapsCompleted=2;player.bankLoan={principal:100000,interest:10000,dueLap:3};
+  rollDice(state,rngFor(0,.01));finishDiceMovement(state);
+  assert.equal(state.feedbackQueue[0].title,'월급 지급');assert.equal(state.feedback.title,'대출 만기 상환');
+  assert.equal(player.bankLoan,null);assert.equal(player.money,RULES.STARTING_MONEY+90000);
+});
+
+test('우대권으로 취소한 통행료는 송금 연출을 만들지 않는다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const [visitor,owner]=state.players;const tile=state.board[1];
+  tile.ownerId=owner.id;owner.ownedProperties.push(tile.id);visitor.position=1;visitor.specialCards.push('toll-waiver');
+  resolveTile(state);assert.equal(state.phase,PHASES.PAYMENT_DECISION);useSpecialCard(state,'toll-waiver');
+  assert.equal(state.feedback,null);assert.equal(state.feedbackQueue.length,0);assert.equal(visitor.money,RULES.STARTING_MONEY);assert.equal(owner.money,RULES.STARTING_MONEY);
+});
+
 test('2~4인 게임을 원화 경제와 데이터 기반 보드로 생성한다',()=>{
   for(const count of [2,3,4]){
     const state=createGame(count,{mode:'30',rng:()=>.2});
