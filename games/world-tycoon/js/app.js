@@ -1,10 +1,10 @@
 import {
-  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,cancelTrade,castEarlyAuctionVote,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,
+  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,cancelTrade,castEarlyAuctionVote,chooseBermudaPlayer,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,getPaymentPlayer,resolveNextEvent,
   endTurn,finishBuildMode,finishMovement,openBuildMode,openTrade,passAuction,placeAuctionBid,proposeEarlyAuction,proposeTrade,repayBankLoan,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
 } from './game.js';
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
-import {animateCityLanding,animateIslandEscape,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from './animations.js';
+import {animateCityLanding,animateGoldenKeyReset,animateIslandEscape,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from './animations.js';
 import {capturePresentation,presentationChanges} from './motion-events.js';
 import {
   animateAuctionAward,animateAuctionBid,animateBankruptcy,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateRegionMonopoly,animateSecondHalfStart,animateTokenStep,animateWorldCup,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
@@ -29,9 +29,10 @@ async function animateNewMonopolies(before){for(const [key,result] of completedM
 function render(){
   if(state){
     const feedbacks=[...(state.feedbackQueue||[]),...(state.feedback?[state.feedback]:[])];const viewState=state;const noticeAnimation=state.notice?.animation;const noticeId=state.notice?.id;
-    const changes=presentationChanges(lastPresentation,state);lastPresentation=capturePresentation(state);const hasPresentation=feedbacks.length||changes.transport||changes.arrival||changes.turn;
+    const resetAnimation=noticeAnimation?.type==='resetEventDeck'&&noticeId!==lastAnimatedNoticeId?noticeAnimation:null;if(resetAnimation)lastAnimatedNoticeId=noticeId;
+    const changes=presentationChanges(lastPresentation,state);lastPresentation=capturePresentation(state);const hasPresentation=feedbacks.length||changes.transport||changes.arrival||changes.turn||resetAnimation;
     state.feedback=null;state.feedbackQueue=[];renderGame(root,hasPresentation?{...state,notice:null}:state);
-    if(hasPresentation){persist();queueCinematic(async()=>{try{if(changes.transport)await animateTransportStatus(changes.transport);if(changes.arrival)await animateCityLanding(changes.arrival);for(const feedback of feedbacks)await showMoneyFeedback(feedback);if(changes.turn)await animateTurnSpotlight(changes.turn)}finally{if(state===viewState)render()}})}
+    if(hasPresentation){persist();queueCinematic(async()=>{try{if(changes.transport)await animateTransportStatus(changes.transport);if(changes.arrival)await animateCityLanding(changes.arrival);for(const feedback of feedbacks)await showMoneyFeedback(feedback);if(resetAnimation)await animateGoldenKeyReset(resetAnimation);if(changes.turn)await animateTurnSpotlight(changes.turn)}finally{if(state===viewState)render()}})}
     else if(noticeAnimation?.type==='genevaConvention'&&noticeId!==lastAnimatedNoticeId){lastAnimatedNoticeId=noticeId;queueCinematic(async()=>{await new Promise(resolve=>setTimeout(resolve,720));await animateGenevaConvention(noticeAnimation)})}
   }else{lastPresentation=null;renderStart(root,{savedGames,setup,playerCount,selectedSlot})}
 }
@@ -61,13 +62,13 @@ async function playResolvedRoll(rollResult){
   if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement){const tile=state.board[player.position];if(tile?.type==='city')await queueCinematic(()=>animateCityLanding({tile,player}));commit(()=>finishMovement(state))}
 }
 
-async function handleSettleDebt(){
+async function handleSettleDebt(action=()=>settleDebt(state)){
   if(actionLocked||cinematicPending)return;actionLocked=true;
-  try{const result=commit(()=>({rollResult:settleDebt(state)}));if(result)await playResolvedRoll(result.rollResult)}finally{actionLocked=false}
+  try{const result=commit(()=>({rollResult:action()}));if(result)await playResolvedRoll(result.rollResult)}finally{actionLocked=false}
 }
 
-function handleEndTurn(){
-  commit(()=>endTurn(state));
+async function handleEndTurn(){
+  const result=commit(()=>endTurn(state));if(result?.type==='auction-start')await queueCinematic(()=>animateHalftimeAuction(result));
 }
 
 async function handleTerrorTarget(tileId){
@@ -87,7 +88,7 @@ async function handleSpaceDestination(index){
 }
 
 async function handleSpecialCard(cardId){
-  if(actionLocked)return;actionLocked=true;const player=state.players[state.currentPlayerIndex];const amount=state.pendingDebt?.amount||0;
+  if(actionLocked)return;actionLocked=true;const player=getPaymentPlayer(state);const amount=state.pendingDebt?.amount||0;
   try{const used=commit(()=>{useSpecialCard(state,cardId);return true},{rerender:false});if(used){await queueCinematic(()=>cardId==='toll-waiver'?animateTollWaiver({player,amount}):animateIslandEscape({player}));render()}}finally{actionLocked=false}
 }
 
@@ -153,6 +154,8 @@ document.addEventListener('click',event=>{
   if(action==='confirm-new-game'){selectedSlot=state?.saveSlot||selectedSlot;clearGame(globalThis.localStorage,selectedSlot);state=null;refreshSaves();setup=true;render();return}
   if(!state)return;
   if(action==='roll-dice'){handleRoll();return}
+  if(action==='resolve-next-event'){commit(()=>resolveNextEvent(state));return}
+  if(action==='choose-bermuda-player'){commit(()=>chooseBermudaPlayer(state,target.dataset.player));return}
   if(action==='buy-tile'){handleBuyTile();return}
   if(action==='build-tile'){handleBuildTile();return}
   if(action==='open-build-mode'){commit(()=>openBuildMode(state));return}
@@ -174,7 +177,7 @@ document.addEventListener('click',event=>{
   if(action==='sell-special-card'){commit(()=>sellSpecialCard(state,target.dataset.card));return}
   if(action==='use-special-card'){handleSpecialCard(target.dataset.card);return}
   if(action==='settle-debt'){handleSettleDebt();return}
-  if(action==='declare-bankruptcy'){commit(()=>declareBankruptcy(state));return}
+  if(action==='declare-bankruptcy'){handleSettleDebt(()=>declareBankruptcy(state));return}
   if(action==='open-trade'){commit(()=>openTrade(state));return}
   if(action==='cancel-trade'){commit(()=>cancelTrade(state));return}
   if(action==='accept-trade'){handleTradeResolution(true);return}

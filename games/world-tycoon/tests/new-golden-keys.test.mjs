@@ -29,18 +29,18 @@ test('리셋은 새 전체 덱을 무작위로 만들고 원래 배열을 수정
   assert.deepEqual([...state.eventDeck].sort(),EVENT_CARDS.map(card=>card.id).sort());assert.equal(state.eventCursor,0);
 });
 
-for(const cursor of [0,17,37])test(`리셋을 ${cursor+1}번째로 뽑아도 38장이 채워지고 기존 효과는 유지된다`,t=>{
+for(const cursor of [0,17,EVENT_CARDS.length-1])test(`리셋을 ${cursor+1}번째로 뽑아도 전체 덱이 채워지고 기존 효과는 유지된다`,t=>{
   t.mock.method(Math,'random',()=>0);const state=game();const player=state.players[0];
-  state.eventDeck=EVENT_CARDS.map(card=>card.id);[state.eventDeck[0],state.eventDeck[cursor]]=[state.eventDeck[cursor],state.eventDeck[0]];state.eventCursor=cursor;
+  state.eventDeck=EVENT_CARDS.map(card=>card.id);const resetIndex=state.eventDeck.indexOf('golden-key-reset');[state.eventDeck[resetIndex],state.eventDeck[cursor]]=[state.eventDeck[cursor],state.eventDeck[resetIndex]];state.eventCursor=cursor;
   player.position=2;player.specialCards=['toll-waiver','island-escape'];player.gamblerPending=true;state.globalEffects.americanRage={remainingTurns:4};
-  resolveTile(state);assert.equal(state.eventCursor,0);assert.equal(state.eventDeck.length,38);assert.equal(new Set(state.eventDeck).size,38);
-  assert.equal(state.notice.title,'황금 열쇠 리셋');assert.match(state.notice.message,/38장/);assert.equal(state.phase,PHASES.END_TURN);
+  resolveTile(state);assert.equal(state.eventCursor,0);assert.equal(state.eventDeck.length,EVENT_CARDS.length);assert.equal(new Set(state.eventDeck).size,EVENT_CARDS.length);
+  assert.equal(state.notice.title,'황금 열쇠 리셋');assert.ok(state.notice.message.includes(`${EVENT_CARDS.length}장`));assert.equal(state.phase,PHASES.END_TURN);
   assert.deepEqual(player.specialCards,['toll-waiver','island-escape']);assert.equal(player.gamblerPending,true);assert.equal(player.money,RULES.STARTING_MONEY);assert.equal(state.globalEffects.americanRage.remainingTurns,4);
 });
 
 test('일반 소진 후에도 전체 덱을 무작위로 채워 한 장만 뽑는다',t=>{
   t.mock.method(Math,'random',()=>0);const state=game();state.players[0].position=2;state.eventCursor=state.eventDeck.length;
-  resolveTile(state);assert.equal(state.eventDeck.length,38);assert.equal(state.eventCursor,1);assert.equal(state.notice.title,'라스베가스의 도박사');
+  resolveTile(state);assert.equal(state.eventDeck.length,EVENT_CARDS.length);assert.equal(state.eventCursor,1);assert.equal(state.notice.title,EVENT_CARDS[1].title);
 });
 
 for(let total=2;total<=12;total++)test(`도박사 합 ${total}: 이동 전에 정확히 한 번 정산한다`,()=>{
@@ -93,10 +93,10 @@ test('대기 효과와 리셋한 덱 순서를 저장하고 옛 저장에도 두
   const state=game();state.players[0].gamblerPending=true;resetEventDeck(state,()=>.4);const saved=storage();saveGame(state,saved);const restored=loadGame(saved);
   assert.equal(restored.players[0].gamblerPending,true);assert.deepEqual(restored.eventDeck,state.eventDeck);assert.equal(restored.eventCursor,0);
   delete state.players[0].gamblerPending;state.eventDeck=state.eventDeck.filter(id=>!['golden-key-reset','las-vegas-gambler'].includes(id));state.eventCursor=4;saveGame(state,saved);
-  const migrated=loadGame(saved);assert.equal(migrated.players[0].gamblerPending,false);assert.equal(migrated.eventCursor,4);assert.equal(migrated.eventDeck.length,38);saveGame(migrated,saved);assert.equal(loadGame(saved).eventDeck.length,38);
+  const migrated=loadGame(saved);assert.equal(migrated.players[0].gamblerPending,false);assert.equal(migrated.eventCursor,4);assert.equal(migrated.eventDeck.length,EVENT_CARDS.length);saveGame(migrated,saved);assert.equal(loadGame(saved).eventDeck.length,EVENT_CARDS.length);
 });
 
 test('게임판에 실제 카드 수와 다음 주사위 적용 대기를 표시한다',()=>{
   const state=game();state.players[0].gamblerPending=true;const root={querySelector:()=>null};renderGame(root,state);
-  assert.match(root.innerHTML,/황금열쇠 카드 38장/);assert.match(root.innerHTML,/내 다음 주사위에 자동 적용/);
+  assert.ok(root.innerHTML.includes(`황금열쇠 카드 ${EVENT_CARDS.length}장`));assert.match(root.innerHTML,/내 다음 주사위에 자동 적용/);
 });

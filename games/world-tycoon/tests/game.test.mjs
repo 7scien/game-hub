@@ -189,9 +189,9 @@ test('우주여행 초대권도 콜럼비아호 이용료를 정산한다',()=>{
   traveler.position=2;state.eventDeck=['space-invitation'];state.eventCursor=0;const before=owner.money;resolveTile(state);assert.equal(owner.money,before+columbia.baseRent);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
 });
 
-test('황금열쇠에 리셋과 라스베가스의 도박사를 포함한 38장 구성을 사용한다',()=>{
-  assert.equal(EVENT_CARDS.length,38);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
-  assert.equal(counts.move.length,12);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,13);
+test('새 카드 세 종을 포함한 황금열쇠 41장 구성을 사용한다',()=>{
+  assert.equal(EVENT_CARDS.length,41);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
+  assert.equal(counts.move.length,13);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,15);
   assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='전액대매출').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='월드컵 개최').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='일제의 수탈').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='911 테러').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='산업화').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='제네바 협정').length,1);
 });
 

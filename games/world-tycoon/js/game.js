@@ -1,6 +1,7 @@
 import {createBoard,findTileIndex} from './board.js';
 import {EVENT_CARDS} from './data/events.js';
 import {gamblerOutcome} from './data/gambler.js';
+import {oathPartner,paymentPlan,splitReceipt,startOath,tickOaths} from './oath.js';
 import {PHASES,PLAYER_COLORS,PLAYER_TOKENS,RULES,buildingValue,calculateRent,formatMoney,liquidationValue,netWorth} from './rules.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -16,9 +17,9 @@ export const SPECIAL_CARD_INFO={
 };
 
 const removeSpecialCard=(player,cardId)=>{const index=player.specialCards.indexOf(cardId);if(index<0)return false;player.specialCards.splice(index,1);return true};
-const collectWelfareFund=(state,player)=>{const amount=state.welfareFund||0;player.money+=amount;state.welfareFund=0;return amount};
+const collectWelfareFund=(state,player)=>{const amount=state.welfareFund||0;receiveCash(state,player,amount,'사회복지기금 수령');state.welfareFund=0;return amount};
 const KOREAN_TILE_IDS=new Set(['jeju','busan','seoul-olympic']);
-const MOVEMENT_EFFECT_TYPES=new Set(['moveBy','moveTo','travelRoute','worldTour']);
+const MOVEMENT_EFFECT_TYPES=new Set(['moveBy','moveTo','travelRoute','worldTour','swapPositions']);
 const EFFECT_NAMES={imperialExploitation:'일제의 수탈',americanRage:'미국의 분노',genevaConvention:'제네바 협정'};
 const PURCHASABLE_TYPES=new Set(['city','facility']);
 const BANK_PHASES=new Set([PHASES.WAITING_FOR_ROLL,PHASES.BUY_DECISION,PHASES.BUILD_DECISION,PHASES.BUILD_ANYWHERE_DECISION,PHASES.PAYMENT_DECISION,PHASES.ASSET_MANAGEMENT,PHASES.END_TURN,PHASES.AUCTION]);
@@ -42,7 +43,7 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
   const state={
     version:RULES.SAVE_VERSION,status:'playing',mode:String(mode),saveSlot:Math.min(RULES.SAVE_SLOT_COUNT,Math.max(1,Number(saveSlot)||1)),gameStage:'FIRST_HALF',auction:null,earlyAuctionVote:null,players,board:createBoard(),currentPlayerIndex:0,turnNumber:1,
     phase:PHASES.WAITING_FOR_ROLL,dice:[1,1],rollTotal:0,rolledDouble:false,consecutiveDoubles:0,islandEscapeThisTurn:false,pendingMovement:null,pendingAction:null,pendingDebt:null,
-    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null,genevaConvention:null},trade:null,notice:null,feedback:null,feedbackQueue:[],log:[],sequence:1,
+    eventDeck:shuffled(EVENT_CARDS.map(card=>card.id),rng),eventCursor:0,eventQueue:[],doubleNextEvent:false,oaths:[],auctionAfterEvents:false,welfareFund:0,globalEffects:{imperialExploitation:null,americanRage:null,genevaConvention:null},trade:null,notice:null,feedback:null,feedbackQueue:[],log:[],sequence:1,
     timer:{remainingSeconds:minutes===null?null:minutes*60},winnerIds:[],finishedReason:null,
   };
   addLog(state,`${players[0].name}의 전반전 토지 여행이 시작되었습니다.`);
@@ -50,12 +51,14 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
 }
 
 export function getCurrentPlayer(state){return currentPlayer(state)}
+export function getPaymentPlayer(state){return state.players.find(player=>player.id===state.pendingDebt?.payerId)??currentPlayer(state)}
+export function getBermudaTargets(state){return state.players.filter(player=>player.id!==currentPlayer(state).id&&!player.bankrupt&&state.board[player.position]?.id!=='deserted-island')}
 export function getAuctionBidder(state){return state.players.find(player=>player.id===state.auction?.turnPlayerId)??currentPlayer(state)}
 export function getEarlyAuctionVoter(state){return state.players.find(player=>player.id===state.earlyAuctionVote?.currentVoterId)??currentPlayer(state)}
 export function getUnownedPurchasableAssets(state){return state.board.filter(tile=>PURCHASABLE_TYPES.has(tile.type)&&!tile.ownerId)}
 export function maxBuildingLevel(tile){return tile?.industrialized?RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL:RULES.MAX_BUILDING_LEVEL}
 export function getLoanBalance(player){return (player?.bankLoan?.principal||0)+(player?.bankLoan?.interest||0)}
-function bankingPlayer(state){return state.phase===PHASES.AUCTION?getAuctionBidder(state):currentPlayer(state)}
+function bankingPlayer(state){return state.phase===PHASES.AUCTION?getAuctionBidder(state):getPaymentPlayer(state)}
 export function canUseBank(state){return state.status==='playing'&&BANK_PHASES.has(state.phase)&&!bankingPlayer(state).bankrupt}
 function requirePhase(state,...phases){if(!phases.includes(state.phase))throw new Error('지금은 이 행동을 할 수 없습니다.')}
 
@@ -67,10 +70,12 @@ export function rollDice(state,rng=Math.random){
 }
 
 function releasePlayerAssets(state,player){
+  state.oaths=(state.oaths||[]).filter(oath=>!oath.playerIds.includes(player.id));
   state.board.filter(tile=>tile.ownerId===player.id).forEach(tile=>{tile.ownerId=null;tile.buildingLevel=0;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null});player.ownedProperties=[];player.specialAssets=[];player.specialCards=[];player.bankLoan=null;player.gamblerPending=false;
 }
 
 function bankruptPlayer(state,player,reason){
+  if(player.id===currentPlayer(state).id)state.eventQueue=[];
   player.money=0;player.bankrupt=true;releasePlayerAssets(state,player);state.pendingDebt=null;state.pendingMovement=null;notice(state,'파산',`${player.name}이 ${reason}(으)로 게임에서 제외되었습니다.`,'danger');addLog(state,`${player.name}이 ${reason}(으)로 파산했습니다.`);
   const active=state.players.filter(item=>!item.bankrupt);if(active.length<=1){finishGame(state,'last-player');return}state.phase=PHASES.END_TURN;
 }
@@ -94,9 +99,18 @@ function settleMatureLoan(state,player){
   bankruptPlayer(state,player,'은행 대출 만기 불이행');return true;
 }
 
+function receiveCash(state,player,amount,title,{feedback=true}={}){
+  const receipts=splitReceipt(state,player.id,amount);
+  for(const receipt of receipts){const recipient=state.players.find(item=>item.id===receipt.playerId);if(!recipient||recipient.bankrupt)continue;recipient.money+=receipt.amount;
+    if(feedback&&receipt.amount)cashFeedback(state,title,receipt.amount,`${recipient.name}${receipts.length>1?' · 도원결의 1/2 분배':''}`,'success',title==='월급 지급'?{transfer:{type:'salary',recipientId:recipient.id,recipientName:recipient.name,amount:receipt.amount}}:null);
+  }
+  if(receipts.length>1)addLog(state,`${title} ${formatMoney(amount)}을 ${player.name}과 ${oathPartner(state,player.id).name}이 나눠 받았습니다.`);
+  return receipts;
+}
+
 function passStart(state,player,count=1){
-  const reward=RULES.PASS_START_BONUS*count;player.money+=reward;player.lapsCompleted=(player.lapsCompleted||0)+count;addLog(state,`${player.name}이 출발 지점을 통과해 ${formatMoney(reward)}을 받았습니다. (${player.lapsCompleted}바퀴)`);
-  cashFeedback(state,'월급 지급',reward,`출발지를 통과했습니다. · ${player.lapsCompleted}바퀴`,'success',{transfer:{type:'salary',recipientId:player.id,recipientName:player.name,amount:reward}});return settleMatureLoan(state,player);
+  const reward=RULES.PASS_START_BONUS*count;receiveCash(state,player,reward,'월급 지급');player.lapsCompleted=(player.lapsCompleted||0)+count;addLog(state,`${player.name}이 출발 지점을 통과했습니다. (${player.lapsCompleted}바퀴)`);
+  return settleMatureLoan(state,player);
 }
 
 function moveBy(state,steps,{collectPassBonus=true}={}){
@@ -114,13 +128,13 @@ function moveTo(state,targetIndex,{collectPassBonus=true}={}){
 export function completeRoll(state){
   requirePhase(state,PHASES.ROLLING);const player=currentPlayer(state);
   if(player.gamblerPending){
-    player.gamblerPending=false;const outcome=gamblerOutcome(state.rollTotal);const owesMoney=outcome.amount<0&&player.money<-outcome.amount;
+    player.gamblerPending=false;const outcome=gamblerOutcome(state.rollTotal);const partner=oathPartner(state,player.id);
+    const planned=outcome.amount<0?paymentPlan(state,{amount:-outcome.amount,reason:'라스베가스의 도박사 손실금'},player.id):[];
+    const owesMoney=planned.some(debt=>state.players.find(item=>item.id===debt.payerId).money<debt.amount);
     addLog(state,`${player.name} · 라스베가스의 도박사: 합 ${outcome.total}, ${outcome.amount===0?'변동 없음':`${formatMoney(Math.abs(outcome.amount))} ${outcome.amount<0?'손실':'획득'}`} · ${outcome.quote}`);
-    if(owesMoney){
-      prepareDebt(state,{amount:-outcome.amount,reason:'라스베가스의 도박사 손실금',afterPayment:{type:'resumeRoll'}});
-      cashFeedback(state,'라스베가스의 도박사',outcome.amount,outcome.quote,outcome.tone,{gambler:{...outcome,pendingPayment:true}});return {gamblingDebt:true};
-    }
-    player.money+=outcome.amount;cashFeedback(state,'라스베가스의 도박사',outcome.amount,outcome.quote,outcome.tone,{gambler:outcome});
+    cashFeedback(state,'라스베가스의 도박사',outcome.amount,outcome.quote,outcome.tone,{gambler:{...outcome,...(owesMoney?{pendingPayment:true}:{}),...(partner?{sharing:`도원결의 · ${player.name} / ${partner.name} 각각 ${formatMoney(Math.abs(outcome.amount)/2)}`}:{})}});
+    if(outcome.amount<0){const result=prepareDebt(state,{amount:-outcome.amount,reason:'라스베가스의 도박사 손실금',afterPayment:{type:'resumeRoll'},silent:!owesMoney});return state.pendingDebt?{gamblingDebt:true}:result}
+    receiveCash(state,player,outcome.amount,'라스베가스의 도박사',{feedback:false});
   }
   state.phase=PHASES.MOVING;
   if(player.skipTurns>0&&state.board[player.position]?.id==='deserted-island'){
@@ -163,10 +177,29 @@ function drawEvent(state){
   const id=state.eventDeck[state.eventCursor++];return EVENT_CARDS.find(card=>card.id===id)??EVENT_CARDS[0];
 }
 
+function beginEventDraw(state){
+  const count=state.doubleNextEvent?2:1;state.doubleNextEvent=false;
+  // Reserve both cards before applying either, so a reset cannot replace card two.
+  const cards=Array.from({length:count},()=>drawEvent(state));
+  state.eventQueue=[...cards.slice(1).map(card=>card.id),...(state.eventQueue||[])];
+  if(count===2)addLog(state,`${currentPlayer(state).name}이 황금열쇠 두 장을 뽑았습니다. 두 효과를 순서대로 적용합니다.`);
+  applyEvent(state,cards[0]);
+}
+
+export function resolveNextEvent(state){
+  requirePhase(state,PHASES.END_TURN);
+  if(currentPlayer(state).bankrupt||!state.eventQueue?.length)throw new Error('적용할 다음 황금열쇠가 없습니다.');
+  const card=EVENT_CARDS.find(item=>item.id===state.eventQueue[0]);
+  if(!card)throw new Error('황금열쇠를 찾을 수 없습니다.');
+  state.eventQueue.shift();
+  applyEvent(state,card);
+}
+
 function finishSimpleTile(state){state.phase=PHASES.END_TURN;state.pendingAction=null}
 
 function continueAfterPayment(state,action){
   if(!action){finishSimpleTile(state);return}
+  if(action.type==='nextPayment')return startPaymentPlan(state,action.payments,action.afterPayment);
   if(action.type==='resumeRoll'){state.notice=null;state.phase=PHASES.ROLLING;return completeRoll(state)}
   if(isGlobalEffectActive(state,'americanRage')&&(action.type==='spaceTravel'||action.type==='moveTo')){
     notice(state,'미국의 분노','이동 봉쇄 기간이라 이동수단과 특수 이동을 사용할 수 없습니다.','warning');finishSimpleTile(state);return;
@@ -183,25 +216,36 @@ function continueAfterPayment(state,action){
 }
 
 function completeDebtPayment(state,debt){
-  const payer=currentPlayer(state);payer.money-=debt.amount;
+  const payer=state.players.find(player=>player.id===debt.payerId)??currentPlayer(state);payer.money-=debt.amount;
   const ownerAmount=debt.recipientId?debt.recipientAmount??debt.amount:0;
-  if(debt.recipientId){const target=state.players.find(player=>player.id===debt.recipientId);if(target&&!target.bankrupt)target.money+=ownerAmount}
+  const credits=debt.credits??(debt.recipientId?[{playerId:debt.recipientId,amount:ownerAmount}]:[]);
+  for(const credit of credits){const target=state.players.find(player=>player.id===credit.playerId);if(target&&!target.bankrupt)target.money+=credit.amount}
   if(debt.recipientIds)debt.recipientIds.forEach(id=>{const target=state.players.find(player=>player.id===id);if(target&&!target.bankrupt)target.money+=debt.shareAmount});
   if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+debt.amount;
   addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
   const title=debt.recipientId?'통행료 지불':debt.fundDeposit?'사회복지기금 납부':'현금 지불';
-  const bankAmount=Math.max(0,debt.amount-ownerAmount);const industrialSplit=debt.recipientId&&bankAmount>0?{payerId:payer.id,recipientId:debt.recipientId,ownerAmount,bankAmount}:null;
+  const bankAmount=Math.max(0,debt.amount-ownerAmount);const industrialSplit=debt.recipientId&&bankAmount>0&&!debt.oathShared?{payerId:payer.id,recipientId:debt.recipientId,ownerAmount,bankAmount}:null;
   const recipient=state.players.find(target=>target.id===debt.recipientId);
-  const transfer=debt.recipientId?{type:'toll',payerId:payer.id,payerName:payer.name,recipientId:debt.recipientId,recipientName:recipient?.name||'소유주',amount:debt.amount}:null;
-  cashFeedback(state,title,-debt.amount,debt.reason,'danger',{industrialSplit,transfer});state.pendingDebt=null;return continueAfterPayment(state,debt.afterPayment);
+  const transfer=debt.recipientId&&!debt.oathShared?{type:'toll',payerId:payer.id,payerName:payer.name,recipientId:debt.recipientId,recipientName:recipient?.name||'소유주',amount:debt.amount}:null;
+  const breakdown=debt.oathShared?` · ${credits.map(credit=>`${state.players.find(item=>item.id===credit.playerId)?.name} +${formatMoney(credit.amount)}`).join(' / ')}${bankAmount?` / ${debt.fundDeposit?'기금':'은행'} ${formatMoney(bankAmount)}`:''}`:'';
+  if(!debt.silent)cashFeedback(state,title,-debt.amount,`${payer.name} · ${debt.reason}${breakdown}`,'danger',{industrialSplit,transfer});state.pendingDebt=null;return continueAfterPayment(state,debt.afterPayment);
 }
 
-function prepareDebt(state,{amount,recipientId=null,recipientAmount=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null}){
-  const payer=currentPlayer(state);const debt={amount:Math.round(amount),recipientId,recipientAmount:recipientId?Math.round(recipientAmount??amount):null,recipientIds,shareAmount,reason,fundDeposit,afterPayment};
-  if(recipientId&&payer.specialCards.includes('toll-waiver')){state.pendingDebt=debt;state.phase=PHASES.PAYMENT_DECISION;return}
-  if(payer.money>=debt.amount){completeDebtPayment(state,debt);return}
+function startPaymentPlan(state,payments,afterPayment){
+  const [first,...rest]=payments;
+  if(!first)return continueAfterPayment(state,afterPayment);
+  const debt={...first,afterPayment:rest.length?{type:'nextPayment',payments:rest,afterPayment}:afterPayment};
+  const payer=state.players.find(player=>player.id===debt.payerId)??currentPlayer(state);
+  if(payer.bankrupt)return continueAfterPayment(state,debt.afterPayment);
+  if(debt.recipientId&&payer.specialCards.includes('toll-waiver')){state.pendingDebt=debt;state.phase=PHASES.PAYMENT_DECISION;return}
+  if(payer.money>=debt.amount)return completeDebtPayment(state,debt);
   state.pendingDebt=debt;state.phase=PHASES.ASSET_MANAGEMENT;
-  notice(state,'자산 정리가 필요합니다',`${reason} ${formatMoney(debt.amount)}을 지불하려면 자산을 정리하세요.`,'warning');
+  notice(state,'자산 정리가 필요합니다',`${payer.name}: ${debt.reason} ${formatMoney(debt.amount)}을 지불하려면 자산을 정리하세요.`,'warning');
+}
+
+function prepareDebt(state,{amount,recipientId=null,recipientAmount=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null,silent=false}){
+  const debt={amount:Math.round(amount),recipientId,recipientAmount:recipientId?Math.round(recipientAmount??amount):null,recipientIds,shareAmount,reason,fundDeposit,silent};
+  return startPaymentPlan(state,paymentPlan(state,debt,currentPlayer(state).id),afterPayment);
 }
 
 function buildingFeeAmount(state,playerId,rates){
@@ -240,14 +284,22 @@ function applyEvent(state,card){
   const player=currentPlayer(state);const effect=card.effect;
   notice(state,card.title,card.text,'event','golden-key');addLog(state,`${player.name}: ${card.title}`);
   if(effect.type==='resetEventDeck'){
-    const count=resetEventDeck(state);notice(state,card.title,`황금열쇠 ${count}장을 모두 다시 채우고 무작위로 섞었습니다. 보유 중인 우대권·탈출권과 발동 중인 효과는 그대로 유지됩니다.`,'success','golden-key');addLog(state,`황금열쇠 ${count}장 리셋 · 무작위로 다시 섞었습니다.`);finishSimpleTile(state);return;
+    const count=resetEventDeck(state);notice(state,card.title,`황금열쇠 ${count}장을 모두 다시 채우고 무작위로 섞었습니다. 보유 중인 카드·발동 중인 효과·이미 뽑은 두 번째 카드는 유지됩니다.`,'success','golden-key');state.notice.animation={type:'resetEventDeck',count};addLog(state,`황금열쇠 ${count}장 리셋 · 무작위로 다시 섞었습니다.`);finishSimpleTile(state);return;
+  }
+  if(effect.type==='doubleNextEvent'){state.doubleNextEvent=true;finishSimpleTile(state);return}
+  if(effect.type==='peachOath'){
+    const partner=startOath(state,player.id);notice(state,card.title,partner?`${player.name}과 ${partner.name}이 2라운드 동안 연결됩니다. 수입·벌금·통행료를 반씩 나누고 서로의 땅에서는 절반만 지불합니다. 두 사람에게 기존 결의가 있었다면 새 결의로 바뀝니다.`:'연결할 상대가 없습니다.','success','golden-key');addLog(state,partner?`도원결의 · ${player.name} ↔ ${partner.name} · 2라운드`:'도원결의 상대 없음');finishSimpleTile(state);return;
   }
   if(effect.type==='nextRollGamble'){player.gamblerPending=true;finishSimpleTile(state);return}
   if(isGlobalEffectActive(state,'americanRage')&&MOVEMENT_EFFECT_TYPES.has(effect.type)){
     notice(state,card.title,'미국의 분노로 이동이 봉쇄되어 이 카드의 이동 효과는 발동하지 않습니다.','warning','golden-key');addLog(state,`${card.title} 이동 효과가 미국의 분노로 무효화되었습니다.`);finishSimpleTile(state);return;
   }
+  if(effect.type==='swapPositions'){
+    if(state.board[player.position]?.id==='deserted-island'||!getBermudaTargets(state).length){notice(state,card.title,'무인도 제외 조건에 맞는 교환 상대가 없어 현재 위치에 머뭅니다.','warning','golden-key');finishSimpleTile(state);return}
+    state.pendingAction={type:'bermuda'};state.phase=PHASES.BERMUDA_DECISION;return;
+  }
   if(effect.type==='cash'){
-    if(effect.amount>=0){player.money+=effect.amount;finishSimpleTile(state)}else prepareDebt(state,{amount:-effect.amount,reason:card.title});
+    if(effect.amount>=0){receiveCash(state,player,effect.amount,card.title);finishSimpleTile(state)}else prepareDebt(state,{amount:-effect.amount,reason:card.title});
     return;
   }
   if(effect.type==='moveBy'){moveBy(state,effect.steps);if(player.bankrupt||state.status==='finished')return;state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return}
@@ -262,8 +314,10 @@ function applyEvent(state,card){
     if(passStart(state,player))return;const fund=collectWelfareFund(state,player);addLog(state,`${player.name}이 세계일주를 마치고 사회복지기금 ${formatMoney(fund)}을 받았습니다.`);finishSimpleTile(state);return;
   }
   if(effect.type==='collectEach'){
-    let total=0;state.players.filter(other=>other.id!==player.id&&!other.bankrupt).forEach(other=>{const paid=Math.min(other.money,effect.amount);other.money-=paid;total+=paid});
-    player.money+=total;finishSimpleTile(state);return;
+    let total=0;const liabilities=new Map();
+    state.players.filter(other=>other.id!==player.id&&!other.bankrupt).forEach(other=>splitReceipt(state,other.id,effect.amount).forEach(part=>liabilities.set(part.playerId,(liabilities.get(part.playerId)||0)+part.amount)));
+    for(const [id,amount] of liabilities){const other=state.players.find(item=>item.id===id);const paid=Math.min(other.money,amount);other.money-=paid;total+=paid}
+    receiveCash(state,player,total,card.title);finishSimpleTile(state);return;
   }
   if(effect.type==='buildingFee'){
     const amount=buildingFeeAmount(state,player.id,effect.rates);if(amount>0)prepareDebt(state,{amount,reason:card.title});else finishSimpleTile(state);return;
@@ -316,7 +370,7 @@ export function resolveTile(state,depth=0){
     if(tile.ownerId===player.id){finishSimpleTile(state);return}
     prepareDebt(state,{amount:calculateRent(state,tile,player),recipientId:tile.ownerId,reason:`${tile.name} 이용료`});return;
   }
-  if(tile.type==='event'){applyEvent(state,drawEvent(state));return}
+  if(tile.type==='event'){beginEventDraw(state);return}
   if(tile.type==='tax'){prepareDebt(state,{amount:tile.amount,reason:tile.name,fundDeposit:tile.id==='social-welfare-tax'});return}
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
   if(tile.type==='wait'){if(isGlobalEffectActive(state,'genevaConvention')){player.skipTurns=0;player.islandFailedRolls=0;notice(state,'제네바 협정','무인도 출입 금지 기간이라 머무르지 않고 지나갑니다.','success');addLog(state,`${player.name}이 제네바 협정으로 무인도에 갇히지 않았습니다.`);finishSimpleTile(state);return}player.skipTurns=1;player.islandFailedRolls=0;notice(state,tile.name,'무인도에 들어왔습니다. 더블이나 탈출권으로 먼저 나갈 수 있고, 세 번째 차례에는 자동으로 탈출합니다.','warning');finishSimpleTile(state);return}
@@ -333,6 +387,17 @@ export function chooseSpaceTravelDestination(state,targetIndex){
   if(!Number.isInteger(index)||!destination||destination.type!=='city')throw new Error('게임판에서 이동할 도시를 선택하세요.');
   moveTo(state,index);if(player.bankrupt||state.status==='finished')return destination;state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
   return destination;
+}
+
+export function chooseBermudaPlayer(state,playerId){
+  requirePhase(state,PHASES.BERMUDA_DECISION);const player=currentPlayer(state);const partner=getBermudaTargets(state).find(item=>item.id===playerId);
+  if(state.pendingAction?.type!=='bermuda'||!partner||state.board[player.position]?.id==='deserted-island')throw new Error('무인도에 있지 않은 다른 플레이어를 선택하세요.');
+  if(isGlobalEffectActive(state,'americanRage'))throw new Error('이동 봉쇄 중에는 위치를 교환할 수 없습니다.');
+  [player.position,partner.position]=[partner.position,player.position];
+  player.skipTurns=0;player.islandFailedRolls=0;partner.skipTurns=0;partner.islandFailedRolls=0;
+  state.positionSwapSequence=(state.positionSwapSequence||0)+1;
+  addLog(state,`${player.name}과 ${partner.name}의 위치를 교환했습니다. 통행료·월급·도착 효과는 없습니다.`);
+  notice(state,'버뮤다 삼각지대',`${player.name} → ${state.board[player.position].name} / ${partner.name} → ${state.board[partner.position].name}. 다음 이동은 바뀐 위치에서 시작합니다.`,'success');finishSimpleTile(state);
 }
 
 export function chooseWorldCupCity(state,tileId){
@@ -395,7 +460,7 @@ export function buyCurrentTile(state){
   requirePhase(state,PHASES.BUY_DECISION);const player=currentPlayer(state);const tile=state.board[state.pendingAction.tileIndex];
   if(tile.ownerId)throw new Error('이미 소유자가 있는 자산입니다.');if(player.money<tile.purchasePrice)throw new Error('구매할 현금이 부족합니다.');
   player.money-=tile.purchasePrice;tile.ownerId=player.id;(tile.type==='city'?player.ownedProperties:player.specialAssets).push(tile.id);
-  addLog(state,`${player.name}이 ${tile.name}을 ${formatMoney(tile.purchasePrice)}에 인수했습니다.`);if(state.gameStage==='FIRST_HALF'&&getUnownedPurchasableAssets(state).length===RULES.FIRST_HALF_AUCTION_REMAINDER)return beginLandAuction(state);finishSimpleTile(state);return {type:'asset-purchase',tile};
+  addLog(state,`${player.name}이 ${tile.name}을 ${formatMoney(tile.purchasePrice)}에 인수했습니다.`);if(state.gameStage==='FIRST_HALF'&&getUnownedPurchasableAssets(state).length===RULES.FIRST_HALF_AUCTION_REMAINDER){if(state.eventQueue?.length)state.auctionAfterEvents=true;else return beginLandAuction(state)}finishSimpleTile(state);return {type:'asset-purchase',tile};
 }
 
 export function declineDecision(state){requirePhase(state,PHASES.BUY_DECISION,PHASES.BUILD_DECISION);finishSimpleTile(state)}
@@ -419,25 +484,25 @@ export function finishBuildMode(state){requirePhase(state,PHASES.BUILD_ANYWHERE_
 function removeOwnedId(player,tile){const list=tile.type==='city'?player.ownedProperties:player.specialAssets;const index=list.indexOf(tile.id);if(index>=0)list.splice(index,1)}
 
 export function sellBuilding(state,tileId){
-  requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
+  requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=getPaymentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
   if(!tile||tile.ownerId!==player.id||tile.buildingLevel<1)throw new Error('매각할 건물이 없습니다.');
   const refund=Math.round(tile.buildingCosts[tile.buildingLevel-1]*RULES.SELL_BUILDING_RATE);tile.buildingLevel-=1;player.money+=refund;addLog(state,`${tile.name} 건물을 매각해 ${formatMoney(refund)}을 확보했습니다.`);return refund;
 }
 
 export function sellAsset(state,tileId){
-  requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
+  requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=getPaymentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
   if(!tile||tile.ownerId!==player.id)throw new Error('매각할 수 없는 자산입니다.');if(tile.buildingLevel>0)throw new Error('건물을 먼저 모두 매각하세요.');
   const refund=Math.round(tile.purchasePrice*RULES.SELL_PROPERTY_RATE);tile.ownerId=null;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;player.money+=refund;removeOwnedId(player,tile);addLog(state,`${tile.name}을 매각해 ${formatMoney(refund)}을 확보했습니다.`);return refund;
 }
 
 export function sellSpecialCard(state,cardId){
-  requirePhase(state,PHASES.WAITING_FOR_ROLL,PHASES.END_TURN,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const info=SPECIAL_CARD_INFO[cardId];
+  requirePhase(state,PHASES.WAITING_FOR_ROLL,PHASES.END_TURN,PHASES.ASSET_MANAGEMENT);const player=getPaymentPlayer(state);const info=SPECIAL_CARD_INFO[cardId];
   if(!info||!removeSpecialCard(player,cardId))throw new Error('매각할 수 없는 황금열쇠 카드입니다.');
   player.money+=info.sellPrice;addLog(state,`${player.name}이 ${info.name}을 은행에 팔아 ${formatMoney(info.sellPrice)}을 받았습니다.`);return info.sellPrice;
 }
 
 export function useSpecialCard(state,cardId){
-  const player=currentPlayer(state);
+  const player=getPaymentPlayer(state);
   if(cardId==='toll-waiver'){
     requirePhase(state,PHASES.PAYMENT_DECISION);const debt=state.pendingDebt;if(!debt?.recipientId)throw new Error('우대권을 사용할 통행료가 없습니다.');
     if(!removeSpecialCard(player,cardId))throw new Error('보유한 우대권이 없습니다.');state.pendingDebt=null;addLog(state,`${player.name}이 우대권으로 ${debt.reason}를 면제받았습니다.`);notice(state,'우대권 사용',`${debt.reason} ${formatMoney(debt.amount)}을 내지 않습니다.`,'success');continueAfterPayment(state,debt.afterPayment);return;
@@ -450,7 +515,7 @@ export function useSpecialCard(state,cardId){
 }
 
 export function settleDebt(state){
-  requirePhase(state,PHASES.PAYMENT_DECISION,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const debt=state.pendingDebt;if(!debt)throw new Error('지불할 금액이 없습니다.');
+  requirePhase(state,PHASES.PAYMENT_DECISION,PHASES.ASSET_MANAGEMENT);const player=getPaymentPlayer(state);const debt=state.pendingDebt;if(!debt)throw new Error('지불할 금액이 없습니다.');
   if(player.money<debt.amount){if(state.phase===PHASES.PAYMENT_DECISION){state.phase=PHASES.ASSET_MANAGEMENT;notice(state,'자산 정리가 필요합니다',`${debt.reason} ${formatMoney(debt.amount)}을 지불하려면 자산을 정리하세요.`,'warning');return}throw new Error('아직 현금이 부족합니다.');}
   return completeDebtPayment(state,debt);
 }
@@ -462,11 +527,14 @@ function finishGame(state,reason){
 }
 
 export function declareBankruptcy(state){
-  requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=currentPlayer(state);const debt=state.pendingDebt;
+  requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=getPaymentPlayer(state);const debt=state.pendingDebt;
   const cardValue=(player.specialCards||[]).reduce((sum,id)=>sum+(SPECIAL_CARD_INFO[id]?.sellPrice||0),0);
   if(player.money+liquidationValue(state,player.id)+cardValue>=debt.amount)throw new Error('매각 가능한 자산으로 아직 지불할 수 있습니다.');
-  if(debt.recipientId){const target=state.players.find(item=>item.id===debt.recipientId);if(target)target.money+=player.money}
+  if(debt.recipientId){const credits=debt.credits??[{playerId:debt.recipientId,amount:debt.recipientAmount??debt.amount}];for(const credit of credits){const target=state.players.find(item=>item.id===credit.playerId);if(target&&!target.bankrupt)target.money+=Math.floor(player.money*credit.amount/Math.max(1,debt.amount))}}
+  if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+player.money;
+  if(player.id!==currentPlayer(state).id){player.money=0;player.bankrupt=true;releasePlayerAssets(state,player);state.pendingDebt=null;notice(state,'도원결의 해제',`${player.name}이 분담금을 낼 수 없어 파산했습니다. 남은 플레이어의 게임을 이어갑니다.`,'danger');addLog(state,`${player.name}이 도원결의 분담금 지불 불능으로 파산했습니다.`);if(activePlayerCount(state)<=1){finishGame(state,'last-player');return}return continueAfterPayment(state,debt.afterPayment)}
   bankruptPlayer(state,player,'지불 불능');
+  if(state.status==='playing'&&debt.afterPayment?.type==='nextPayment')return startPaymentPlan(state,debt.afterPayment.payments,null);
 }
 
 function nextActiveIndex(state,from){let next=from;do{next=(next+1)%state.players.length}while(state.players[next].bankrupt);return next}
@@ -493,9 +561,11 @@ function tickGlobalEffects(state){
 
 export function endTurn(state){
   requirePhase(state,PHASES.END_TURN);const oldIndex=state.currentPlayerIndex;
+  if(state.eventQueue?.length&&!currentPlayer(state).bankrupt)throw new Error('남은 황금열쇠 효과를 먼저 적용하세요.');
+  if(state.auctionAfterEvents){state.auctionAfterEvents=false;return beginLandAuction(state)}
   const bonus=RULES.BONUS_TURN_ON_DOUBLE&&state.rolledDouble&&!state.islandEscapeThisTurn&&state.consecutiveDoubles<RULES.MAX_CONSECUTIVE_DOUBLES&&!currentPlayer(state).bankrupt;
   tickWorldCupBonuses(state,currentPlayer(state).id);
-  if(!bonus){tickGlobalEffects(state);state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
+  if(!bonus){tickGlobalEffects(state);tickOaths(state);state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
   prepareTurn(state);return {playerChanged:oldIndex!==state.currentPlayerIndex,bonusTurn:bonus};
 }
 
@@ -534,5 +604,5 @@ export function updateClock(state,seconds=1){
   state.timer.remainingSeconds=Math.max(0,state.timer.remainingSeconds-seconds);if(state.timer.remainingSeconds===0){finishGame(state,'time-limit');return true}return false;
 }
 export function getNetWorth(state,playerId){return netWorth(state,playerId)}
-export function canDeclareBankruptcy(state){const player=currentPlayer(state);const cards=(player.specialCards||[]).reduce((sum,id)=>sum+(SPECIAL_CARD_INFO[id]?.sellPrice||0),0);return Boolean(state.pendingDebt&&player.money+liquidationValue(state,player.id)+cards<state.pendingDebt.amount)}
+export function canDeclareBankruptcy(state){const player=getPaymentPlayer(state);const cards=(player.specialCards||[]).reduce((sum,id)=>sum+(SPECIAL_CARD_INFO[id]?.sellPrice||0),0);return Boolean(state.pendingDebt&&player.money+liquidationValue(state,player.id)+cards<state.pendingDebt.amount)}
 export function cloneGame(state){return clone(state)}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {animateCityLanding,animateIslandEscape,animateMoneyTransfer,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from '../js/animations.js';
+import {animateCityLanding,animateGoldenKeyReset,animateIslandEscape,animateMoneyTransfer,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from '../js/animations.js';
 import {animateDiceThrow,showMoneyFeedback} from '../js/ui.js';
 import {gamblerOutcome} from '../js/data/gambler.js';
 
@@ -29,6 +29,17 @@ function animationEnvironment(t,{reduced=false,throwOnAnimation=0}={}){
 
 const player={id:'player-1',name:'구매자 <테스트>',color:'#57dcb8',token:'✈'};
 const tile={index:1,name:'타이페이',englishName:'Taipei',purchasePrice:50000};
+
+for(const reduced of [false,true])test(`리셋은 현재 카드 수와 섞기·복귀를 표시하고 정리한다 (${reduced?'정적':'동작'})`,async t=>{
+  const env=animationEnvironment(t,{reduced});await animateGoldenKeyReset({count:41});const layer=env.body.appended[0];assert.match(layer.innerHTML,/41장 전체 충전/);assert.match(layer.innerHTML,/41 \/ 41/);assert.equal((layer.innerHTML.match(/data-reset-card=/g)||[]).length,14);assert.ok(layer.removed);
+  if(reduced)assert.equal(env.animations.length,0);else{assert.equal(env.animations.length,15);assert.ok(env.animations.every(animation=>animation.cancelled));assert.equal(env.animations[0].keyframes.length,7)}
+});
+
+test('카지노는 이익 조명·손실 소등·7의 조용한 결과를 구분한다',async t=>{
+  const env=animationEnvironment(t);await showMoneyFeedback({gambler:gamblerOutcome(12)});assert.match(env.body.appended[0].innerHTML,/casino-lights/);assert.equal(env.animations.length,23);
+  const before=env.animations.length;await showMoneyFeedback({gambler:gamblerOutcome(7)});assert.equal(env.animations.length-before,2);
+  await showMoneyFeedback({gambler:{...gamblerOutcome(6),sharing:'도원결의 · A / B 각각 30만 원'}});assert.match(env.body.appended[2].innerHTML,/각각 30만 원/);assert.ok(env.animations.some(animation=>animation.keyframes.some(frame=>frame.filter==='brightness(.62)')));
+});
 
 for(const reduced of [false,true])test(`도박사 결과는 손익·무승부·지불 대기를 한 화면에 표시한다 (${reduced?'동작 줄이기':'일반'})`,async t=>{
   const env=animationEnvironment(t,{reduced});

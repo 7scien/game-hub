@@ -1,4 +1,7 @@
 export const EVENT_CARDS = [
+  {id:'bermuda-triangle',category:'move',title:'버뮤다 삼각지대',text:'다른 플레이어 한 명을 지정해 비행기 위치를 맞바꿉니다. 무인도에 있는 플레이어는 선택할 수 없습니다. 교환으로 월급·통행료·도착 효과가 발생하지 않습니다.',effect:{type:'swapPositions'}},
+  {id:'peach-garden-oath',category:'special',title:'도원결의',text:'무작위 상대 한 명과 2라운드 동안 연결됩니다. 월급·현금 보너스·벌금·사회복지기금·통행료를 반씩 나눕니다. 서로의 땅에서는 방문자가 통행료 절반만 냅니다. 구입·건설·매각·대출·거래는 제외됩니다.',effect:{type:'peachOath'}},
+  {id:'ask-and-double',category:'special',title:'묻고 더블로 가!',text:'누구든 다음에 처음 황금열쇠를 뽑으면 두 장을 뽑고 효과를 모두 순서대로 적용합니다. 발동할 때까지 턴 제한 없이 유지됩니다.',effect:{type:'doubleNextEvent'}},
   {id:'golden-key-reset',category:'special',title:'황금 열쇠 리셋',text:'남은 장수와 관계없이 모든 황금열쇠 카드를 다시 채우고 무작위로 섞습니다. 이 리셋 카드도 다시 포함됩니다.',effect:{type:'resetEventDeck'}},
   {id:'las-vegas-gambler',category:'special',title:'라스베가스의 도박사',text:'내가 다음에 굴릴 주사위로 한 번 정산합니다. 합 2~6: 합×10만 원 손실, 7: 변동 없음, 8~12: (합−6)×10만 원 획득. 더블 보너스·무인도 주사위도 포함합니다.',effect:{type:'nextRollGamble'}},
   {id:'air-travel',category:'move',title:'항공여행',text:'콩코드여객기를 타고 타이페이로 갑니다. 소유자가 있으면 객실료를 냅니다.',effect:{type:'travelRoute',vehicleTileId:'concorde',destinationTileId:'taipei'}},

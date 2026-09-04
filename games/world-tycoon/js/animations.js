@@ -33,15 +33,31 @@ function targetRing(point,label=''){
   return `<span class="motion-target-ring" style="left:${point.x}px;top:${point.y}px"><b>${escapeHtml(label)}</b></span>`;
 }
 
-export async function showGamblerResult({total,amount,quote,pendingPayment=false}){
+export async function showGamblerResult({total,amount,quote,pendingPayment=false,sharing=''}){
   const tone=amount<0?'loss':amount>0?'win':'draw';const magnitude=Math.abs(amount)/100000;
   const amountLabel=amount===0?'0원 · 변동 없음':`${amount>0?'+':'−'}${formatMoney(Math.abs(amount))}`;
   const status=pendingPayment?'손실 확정 · 자산 정리 후 지불':amount<0?'은행에 지불했습니다':amount>0?'은행에서 받았습니다':'잃지도, 얻지도 않았습니다';
   await playOverlay(`gambler ${tone}`,`라스베가스의 도박사 · 주사위 합 ${total} · ${amountLabel} · ${quote} · ${status}`,
-    `<section class="gambler-result-card"><small>라스베가스의 도박사</small><div class="gambler-roll"><span aria-hidden="true">🎲</span><b>${total}</b><span>주사위 합</span></div><strong class="gambler-amount">${amountLabel}</strong><p class="gambler-quote">${escapeHtml(quote)}</p><em>${status}</em>${pendingPayment?'<span class="gambler-payment-hint">지불을 마치면 이 주사위로 이동합니다.</span>':''}</section>`,2800,(layer,run)=>{
+    `<section class="gambler-result-card casino-marquee"><div class="casino-lights" aria-hidden="true">${Array.from({length:20},(_,i)=>`<i data-casino-light="${i}"></i>`).join('')}</div><small>LAS VEGAS</small><div class="casino-caption">라스베가스의 도박사</div><div class="gambler-roll"><span aria-hidden="true">🎲</span><b>${total}</b><span>주사위 합</span></div><strong class="gambler-amount">${amountLabel}</strong><p class="gambler-quote">${escapeHtml(quote)}</p><em>${status}</em>${sharing?`<span class="gambler-sharing">${escapeHtml(sharing)}</span>`:''}${pendingPayment?'<span class="gambler-payment-hint">지불을 마치면 이 주사위로 이동합니다.</span>':''}</section>`,3600,(layer,run)=>{
       run(layer.querySelector('.gambler-result-card'),[{opacity:0,transform:move(0,15,.9)},{opacity:1,transform:move()}],{duration:300});
       run(layer.querySelector('.gambler-amount'),tone==='loss'?[{translate:'0 0'},{translate:`${magnitude}px 0`,offset:.25},{translate:`-${magnitude}px 0`,offset:.5},{translate:'0 0'}]:[{scale:.8,opacity:.4},{scale:1.08,opacity:1,offset:.7},{scale:1,opacity:1}],{duration:460,delay:250});
-    },2800);
+      if(tone!=='draw')for(let i=0;i<20;i++)run(layer.querySelector(`[data-casino-light="${i}"]`),tone==='win'?[{opacity:.12,boxShadow:'0 0 0 transparent'},{opacity:1,boxShadow:'0 0 14px #ffe181'}]:[{opacity:1},{opacity:.12}],{duration:450,delay:350+i*38});
+      if(tone==='loss')run(layer.querySelector('.casino-marquee'),[{filter:'brightness(1)'},{filter:'brightness(.62)',offset:.6},{filter:'brightness(.8)'}],{duration:850,delay:400});
+      if(tone!=='draw')run(layer.querySelector('.gambler-quote'),[{opacity:0,translate:'0 8px'},{opacity:1,translate:'0 0'}],{duration:350,delay:1100});
+    },3600);
+}
+
+export async function animateGoldenKeyReset({count}){
+  const target=centerOf(document.querySelector('.center-card-deck'));const dx=target.x-innerWidth/2;const dy=target.y-innerHeight/2;
+  await playOverlay('deck-reset',`황금열쇠 ${count}장 전체 리셋 · 무작위 섞기`,
+    `<div class="reset-caption"><small>GOLDEN KEY RESET</small><strong>황금열쇠가 돌아옵니다</strong><span>${count}장 전체 충전 · 무작위 섞기</span></div>${Array.from({length:14},(_,i)=>`<div class="reset-key-card" data-reset-card="${i}" aria-hidden="true"><span>◆</span><small>GOLDEN KEY</small></div>`).join('')}<div class="reset-complete"><b>${count} / ${count}</b><span>다시, 새로운 운명</span></div>`,2600,(layer,run)=>{
+      for(let i=0;i<14;i++){
+        const angle=i*Math.PI*2/14;const radius=Math.min(innerWidth*.39,200);const x=Math.cos(angle)*radius;const y=Math.sin(angle)*radius;
+        const frames=[{opacity:0,transform:`${move(x,y,.45)} rotate(${i*26}deg)`},{opacity:1,transform:`${move(-y*.65,x*.65,.7)} rotate(${i*26+110}deg)`,offset:.2},{opacity:1,transform:`${move(0,0,.8)} rotate(0deg)`,offset:.38},{opacity:1,transform:`${move(i%2?64:-64,(i%7)*-2,.8)} rotate(${i%2?12:-12}deg)`,offset:.53},{opacity:1,transform:`${move(0,-i*1.5,.8)} rotate(0deg)`,offset:.7},{opacity:1,transform:`${move(dx,dy,.3)} rotate(0deg)`,offset:.9},{opacity:0,transform:move(dx,dy,.25)}];
+        run(layer.querySelector(`[data-reset-card="${i}"]`),frames,{duration:2250,delay:i*14});
+      }
+      run(layer.querySelector('.reset-complete'),[{opacity:0,scale:.7},{opacity:1,scale:1.1,offset:.65},{opacity:1,scale:1}],{duration:450,delay:1850});
+    },1300);
 }
 
 export async function animateTransportStatus({locked,tiles=[]}){
