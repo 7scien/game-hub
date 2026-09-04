@@ -1,4 +1,5 @@
 import {
+  chooseFatefulCrossroads,completeFatefulRoll,chooseGhostCity,chooseTrojanCity,
   advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,cancelTrade,castEarlyAuctionVote,chooseBermudaPlayer,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,dismissNotice,getPaymentPlayer,resolveNextEvent,
   endTurn,finishBuildMode,finishMovement,openBuildMode,openTrade,passAuction,placeAuctionBid,proposeEarlyAuction,proposeTrade,repayBankLoan,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
 } from './game.js';
@@ -7,6 +8,7 @@ import {PHASES} from './rules.js';
 import {animateCityLanding,animateGoldenKeyReset,animateIslandEscape,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from './animations.js';
 import {capturePresentation,presentationChanges} from './motion-events.js';
 import {
+  animateFateDie,
   animateAuctionAward,animateAuctionBid,animateBankruptcy,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateRegionMonopoly,animateSecondHalfStart,animateTokenStep,animateWorldCup,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
@@ -52,6 +54,20 @@ async function handleRoll(){
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
     const dice=[...state.dice];const total=state.rollTotal;await animateDiceThrow(dice,total);const rollResult=commit(()=>completeRoll(state));await playResolvedRoll(rollResult);
   }finally{actionLocked=false}
+}
+
+async function handleFateChoice(choice=null){
+  if(actionLocked||cinematicPending)return;actionLocked=true;
+  try{
+    if(choice!==null){const selected=commit(()=>chooseFatefulCrossroads(state,choice));if(!selected||selected.choice==='safe')return}
+    if(state.phase!==PHASES.FATE_ROLLING)return;
+    const face=state.pendingAction.face;await queueCinematic(()=>animateFateDie(face));commit(()=>completeFatefulRoll(state));await cinematicQueue;
+  }finally{actionLocked=false}
+}
+
+async function handleGhostCity(tileId){
+  if(actionLocked||cinematicPending)return;actionLocked=true;
+  try{const result=commit(()=>chooseGhostCity(state,tileId),{rerender:false});if(result){const {tile}=result;await queueCinematic(()=>animateLandmarkConstruction({tileIndex:tile.index,tileName:tile.name,landmarkName:tile.landmarkName,landmarkGlyph:tile.landmarkGlyph,previousLevel:result.previousLevel,newLevel:4}));render()}}finally{actionLocked=false}
 }
 
 async function playResolvedRoll(rollResult){
@@ -154,6 +170,10 @@ document.addEventListener('click',event=>{
   if(action==='confirm-new-game'){selectedSlot=state?.saveSlot||selectedSlot;clearGame(globalThis.localStorage,selectedSlot);state=null;refreshSaves();setup=true;render();return}
   if(!state)return;
   if(action==='roll-dice'){handleRoll();return}
+  if(action==='choose-fate'){handleFateChoice(target.dataset.choice);return}
+  if(action==='resume-fate-roll'){handleFateChoice();return}
+  if(action==='choose-ghost-city'){handleGhostCity(target.dataset.tile);return}
+  if(action==='choose-trojan-city'){commit(()=>chooseTrojanCity(state,target.dataset.tile));return}
   if(action==='resolve-next-event'){commit(()=>resolveNextEvent(state));return}
   if(action==='choose-bermuda-player'){commit(()=>chooseBermudaPlayer(state,target.dataset.player));return}
   if(action==='buy-tile'){handleBuyTile();return}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {animateCityLanding,animateGoldenKeyReset,animateIslandEscape,animateMoneyTransfer,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from '../js/animations.js';
-import {animateDiceThrow,showMoneyFeedback} from '../js/ui.js';
+import {animateDiceThrow,animateFateDie,showMoneyFeedback} from '../js/ui.js';
 import {gamblerOutcome} from '../js/data/gambler.js';
 
 // Unit-level animation lifecycle checks; no browser or rendering dependencies.
@@ -29,6 +29,13 @@ function animationEnvironment(t,{reduced=false,throwOnAnimation=0}={}){
 
 const player={id:'player-1',name:'구매자 <테스트>',color:'#57dcb8',token:'✈'};
 const tile={index:1,name:'타이페이',englishName:'Taipei',purchasePrice:50000};
+
+for(const reduced of [false,true])test(`갈림길은 주사위 한 개의 실제 결과만 보여주고 이동·더블은 표시하지 않는다 (${reduced?'정적':'동작'})`,async t=>{
+  const env=animationEnvironment(t,{reduced});
+  for(let face=1;face<=6;face++)await animateFateDie(face);
+  assert.equal(env.body.appended.length,6);env.body.appended.forEach((layer,index)=>{assert.ok(layer.removed);assert.ok(layer.attributes['aria-label'].includes(`· ${index+1} ·`));assert.ok(!layer.innerHTML.includes('칸 이동'));assert.ok(!layer.innerHTML.includes('dice-double-badge'));if(!reduced){assert.equal((layer.innerHTML.match(/data-cinematic-die=/g)||[]).length,1);assert.equal((layer.innerHTML.match(/cinematic-dice-face /g)||[]).length,6)}});
+  assert.ok(env.animations.every(animation=>animation.cancelled));if(reduced)assert.equal(env.animations.length,0);
+});
 
 for(const reduced of [false,true])test(`리셋은 현재 카드 수와 섞기·복귀를 표시하고 정리한다 (${reduced?'정적':'동작'})`,async t=>{
   const env=animationEnvironment(t,{reduced});await animateGoldenKeyReset({count:41});const layer=env.body.appended[0];assert.match(layer.innerHTML,/41장 전체 충전/);assert.match(layer.innerHTML,/41 \/ 41/);assert.equal((layer.innerHTML.match(/data-reset-card=/g)||[]).length,14);assert.ok(layer.removed);

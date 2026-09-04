@@ -189,9 +189,9 @@ test('우주여행 초대권도 콜럼비아호 이용료를 정산한다',()=>{
   traveler.position=2;state.eventDeck=['space-invitation'];state.eventCursor=0;const before=owner.money;resolveTile(state);assert.equal(owner.money,before+columbia.baseRent);assert.equal(state.phase,PHASES.TRAVEL_DECISION);
 });
 
-test('새 카드 세 종을 포함한 황금열쇠 41장 구성을 사용한다',()=>{
-  assert.equal(EVENT_CARDS.length,41);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
-  assert.equal(counts.move.length,13);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,15);
+test('새 카드 세 종을 포함한 황금열쇠 44장 구성을 사용한다',()=>{
+  assert.equal(EVENT_CARDS.length,44);const counts=Object.groupBy(EVENT_CARDS,card=>card.category);
+  assert.equal(counts.move.length,13);assert.equal(counts.income.length,7);assert.equal(counts.expense.length,6);assert.equal(counts.special.length,18);
   assert.equal(EVENT_CARDS.filter(card=>card.title==='우대권').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='반액대매출').length,2);assert.equal(EVENT_CARDS.filter(card=>card.title==='전액대매출').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='월드컵 개최').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='일제의 수탈').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='911 테러').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='산업화').length,1);assert.equal(EVENT_CARDS.filter(card=>card.title==='제네바 협정').length,1);
 });
 
@@ -312,7 +312,7 @@ test('시간 제한 종료 시 순자산으로 승자를 결정한다',()=>{
 });
 
 test('더블이면 같은 플레이어가 보너스 턴을 얻는다',()=>{
-  const state=createGame(2,{mode:'full',rng:()=>.2});rollDice(state,rngFor(0,0));finishDiceMovement(state);
+  const state=createGame(2,{mode:'full',rng:()=>.2});state.eventDeck=['pension'];state.eventCursor=0;rollDice(state,rngFor(0,0));finishDiceMovement(state);
   if(state.phase===PHASES.BUY_DECISION)state.phase=PHASES.END_TURN;
   const result=endTurn(state);assert.equal(result.bonusTurn,true);assert.equal(state.currentPlayerIndex,0);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
 });

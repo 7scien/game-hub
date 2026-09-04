@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {advanceMovement,buildCurrentTile,buyCurrentTile,chooseBermudaPlayer,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,endTurn,getBermudaTargets,getPaymentPlayer,resolveNextEvent,resolveTile,rollDice,sellAsset,settleDebt,takeBankLoan,useSpecialCard} from '../js/game.js';
+import {chooseFatefulCrossroads,completeFatefulRoll,chooseGhostCity,chooseTrojanCity,getGhostCityTargets,getTrojanTargets,advanceMovement,buildCurrentTile,buyCurrentTile,chooseBermudaPlayer,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,declineDecision,endTurn,getBermudaTargets,getPaymentPlayer,resolveNextEvent,resolveTile,rollDice,sellAsset,settleDebt,takeBankLoan,useSpecialCard} from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
 import {oathPartner,paymentPlan,startOath} from '../js/oath.js';
-import {PHASES,RULES,calculateRent} from '../js/rules.js';
+import {PHASES,RULES,calculateRent,effectiveBuildingLevel,hasGhostCity} from '../js/rules.js';
 import {loadGame,saveGame} from '../js/storage.js';
 import {renderGame,renderHelp} from '../js/ui.js';
 import {capturePresentation,presentationChanges} from '../js/motion-events.js';
@@ -17,8 +17,8 @@ const changes=(s,before)=>balances(s).map((n,i)=>n-before[i]);
 const roll=(s,a,b)=>{s.phase=PHASES.WAITING_FOR_ROLL;const values=[(a-.5)/6,(b-.5)/6];rollDice(s,()=>values.shift());return completeRoll(s)};
 const roundTrip=s=>{const data=new Map();const storage={getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)};saveGame(s,storage);return loadGame(storage)};
 
-test('새 카드들은 한 장씩 포함되고 리셋은 현재 전체 41장을 사용한다',()=>{
-  assert.equal(EVENT_CARDS.length,41);for(const id of ['bermuda-triangle','peach-garden-oath','ask-and-double'])assert.equal(EVENT_CARDS.filter(c=>c.id===id).length,1);
+test('새 카드들은 한 장씩 포함되고 리셋은 현재 전체 44장을 사용한다',()=>{
+  assert.equal(EVENT_CARDS.length,44);for(const id of ['bermuda-triangle','peach-garden-oath','ask-and-double'])assert.equal(EVENT_CARDS.filter(c=>c.id===id).length,1);
   const s=game();draw(s,'golden-key-reset');assert.equal(s.eventDeck.length,EVENT_CARDS.length);assert.equal(s.notice.animation.count,EVENT_CARDS.length);
 });
 
@@ -126,7 +126,7 @@ test('첫 카드 선택을 마쳐야 두 번째 카드를 사용하며 저장해
 });
 
 test('두 장 중 리셋은 이미 확보한 다음 카드와 대기 효과를 없애지 않는다',()=>{
-  const s=game();linked(s);s.doubleNextEvent=true;draw(s,'golden-key-reset','ask-and-double');assert.equal(s.eventDeck.length,41);assert.equal(s.eventCursor,0);assert.deepEqual(s.eventQueue,['ask-and-double']);assert.equal(s.oaths.length,1);resolveNextEvent(s);assert.equal(s.doubleNextEvent,true);assert.equal(s.eventCursor,0);
+  const s=game();linked(s);s.doubleNextEvent=true;draw(s,'golden-key-reset','ask-and-double');assert.equal(s.eventDeck.length,EVENT_CARDS.length);assert.equal(s.eventCursor,0);assert.deepEqual(s.eventQueue,['ask-and-double']);assert.equal(s.oaths.length,1);resolveNextEvent(s);assert.equal(s.doubleNextEvent,true);assert.equal(s.eventCursor,0);
 });
 
 test('두 장 중 묻고 더블은 확보된 두 번째 카드가 아니라 다음 실제 뽑기에 적용한다',()=>{
@@ -146,12 +146,12 @@ test('이동 봉쇄는 두 번째 이동 카드만 막고 현금 카드와 두 �
 });
 
 test('옛 저장에는 세 카드를 한 번씩 추가하고 새 결의·대기·큐를 보존한다',()=>{
-  let s=game();delete s.oaths;delete s.eventQueue;delete s.doubleNextEvent;s.eventDeck=s.eventDeck.filter(id=>!['bermuda-triangle','peach-garden-oath','ask-and-double'].includes(id));s=roundTrip(s);assert.equal(s.eventDeck.length,41);assert.deepEqual(s.oaths,[]);assert.deepEqual(s.eventQueue,[]);assert.equal(s.doubleNextEvent,false);
-  linked(s);s.doubleNextEvent=true;s.eventQueue=['nobel-prize'];const restored=roundTrip(s);assert.deepEqual(restored.oaths,s.oaths);assert.equal(restored.doubleNextEvent,true);assert.deepEqual(restored.eventQueue,['nobel-prize']);assert.equal(roundTrip(restored).eventDeck.length,41);
+  let s=game();delete s.oaths;delete s.eventQueue;delete s.doubleNextEvent;s.eventDeck=s.eventDeck.filter(id=>!['bermuda-triangle','peach-garden-oath','ask-and-double'].includes(id));s=roundTrip(s);assert.equal(s.eventDeck.length,EVENT_CARDS.length);assert.deepEqual(s.oaths,[]);assert.deepEqual(s.eventQueue,[]);assert.equal(s.doubleNextEvent,false);
+  linked(s);s.doubleNextEvent=true;s.eventQueue=['nobel-prize'];const restored=roundTrip(s);assert.deepEqual(restored.oaths,s.oaths);assert.equal(restored.doubleNextEvent,true);assert.deepEqual(restored.eventQueue,['nobel-prize']);assert.equal(roundTrip(restored).eventDeck.length,EVENT_CARDS.length);
 });
 
 test('UI는 교환 가능한 상대·두 장 대기·개별 분담 정산·도움말을 표시한다',()=>{
-  const root={querySelector:()=>null};const s=game();draw(s,'bermuda-triangle');s.notice=null;renderGame(root,s);assert.match(root.innerHTML,/data-action="choose-bermuda-player"/);linked(s);s.players[1].money=0;s.doubleNextEvent=true;draw(s,'speeding-fine','pension');s.notice=null;renderGame(root,s);assert.match(root.innerHTML,/도원결의 분담/);assert.match(root.innerHTML,/추가 황금열쇠 1장/);assert.match(root.innerHTML,/<h2>플레이어 2<\/h2>/);assert.match(renderHelp(),/버뮤다 삼각지대/);assert.match(renderHelp(),/41장/);
+  const root={querySelector:()=>null};const s=game();draw(s,'bermuda-triangle');s.notice=null;renderGame(root,s);assert.match(root.innerHTML,/data-action="choose-bermuda-player"/);linked(s);s.players[1].money=0;s.doubleNextEvent=true;draw(s,'speeding-fine','pension');s.notice=null;renderGame(root,s);assert.match(root.innerHTML,/도원결의 분담/);assert.match(root.innerHTML,/추가 황금열쇠 1장/);assert.match(root.innerHTML,/<h2>플레이어 2<\/h2>/);assert.match(renderHelp(),/버뮤다 삼각지대/);assert.match(renderHelp(),/44장/);
 });
 
 test('홀수 금액을 나눠도 통행료 총액과 은행 몫은 보존한다',()=>{
@@ -173,11 +173,15 @@ test('모든 두 카드 조합은 선택·지불을 끝내면 막힘 없이 완�
     while(s.status==='playing'&&(s.phase!==PHASES.END_TURN||s.eventQueue.length)){
       assert.ok(actions++<30,`${first.id} + ${second.id}: loop`);
       if(s.phase===PHASES.END_TURN)resolveNextEvent(s);
+      else if(s.phase===PHASES.FATE_DECISION)chooseFatefulCrossroads(s,'risk',()=>.7);
+      else if(s.phase===PHASES.FATE_ROLLING)completeFatefulRoll(s);
+      else if(s.phase===PHASES.TROJAN_DECISION)chooseTrojanCity(s,getTrojanTargets(s)[0].id);
+      else if(s.phase===PHASES.GHOST_CITY_DECISION)chooseGhostCity(s,getGhostCityTargets(s)[0].id);
       else if([PHASES.BUY_DECISION,PHASES.BUILD_DECISION].includes(s.phase))declineDecision(s);
       else if(s.phase===PHASES.BERMUDA_DECISION)chooseBermudaPlayer(s,getBermudaTargets(s)[0].id);
       else if(s.phase===PHASES.WORLD_CUP_DECISION)chooseWorldCupCity(s,s.board.find(t=>t.type==='city'&&t.ownerId==='player-1').id);
-      else if(s.phase===PHASES.INDUSTRIALIZATION_DECISION)chooseIndustrializationCity(s,s.board.find(t=>t.type==='city'&&t.ownerId==='player-1'&&t.buildable!==false).id);
-      else if(s.phase===PHASES.TERROR_TARGET_DECISION)chooseTerrorTarget(s,s.board.find(t=>t.buildingLevel>0).id);
+      else if(s.phase===PHASES.INDUSTRIALIZATION_DECISION)chooseIndustrializationCity(s,s.board.find(t=>t.type==='city'&&t.ownerId==='player-1'&&t.buildable!==false&&!hasGhostCity(t)).id);
+      else if(s.phase===PHASES.TERROR_TARGET_DECISION)chooseTerrorTarget(s,s.board.find(t=>effectiveBuildingLevel(t)>0).id);
       else if(s.phase===PHASES.TRAVEL_DECISION)chooseSpaceTravelDestination(s,1);
       else if([PHASES.PAYMENT_DECISION,PHASES.ASSET_MANAGEMENT].includes(s.phase))settleDebt(s);
       else assert.fail(`${first.id} + ${second.id}: unexpected ${s.phase}`);

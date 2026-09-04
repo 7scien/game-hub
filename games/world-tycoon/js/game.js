@@ -2,7 +2,8 @@ import {createBoard,findTileIndex} from './board.js';
 import {EVENT_CARDS} from './data/events.js';
 import {gamblerOutcome} from './data/gambler.js';
 import {oathPartner,paymentPlan,splitReceipt,startOath,tickOaths} from './oath.js';
-import {PHASES,PLAYER_COLORS,PLAYER_TOKENS,RULES,buildingValue,calculateRent,formatMoney,liquidationValue,netWorth} from './rules.js';
+import {activeTrojan,clearCityEffects,divertTrojanPayments,tickCityEffects} from './city-effects.js';
+import {PHASES,PLAYER_COLORS,PLAYER_TOKENS,RULES,buildingValue,calculateRent,effectiveBuildingLevel,formatMoney,hasGhostCity,liquidationValue,netWorth} from './rules.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const currentPlayer=state=>state.players[state.currentPlayerIndex];
@@ -53,6 +54,8 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
 export function getCurrentPlayer(state){return currentPlayer(state)}
 export function getPaymentPlayer(state){return state.players.find(player=>player.id===state.pendingDebt?.payerId)??currentPlayer(state)}
 export function getBermudaTargets(state){return state.players.filter(player=>player.id!==currentPlayer(state).id&&!player.bankrupt&&state.board[player.position]?.id!=='deserted-island')}
+export function getTrojanTargets(state){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId&&tile.ownerId!==currentPlayer(state).id&&state.players.some(p=>p.id===tile.ownerId&&!p.bankrupt)&&!activeTrojan(state,tile))}
+export function getGhostCityTargets(state){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===currentPlayer(state).id&&tile.buildable!==false&&tile.buildingLevel<4&&!hasGhostCity(tile))}
 export function getAuctionBidder(state){return state.players.find(player=>player.id===state.auction?.turnPlayerId)??currentPlayer(state)}
 export function getEarlyAuctionVoter(state){return state.players.find(player=>player.id===state.earlyAuctionVote?.currentVoterId)??currentPlayer(state)}
 export function getUnownedPurchasableAssets(state){return state.board.filter(tile=>PURCHASABLE_TYPES.has(tile.type)&&!tile.ownerId)}
@@ -71,6 +74,7 @@ export function rollDice(state,rng=Math.random){
 
 function releasePlayerAssets(state,player){
   state.oaths=(state.oaths||[]).filter(oath=>!oath.playerIds.includes(player.id));
+  for(const tile of state.board){if(tile.ownerId===player.id)clearCityEffects(tile);else if(tile.trojanHorse?.beneficiaryId===player.id)tile.trojanHorse=null}
   state.board.filter(tile=>tile.ownerId===player.id).forEach(tile=>{tile.ownerId=null;tile.buildingLevel=0;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null});player.ownedProperties=[];player.specialAssets=[];player.specialCards=[];player.bankLoan=null;player.gamblerPending=false;
 }
 
@@ -222,6 +226,7 @@ function completeDebtPayment(state,debt){
   for(const credit of credits){const target=state.players.find(player=>player.id===credit.playerId);if(target&&!target.bankrupt)target.money+=credit.amount}
   if(debt.recipientIds)debt.recipientIds.forEach(id=>{const target=state.players.find(player=>player.id===id);if(target&&!target.bankrupt)target.money+=debt.shareAmount});
   if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+debt.amount;
+  consumeTrojan(state,debt);
   addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
   const title=debt.recipientId?'통행료 지불':debt.fundDeposit?'사회복지기금 납부':'현금 지불';
   const bankAmount=Math.max(0,debt.amount-ownerAmount);const industrialSplit=debt.recipientId&&bankAmount>0&&!debt.oathShared?{payerId:payer.id,recipientId:debt.recipientId,ownerAmount,bankAmount}:null;
@@ -237,15 +242,24 @@ function startPaymentPlan(state,payments,afterPayment){
   const debt={...first,afterPayment:rest.length?{type:'nextPayment',payments:rest,afterPayment}:afterPayment};
   const payer=state.players.find(player=>player.id===debt.payerId)??currentPlayer(state);
   if(payer.bankrupt)return continueAfterPayment(state,debt.afterPayment);
-  if(debt.recipientId&&payer.specialCards.includes('toll-waiver')){state.pendingDebt=debt;state.phase=PHASES.PAYMENT_DECISION;return}
+  if(debt.amount>0&&debt.recipientId&&payer.specialCards.includes('toll-waiver')){state.pendingDebt=debt;state.phase=PHASES.PAYMENT_DECISION;return}
   if(payer.money>=debt.amount)return completeDebtPayment(state,debt);
   state.pendingDebt=debt;state.phase=PHASES.ASSET_MANAGEMENT;
   notice(state,'자산 정리가 필요합니다',`${payer.name}: ${debt.reason} ${formatMoney(debt.amount)}을 지불하려면 자산을 정리하세요.`,'warning');
 }
 
-function prepareDebt(state,{amount,recipientId=null,recipientAmount=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null,silent=false}){
+function prepareDebt(state,{amount,recipientId=null,recipientAmount=null,recipientIds=null,shareAmount=null,reason,fundDeposit=false,afterPayment=null,silent=false,tile=null}){
   const debt={amount:Math.round(amount),recipientId,recipientAmount:recipientId?Math.round(recipientAmount??amount):null,recipientIds,shareAmount,reason,fundDeposit,silent};
-  return startPaymentPlan(state,paymentPlan(state,debt,currentPlayer(state).id),afterPayment);
+  const payments=paymentPlan(state,debt,currentPlayer(state).id);
+  return startPaymentPlan(state,tile?divertTrojanPayments(state,tile,payments):payments,afterPayment);
+}
+
+function consumeTrojan(state,debt){
+  if(!debt.trojan?.interceptedAmount)return;
+  const tile=state.board.find(item=>item.id===debt.trojan.tileId);
+  if(tile?.trojanHorse?.id!==debt.trojan.effectId)return;
+  tile.trojanHorse=null;const beneficiary=state.players.find(p=>p.id===debt.trojan.beneficiaryId);
+  addLog(state,`트로이 목마 발동! ${tile.name}의 이번 통행료 수익을 ${beneficiary?.name||'설치자'}에게 돌립니다.`);
 }
 
 function buildingFeeAmount(state,playerId,rates){
@@ -261,6 +275,7 @@ function sellMostExpensive(state,player,rate,saleName){
   if(!assets.length){addLog(state,`${player.name}은 ${saleName}할 부동산이 없습니다.`);return null}
   const currentValue=tile=>(tile.purchasePrice||0)+buildingValue(tile);const tile=[...assets].sort((a,b)=>currentValue(b)-currentValue(a)||b.baseRent-a.baseRent)[0];
   const refund=Math.round((tile.purchasePrice+buildingValue(tile))*rate);tile.ownerId=null;tile.buildingLevel=0;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;removeOwnedId(player,tile);player.money+=refund;
+  clearCityEffects(tile);
   addLog(state,`${player.name}이 현재 가치가 가장 높은 ${tile.name}을 ${saleName}해 ${formatMoney(refund)}을 받았습니다.`);return {tile,refund};
 }
 
@@ -283,6 +298,12 @@ function beginSpaceTravel(state){
 function applyEvent(state,card){
   const player=currentPlayer(state);const effect=card.effect;
   notice(state,card.title,card.text,'event','golden-key');addLog(state,`${player.name}: ${card.title}`);
+  if(effect.type==='fatefulCrossroads'){state.pendingAction={type:'fateful-crossroads'};state.phase=PHASES.FATE_DECISION;return}
+  if(effect.type==='trojanHorse'||effect.type==='ghostCity'){
+    const ghost=effect.type==='ghostCity';const targets=ghost?getGhostCityTargets(state):getTrojanTargets(state);
+    if(!targets.length){notice(state,card.title,ghost?'호텔 2개 미만인 건설 가능한 내 도시가 없습니다.':'목마를 설치할 상대 도시가 없습니다.','warning','golden-key');finishSimpleTile(state);return}
+    state.pendingAction={type:ghost?'ghost-city':'trojan-horse'};state.phase=ghost?PHASES.GHOST_CITY_DECISION:PHASES.TROJAN_DECISION;return;
+  }
   if(effect.type==='resetEventDeck'){
     const count=resetEventDeck(state);notice(state,card.title,`황금열쇠 ${count}장을 모두 다시 채우고 무작위로 섞었습니다. 보유 중인 카드·발동 중인 효과·이미 뽑은 두 번째 카드는 유지됩니다.`,'success','golden-key');state.notice.animation={type:'resetEventDeck',count};addLog(state,`황금열쇠 ${count}장 리셋 · 무작위로 다시 섞었습니다.`);finishSimpleTile(state);return;
   }
@@ -332,12 +353,12 @@ function applyEvent(state,card){
     startGlobalEffect(state,'imperialExploitation',effect.rounds);notice(state,card.title,`즉시 발동했습니다. 앞으로 ${effect.rounds}라운드 동안 제주도·부산·서울 통행료가 도쿄 소유주에게 귀속됩니다.`,'warning','golden-key');addLog(state,`일제의 수탈이 ${effect.rounds}라운드 동안 적용됩니다.`);finishSimpleTile(state);return;
   }
   if(effect.type==='terrorAttack'){
-    startGlobalEffect(state,'americanRage',effect.rageRounds);const targets=state.board.filter(tile=>tile.type==='city'&&tile.buildingLevel>0);
+    startGlobalEffect(state,'americanRage',effect.rageRounds);const targets=state.board.filter(tile=>tile.type==='city'&&effectiveBuildingLevel(tile)>0);
     if(!targets.length){notice(state,card.title,`파괴할 건물이 없습니다. 미국의 분노 이동 봉쇄만 ${effect.rageRounds}라운드 동안 즉시 적용됩니다.`,'warning','golden-key');addLog(state,`미국의 분노가 ${effect.rageRounds}라운드 동안 적용됩니다.`);finishSimpleTile(state);return}
     state.pendingAction={type:'terror-attack',remainingTargets:Math.min(Math.max(1,Number(effect.targetCount)||2),targets.length),selectedTileIds:[]};state.phase=PHASES.TERROR_TARGET_DECISION;addLog(state,`미국의 분노가 ${effect.rageRounds}라운드 동안 적용됩니다.`);return;
   }
   if(effect.type==='industrialization'){
-    const targets=state.board.filter(tile=>tile.type==='city'&&tile.ownerId===player.id&&tile.buildable!==false&&(!tile.industrialized||tile.buildingLevel<RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL));
+    const targets=state.board.filter(tile=>tile.type==='city'&&tile.ownerId===player.id&&tile.buildable!==false&&!hasGhostCity(tile)&&(!tile.industrialized||tile.buildingLevel<RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL));
     if(!targets.length){notice(state,card.title,'산업화할 수 있는 보유 도시가 없습니다.','warning','golden-key');finishSimpleTile(state);return}
     state.pendingAction={type:'industrialization'};state.phase=PHASES.INDUSTRIALIZATION_DECISION;return;
   }
@@ -356,14 +377,14 @@ export function resolveTile(state,depth=0){
   }
   if(tile.type==='city'){
     if(!tile.ownerId){state.pendingAction={type:'buy',tileIndex:tile.index};state.phase=PHASES.BUY_DECISION;return}
-    if(tile.ownerId===player.id){if(state.gameStage==='FIRST_HALF'||tile.buildable===false){finishSimpleTile(state);return}state.pendingAction={type:'build',tileIndex:tile.index};state.phase=PHASES.BUILD_DECISION;return}
+    if(tile.ownerId===player.id){if(state.gameStage==='FIRST_HALF'||tile.buildable===false||hasGhostCity(tile)){finishSimpleTile(state);return}state.pendingAction={type:'build',tileIndex:tile.index};state.phase=PHASES.BUILD_DECISION;return}
     let recipientId=tile.ownerId;let reason=state.gameStage==='FIRST_HALF'?`${tile.name} 대지 통행료`:`${tile.name} 통행료`;
     if(isGlobalEffectActive(state,'imperialExploitation')&&KOREAN_TILE_IDS.has(tile.id)){
       const tokyo=state.board.find(item=>item.id==='tokyo');const tokyoOwner=state.players.find(item=>item.id===tokyo?.ownerId&&!item.bankrupt);recipientId=tokyoOwner?.id??null;
       reason=recipientId?`일제의 수탈 · ${tile.name} 통행료 → ${tokyoOwner.name}`:`일제의 수탈 · ${tile.name} 통행료 은행 귀속`;
       addLog(state,recipientId?`${tile.name} 통행료가 도쿄 소유주 ${tokyoOwner.name}에게 귀속됩니다.`:`도쿄가 미소유 상태라 ${tile.name} 통행료를 은행이 회수합니다.`);
     }
-    const rent=state.gameStage==='FIRST_HALF'?Math.round(tile.baseRent*(tile.worldCupTurns>0?2:1)):calculateRent(state,tile,player);const recipientAmount=tile.industrialized&&recipientId?Math.round(rent*RULES.INDUSTRIALIZED_OWNER_SHARE):rent;if(tile.industrialized)reason=`산업화 · ${reason} (20% 은행 반환)`;prepareDebt(state,{amount:rent,recipientId,recipientAmount,reason});return;
+    const rent=state.gameStage==='FIRST_HALF'&&!hasGhostCity(tile)?Math.round(tile.baseRent*(tile.worldCupTurns>0?2:1)):calculateRent(state,tile,player);const recipientAmount=tile.industrialized&&recipientId?Math.round(rent*RULES.INDUSTRIALIZED_OWNER_SHARE):rent;if(hasGhostCity(tile))reason=`유령도시 호텔 2개 · ${tile.name} 통행료`;if(tile.industrialized)reason=`산업화 · ${reason} (20% 은행 반환)`;prepareDebt(state,{amount:rent,recipientId,recipientAmount,reason,tile});return;
   }
   if(tile.type==='facility'){
     if(!tile.ownerId){state.pendingAction={type:'buy',tileIndex:tile.index};state.phase=PHASES.BUY_DECISION;return}
@@ -400,6 +421,37 @@ export function chooseBermudaPlayer(state,playerId){
   notice(state,'버뮤다 삼각지대',`${player.name} → ${state.board[player.position].name} / ${partner.name} → ${state.board[partner.position].name}. 다음 이동은 바뀐 위치에서 시작합니다.`,'success');finishSimpleTile(state);
 }
 
+export function chooseFatefulCrossroads(state,choice,rng=Math.random){
+  requirePhase(state,PHASES.FATE_DECISION);if(state.pendingAction?.type!=='fateful-crossroads')throw new Error('운명의 갈림길 선택 대기가 아닙니다.');
+  if(choice==='safe'){receiveCash(state,currentPlayer(state),150000,'운명의 갈림길 · 안전한 선택');notice(state,'안전한 선택','은행에서 15만 원을 받습니다. 도원결의가 있다면 반씩 나눕니다.','success');finishSimpleTile(state);return {choice,amount:150000}}
+  if(choice!=='risk')throw new Error('안전한 선택 또는 도전을 선택하세요.');
+  const face=1+Math.floor(rng()*6);state.pendingAction={type:'fate-roll',face};state.phase=PHASES.FATE_ROLLING;state.notice=null;return {choice,face};
+}
+
+export function completeFatefulRoll(state){
+  requirePhase(state,PHASES.FATE_ROLLING);const face=state.pendingAction?.face;
+  if(state.pendingAction?.type!=='fate-roll'||!Number.isInteger(face)||face<1||face>6)throw new Error('확인할 주사위 결과가 없습니다.');
+  state.pendingAction=null;const amount=face<=3?-200000:400000;
+  addLog(state,`${currentPlayer(state).name}의 운명의 갈림길: ${face} → ${formatMoney(amount)}`);
+  notice(state,'운명의 갈림길',`${face}이 나왔습니다. ${amount>0?'40만 원 획득!':'20만 원 손실.'} 이 주사위로 이동하거나 더블 보너스를 얻지는 않습니다.`,amount>0?'success':'danger');
+  if(amount>0){receiveCash(state,currentPlayer(state),amount,'운명의 갈림길 · 도전 성공');finishSimpleTile(state)}else prepareDebt(state,{amount:-amount,reason:`운명의 갈림길 · 주사위 ${face}`});
+  return {face,amount};
+}
+
+export function chooseTrojanCity(state,tileId){
+  requirePhase(state,PHASES.TROJAN_DECISION);const tile=getTrojanTargets(state).find(item=>item.id===tileId);
+  if(state.pendingAction?.type!=='trojan-horse'||!tile)throw new Error('목마를 설치할 상대 도시를 선택하세요.');
+  tile.trojanHorse={id:`trojan-${state.sequence++}`,ownerId:tile.ownerId,beneficiaryId:currentPlayer(state).id,remainingTurns:activePlayerCount(state)*2,activatedTurn:state.turnNumber};
+  addLog(state,`${currentPlayer(state).name}이 ${tile.name}에 트로이 목마를 설치했습니다.`);notice(state,'트로이 목마 설치',`${tile.name}의 소유주가 받을 다음 통행료 수익 한 번을 가로챕니다. 2라운드 동안 유효합니다.`,'success');finishSimpleTile(state);return tile;
+}
+
+export function chooseGhostCity(state,tileId){
+  requirePhase(state,PHASES.GHOST_CITY_DECISION);const tile=getGhostCityTargets(state).find(item=>item.id===tileId);
+  if(state.pendingAction?.type!=='ghost-city'||!tile)throw new Error('유령도시로 만들 내 도시를 선택하세요.');
+  const previousLevel=tile.buildingLevel;tile.ghostCity={ownerId:tile.ownerId,remainingTurns:activePlayerCount(state),activatedTurn:state.turnNumber};
+  addLog(state,`${tile.name}이 1라운드 동안 호텔 2개 단계의 유령도시가 됩니다.`);notice(state,'유령도시 등장',`${tile.name}에 임시 호텔 2개가 나타났습니다. 전반전에도 해당 통행료를 적용하며, 1라운드 뒤 원래 단계로 돌아갑니다.`,'landmark');finishSimpleTile(state);return {tile,previousLevel,newLevel:4};
+}
+
 export function chooseWorldCupCity(state,tileId){
   requirePhase(state,PHASES.WORLD_CUP_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);const turns=Math.max(1,Number(state.pendingAction?.turns)||3);
   if(state.pendingAction?.type!=='world-cup'||!tile||tile.type!=='city'||tile.ownerId!==player.id)throw new Error('월드컵을 개최할 내 도시를 선택하세요.');
@@ -408,14 +460,14 @@ export function chooseWorldCupCity(state,tileId){
 
 export function chooseTerrorTarget(state,tileId){
   requirePhase(state,PHASES.TERROR_TARGET_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
-  if(state.pendingAction?.type!=='terror-attack'||!tile||tile.type!=='city'||tile.buildingLevel<1)throw new Error('건물이 있는 도시를 선택하세요.');
-  const result={tileIndex:tile.index,tileId:tile.id,tileName:tile.name,landmarkName:tile.landmarkName||'랜드마크',landmarkGlyph:tile.landmarkGlyph||'▥',previousLevel:tile.buildingLevel,buildingCount:Math.max(1,tile.buildingLevel-2)};
-  tile.buildingLevel=0;state.pendingAction.selectedTileIds.push(tile.id);state.pendingAction.remainingTargets-=1;const completed=state.pendingAction.remainingTargets<=0||!state.board.some(item=>item.type==='city'&&item.buildingLevel>0);result.completed=completed;result.remainingTargets=completed?0:state.pendingAction.remainingTargets;state.notice=null;addLog(state,`${player.name}이 ${tile.name}을 지정해 ${result.landmarkName} 건물을 모두 파괴했습니다.`);if(completed){state.pendingAction=null;state.phase=PHASES.END_TURN}return result;
+  if(state.pendingAction?.type!=='terror-attack'||!tile||tile.type!=='city'||effectiveBuildingLevel(tile)<1)throw new Error('건물이 있는 도시를 선택하세요.');
+  const previousLevel=effectiveBuildingLevel(tile);const result={tileIndex:tile.index,tileId:tile.id,tileName:tile.name,landmarkName:tile.landmarkName||'랜드마크',landmarkGlyph:tile.landmarkGlyph||'▥',previousLevel,buildingCount:Math.max(1,previousLevel-2)};
+  tile.buildingLevel=0;tile.ghostCity=null;state.pendingAction.selectedTileIds.push(tile.id);state.pendingAction.remainingTargets-=1;const completed=state.pendingAction.remainingTargets<=0||!state.board.some(item=>item.type==='city'&&effectiveBuildingLevel(item)>0);result.completed=completed;result.remainingTargets=completed?0:state.pendingAction.remainingTargets;state.notice=null;addLog(state,`${player.name}이 ${tile.name}을 지정해 ${result.landmarkName} 건물을 모두 파괴했습니다.`);if(completed){state.pendingAction=null;state.phase=PHASES.END_TURN}return result;
 }
 
 export function chooseIndustrializationCity(state,tileId){
   requirePhase(state,PHASES.INDUSTRIALIZATION_DECISION);const player=currentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
-  if(state.pendingAction?.type!=='industrialization'||!tile||tile.type!=='city'||tile.ownerId!==player.id||tile.buildable===false||tile.buildingLevel>=RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL)throw new Error('산업화할 수 있는 내 도시를 선택하세요.');
+  if(state.pendingAction?.type!=='industrialization'||!tile||tile.type!=='city'||tile.ownerId!==player.id||tile.buildable===false||hasGhostCity(tile)||tile.buildingLevel>=RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL)throw new Error('산업화할 수 있는 내 도시를 선택하세요.');
   const previousLevel=tile.buildingLevel;tile.industrialized=true;tile.buildingLevel=previousLevel<3?3:Math.min(RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL,previousLevel+1);state.pendingAction=null;state.phase=PHASES.END_TURN;notice(state,'산업화 완료',`${tile.name}에 은행이 ${tile.landmarkName||'대표 랜드마크'} 1동을 무료로 세웠습니다. 이 도시는 영구적으로 3동까지 개발할 수 있고 통행료 수익의 20%를 은행에 반환합니다.`,'landmark');addLog(state,`${player.name}의 ${tile.name}이 산업화되어 건물 ${tile.buildingLevel-2}동을 보유합니다.`);return {tile,previousLevel,newLevel:tile.buildingLevel};
 }
 
@@ -465,8 +517,9 @@ export function buyCurrentTile(state){
 
 export function declineDecision(state){requirePhase(state,PHASES.BUY_DECISION,PHASES.BUILD_DECISION);finishSimpleTile(state)}
 
-export function getBuildableOwnedCities(state,playerId=currentPlayer(state).id){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===playerId&&tile.buildable!==false&&tile.buildingLevel<maxBuildingLevel(tile))}
+export function getBuildableOwnedCities(state,playerId=currentPlayer(state).id){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===playerId&&tile.buildable!==false&&!hasGhostCity(tile)&&tile.buildingLevel<maxBuildingLevel(tile))}
 function developCity(state,player,tile){
+  if(hasGhostCity(tile))throw new Error('유령도시 효과가 끝난 뒤 추가 건설할 수 있습니다.');
   if(state.gameStage!=='SECOND_HALF')throw new Error('건설은 경매가 끝난 후반전부터 가능합니다.');if(!tile||tile.ownerId!==player.id||tile.type!=='city'||tile.buildable===false)throw new Error('이 도시에는 건설할 수 없습니다.');const maxLevel=maxBuildingLevel(tile);if(tile.buildingLevel>=maxLevel)throw new Error(`이미 대표 랜드마크 ${maxLevel-2}동이 완성되었습니다.`);
   const cost=tile.buildingCosts[tile.buildingLevel];if(player.money<cost)throw new Error('건설할 현금이 부족합니다.');player.money-=cost;tile.buildingLevel+=1;const landmark=tile.landmarkName||'대표 랜드마크';const buildingName=[null,`${landmark} 기초`,`${landmark} 건설 중`,`${landmark} 1동`,`${landmark} 2동`,`${landmark} 3동`][tile.buildingLevel];addLog(state,`${player.name}이 ${tile.name}에 ${buildingName} 단계를 완성했습니다.`);
   if(tile.buildingLevel===3)notice(state,'랜드마크 완성!',`${tile.name}에 ${landmark} 1동이 완성되었습니다.`,'landmark');if(tile.buildingLevel>=4)notice(state,`랜드마크 ${tile.buildingLevel-2}동 완성!`,`${tile.name}에 ${landmark} ${tile.buildingLevel-2}동이 완성되었습니다.`,'landmark');return tile;
@@ -486,12 +539,14 @@ function removeOwnedId(player,tile){const list=tile.type==='city'?player.ownedPr
 export function sellBuilding(state,tileId){
   requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=getPaymentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
   if(!tile||tile.ownerId!==player.id||tile.buildingLevel<1)throw new Error('매각할 건물이 없습니다.');
+  tile.ghostCity=null;
   const refund=Math.round(tile.buildingCosts[tile.buildingLevel-1]*RULES.SELL_BUILDING_RATE);tile.buildingLevel-=1;player.money+=refund;addLog(state,`${tile.name} 건물을 매각해 ${formatMoney(refund)}을 확보했습니다.`);return refund;
 }
 
 export function sellAsset(state,tileId){
   requirePhase(state,PHASES.ASSET_MANAGEMENT);const player=getPaymentPlayer(state);const tile=state.board.find(item=>item.id===tileId);
   if(!tile||tile.ownerId!==player.id)throw new Error('매각할 수 없는 자산입니다.');if(tile.buildingLevel>0)throw new Error('건물을 먼저 모두 매각하세요.');
+  clearCityEffects(tile);
   const refund=Math.round(tile.purchasePrice*RULES.SELL_PROPERTY_RATE);tile.ownerId=null;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;player.money+=refund;removeOwnedId(player,tile);addLog(state,`${tile.name}을 매각해 ${formatMoney(refund)}을 확보했습니다.`);return refund;
 }
 
@@ -532,6 +587,7 @@ export function declareBankruptcy(state){
   if(player.money+liquidationValue(state,player.id)+cardValue>=debt.amount)throw new Error('매각 가능한 자산으로 아직 지불할 수 있습니다.');
   if(debt.recipientId){const credits=debt.credits??[{playerId:debt.recipientId,amount:debt.recipientAmount??debt.amount}];for(const credit of credits){const target=state.players.find(item=>item.id===credit.playerId);if(target&&!target.bankrupt)target.money+=Math.floor(player.money*credit.amount/Math.max(1,debt.amount))}}
   if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+player.money;
+  if(player.money>0)consumeTrojan(state,debt);
   if(player.id!==currentPlayer(state).id){player.money=0;player.bankrupt=true;releasePlayerAssets(state,player);state.pendingDebt=null;notice(state,'도원결의 해제',`${player.name}이 분담금을 낼 수 없어 파산했습니다. 남은 플레이어의 게임을 이어갑니다.`,'danger');addLog(state,`${player.name}이 도원결의 분담금 지불 불능으로 파산했습니다.`);if(activePlayerCount(state)<=1){finishGame(state,'last-player');return}return continueAfterPayment(state,debt.afterPayment)}
   bankruptPlayer(state,player,'지불 불능');
   if(state.status==='playing'&&debt.afterPayment?.type==='nextPayment')return startPaymentPlan(state,debt.afterPayment.payments,null);
@@ -565,7 +621,7 @@ export function endTurn(state){
   if(state.auctionAfterEvents){state.auctionAfterEvents=false;return beginLandAuction(state)}
   const bonus=RULES.BONUS_TURN_ON_DOUBLE&&state.rolledDouble&&!state.islandEscapeThisTurn&&state.consecutiveDoubles<RULES.MAX_CONSECUTIVE_DOUBLES&&!currentPlayer(state).bankrupt;
   tickWorldCupBonuses(state,currentPlayer(state).id);
-  if(!bonus){tickGlobalEffects(state);tickOaths(state);state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
+  if(!bonus){tickGlobalEffects(state);tickOaths(state);for(const {tile,key} of tickCityEffects(state))addLog(state,key==='ghostCity'?`${tile.name} 유령도시 종료 · 원래 건물 단계로 돌아갑니다.`:`${tile.name} 트로이 목마의 유효기간이 끝났습니다.`);state.currentPlayerIndex=nextActiveIndex(state,state.currentPlayerIndex);state.turnNumber+=1;state.consecutiveDoubles=0}else addLog(state,`${currentPlayer(state).name}이 더블 보너스 턴을 얻었습니다.`);
   prepareTurn(state);return {playerChanged:oldIndex!==state.currentPlayerIndex,bonusTurn:bonus};
 }
 
@@ -585,7 +641,7 @@ export function proposeTrade(state,proposal){
   state.trade={stage:'review',proposerId:proposer.id,partnerId:partner.id,offerCash,requestCash,offerAssetId:offered?.id||null,requestAssetId:requested?.id||null};
 }
 
-function transferTile(state,tileId,from,to){if(!tileId)return;const tile=state.board.find(item=>item.id===tileId);removeOwnedId(from,tile);tile.ownerId=to.id;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;(tile.type==='city'?to.ownedProperties:to.specialAssets).push(tile.id)}
+function transferTile(state,tileId,from,to){if(!tileId)return;const tile=state.board.find(item=>item.id===tileId);removeOwnedId(from,tile);clearCityEffects(tile);tile.ownerId=to.id;tile.worldCupTurns=0;tile.worldCupActivatedTurn=null;(tile.type==='city'?to.ownedProperties:to.specialAssets).push(tile.id)}
 export function resolveTrade(state,accepted){
   requirePhase(state,PHASES.TRADE);if(state.trade?.stage!=='review')throw new Error('검토할 거래가 없습니다.');const trade=state.trade;
   const proposer=state.players.find(player=>player.id===trade.proposerId);const partner=state.players.find(player=>player.id===trade.partnerId);

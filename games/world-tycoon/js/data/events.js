@@ -1,4 +1,7 @@
 export const EVENT_CARDS = [
+  {id:'fateful-crossroads',category:'special',title:'운명의 갈림길',text:'안전하게 15만 원을 받거나, 주사위 한 개에 도전하세요. 도전 결과 1~3은 20만 원 손실, 4~6은 40만 원 획득입니다. 이동용 주사위와는 별개입니다.',effect:{type:'fatefulCrossroads'}},
+  {id:'trojan-horse',category:'special',title:'트로이 목마',text:'상대 도시 하나에 목마를 설치합니다. 2라운드 안에 그 도시 소유주가 받을 다음 통행료 한 번을 가로챕니다. 산업화의 은행 몫은 유지되며, 전액 면제된 통행료에는 발동하지 않습니다.',effect:{type:'trojanHorse'}},
+  {id:'ghost-city',category:'special',title:'유령도시',text:'건설 가능한 내 도시 하나를 1라운드 동안 호텔 2개(랜드마크 2동) 단계로 만듭니다. 기간이 끝나면 원래 단계로 돌아갑니다. 임시 건물은 매각하거나 추가 개발할 수 없습니다.',effect:{type:'ghostCity'}},
   {id:'bermuda-triangle',category:'move',title:'버뮤다 삼각지대',text:'다른 플레이어 한 명을 지정해 비행기 위치를 맞바꿉니다. 무인도에 있는 플레이어는 선택할 수 없습니다. 교환으로 월급·통행료·도착 효과가 발생하지 않습니다.',effect:{type:'swapPositions'}},
   {id:'peach-garden-oath',category:'special',title:'도원결의',text:'무작위 상대 한 명과 2라운드 동안 연결됩니다. 월급·현금 보너스·벌금·사회복지기금·통행료를 반씩 나눕니다. 서로의 땅에서는 방문자가 통행료 절반만 냅니다. 구입·건설·매각·대출·거래는 제외됩니다.',effect:{type:'peachOath'}},
   {id:'ask-and-double',category:'special',title:'묻고 더블로 가!',text:'누구든 다음에 처음 황금열쇠를 뽑으면 두 장을 뽑고 효과를 모두 순서대로 적용합니다. 발동할 때까지 턴 제한 없이 유지됩니다.',effect:{type:'doubleNextEvent'}},

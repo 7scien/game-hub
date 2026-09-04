@@ -5,7 +5,7 @@ import {PROPERTY_BY_ID} from './data/properties.js';
 export function createBoard(){
   return BOARD_TILES.map((tile,index)=>{
     const source=tile.type==='city'?PROPERTY_BY_ID[tile.propertyId]:tile.type==='facility'?FACILITY_BY_ID[tile.facilityId]:null;
-    return {...tile,...source,index,ownerId:null,buildingLevel:0,industrialized:false,worldCupTurns:0,worldCupActivatedTurn:null};
+    return {...tile,...source,index,ownerId:null,buildingLevel:0,industrialized:false,worldCupTurns:0,worldCupActivatedTurn:null,ghostCity:null,trojanHorse:null};
   });
 }
 

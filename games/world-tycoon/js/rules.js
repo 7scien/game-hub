@@ -1,6 +1,7 @@
 import {REGION_STYLES} from './data/board.js';
 
 export const PHASES={
+  FATE_DECISION:'FATE_DECISION',FATE_ROLLING:'FATE_ROLLING',TROJAN_DECISION:'TROJAN_DECISION',GHOST_CITY_DECISION:'GHOST_CITY_DECISION',
   BERMUDA_DECISION:'BERMUDA_DECISION',
   WAITING_FOR_ROLL:'WAITING_FOR_ROLL',ROLLING:'ROLLING',MOVING:'MOVING',RESOLVING_TILE:'RESOLVING_TILE',
   BUY_DECISION:'BUY_DECISION',BUILD_DECISION:'BUILD_DECISION',BUILD_ANYWHERE_DECISION:'BUILD_ANYWHERE_DECISION',EARLY_AUCTION_VOTE:'EARLY_AUCTION_VOTE',AUCTION:'AUCTION',TRAVEL_DECISION:'TRAVEL_DECISION',WORLD_CUP_DECISION:'WORLD_CUP_DECISION',TERROR_TARGET_DECISION:'TERROR_TARGET_DECISION',INDUSTRIALIZATION_DECISION:'INDUSTRIALIZATION_DECISION',PAYMENT_DECISION:'PAYMENT_DECISION',TRADE:'TRADE',ASSET_MANAGEMENT:'ASSET_MANAGEMENT',
@@ -28,9 +29,12 @@ export function ownsRegion(state,ownerId,region){
   return cities.length>0&&cities.every(tile=>tile.ownerId===ownerId);
 }
 
+export function hasGhostCity(tile){return Boolean(tile?.ghostCity?.remainingTurns>0&&tile.ownerId&&tile.ghostCity.ownerId===tile.ownerId)}
+export function effectiveBuildingLevel(tile){return hasGhostCity(tile)?Math.max(4,tile.buildingLevel||0):tile?.buildingLevel||0}
+
 export function calculateRent(state,tile,visitor){
   if(tile.type==='city'){
-    let rent=tile.rentByLevel[tile.buildingLevel]??tile.baseRent;
+    let rent=tile.rentByLevel[effectiveBuildingLevel(tile)]??tile.baseRent;
     if(tile.buildable!==false&&ownsRegion(state,tile.ownerId,tile.region))rent*=RULES.GROUP_COMPLETION_MULTIPLIER;
     if(tile.worldCupTurns>0)rent*=2;
     return Math.round(rent);
