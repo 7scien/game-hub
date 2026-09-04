@@ -1,4 +1,6 @@
 export const EVENT_CARDS = [
+  {id:'golden-key-reset',category:'special',title:'황금 열쇠 리셋',text:'남은 장수와 관계없이 모든 황금열쇠 카드를 다시 채우고 무작위로 섞습니다. 이 리셋 카드도 다시 포함됩니다.',effect:{type:'resetEventDeck'}},
+  {id:'las-vegas-gambler',category:'special',title:'라스베가스의 도박사',text:'내가 다음에 굴릴 주사위로 한 번 정산합니다. 합 2~6: 합×10만 원 손실, 7: 변동 없음, 8~12: (합−6)×10만 원 획득. 더블 보너스·무인도 주사위도 포함합니다.',effect:{type:'nextRollGamble'}},
   {id:'air-travel',category:'move',title:'항공여행',text:'콩코드여객기를 타고 타이페이로 갑니다. 소유자가 있으면 객실료를 냅니다.',effect:{type:'travelRoute',vehicleTileId:'concorde',destinationTileId:'taipei'}},
   {id:'sea-travel',category:'move',title:'유람선 여행',text:'퀸 엘리자베스호를 타고 부산으로 갑니다. 소유자가 있으면 승선료를 냅니다.',effect:{type:'travelRoute',vehicleTileId:'queen-elizabeth',destinationTileId:'busan'}},
   {id:'highway',category:'move',title:'고속도로',text:'출발지까지 곧바로 가고 월급 20만 원을 받습니다.',effect:{type:'moveTo',tileId:'start'}},

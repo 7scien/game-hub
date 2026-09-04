@@ -49,10 +49,21 @@ async function handleRoll(){
   if(actionLocked||cinematicPending)return;actionLocked=true;
   try{
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
-    const player=state.players[state.currentPlayerIndex];const playerId=player.id;const dice=[...state.dice];const total=state.rollTotal;await animateDiceThrow(dice,total);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandEscaped)await queueCinematic(()=>animateIslandEscape({player,method:rollResult.islandAutoReleased?'automatic':'double'}));
-    while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await cinematicQueue;await new Promise(resolve=>setTimeout(resolve,55))}
-    if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement){const tile=state.board[player.position];if(tile?.type==='city')await queueCinematic(()=>animateCityLanding({tile,player}));commit(()=>finishMovement(state))}
+    const dice=[...state.dice];const total=state.rollTotal;await animateDiceThrow(dice,total);const rollResult=commit(()=>completeRoll(state));await playResolvedRoll(rollResult);
   }finally{actionLocked=false}
+}
+
+async function playResolvedRoll(rollResult){
+  const player=state.players[state.currentPlayerIndex];const playerId=player.id;
+  await cinematicQueue;
+  if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandEscaped)await queueCinematic(()=>animateIslandEscape({player,method:rollResult.islandAutoReleased?'automatic':'double'}));
+  while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await cinematicQueue;await new Promise(resolve=>setTimeout(resolve,55))}
+  if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement){const tile=state.board[player.position];if(tile?.type==='city')await queueCinematic(()=>animateCityLanding({tile,player}));commit(()=>finishMovement(state))}
+}
+
+async function handleSettleDebt(){
+  if(actionLocked||cinematicPending)return;actionLocked=true;
+  try{const result=commit(()=>({rollResult:settleDebt(state)}));if(result)await playResolvedRoll(result.rollResult)}finally{actionLocked=false}
 }
 
 function handleEndTurn(){
@@ -162,7 +173,7 @@ document.addEventListener('click',event=>{
   if(action==='sell-asset'){commit(()=>sellAsset(state,target.dataset.tile));return}
   if(action==='sell-special-card'){commit(()=>sellSpecialCard(state,target.dataset.card));return}
   if(action==='use-special-card'){handleSpecialCard(target.dataset.card);return}
-  if(action==='settle-debt'){commit(()=>settleDebt(state));return}
+  if(action==='settle-debt'){handleSettleDebt();return}
   if(action==='declare-bankruptcy'){commit(()=>declareBankruptcy(state));return}
   if(action==='open-trade'){commit(()=>openTrade(state));return}
   if(action==='cancel-trade'){commit(()=>cancelTrade(state));return}

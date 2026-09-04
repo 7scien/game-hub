@@ -12,7 +12,7 @@ const centerOf=element=>{
 const move=(x=0,y=0,scale=1)=>`translate(calc(-50% + ${x}px),calc(-50% + ${y}px)) scale(${scale})`;
 
 // Every overlay owns its animations and removes them, including cancelled ones.
-async function playOverlay(kind,label,markup,duration,animate){
+async function playOverlay(kind,label,markup,duration,animate,reducedDuration=700){
   const layer=document.createElement('div');
   layer.className=`tycoon-motion tycoon-motion-${kind}${reducedMotion()?' motion-reduced':''}`;
   layer.setAttribute('role','status');layer.setAttribute('aria-label',label);layer.innerHTML=markup;
@@ -25,12 +25,23 @@ async function playOverlay(kind,label,markup,duration,animate){
   document.body.append(layer);
   try{
     if(!reducedMotion())animate?.(layer,run);
-    await pause(reducedMotion()?700:duration);
+    await pause(reducedMotion()?reducedDuration:duration);
   }finally{animations.forEach(animation=>animation.cancel());layer.remove()}
 }
 
 function targetRing(point,label=''){
   return `<span class="motion-target-ring" style="left:${point.x}px;top:${point.y}px"><b>${escapeHtml(label)}</b></span>`;
+}
+
+export async function showGamblerResult({total,amount,quote,pendingPayment=false}){
+  const tone=amount<0?'loss':amount>0?'win':'draw';const magnitude=Math.abs(amount)/100000;
+  const amountLabel=amount===0?'0원 · 변동 없음':`${amount>0?'+':'−'}${formatMoney(Math.abs(amount))}`;
+  const status=pendingPayment?'손실 확정 · 자산 정리 후 지불':amount<0?'은행에 지불했습니다':amount>0?'은행에서 받았습니다':'잃지도, 얻지도 않았습니다';
+  await playOverlay(`gambler ${tone}`,`라스베가스의 도박사 · 주사위 합 ${total} · ${amountLabel} · ${quote} · ${status}`,
+    `<section class="gambler-result-card"><small>라스베가스의 도박사</small><div class="gambler-roll"><span aria-hidden="true">🎲</span><b>${total}</b><span>주사위 합</span></div><strong class="gambler-amount">${amountLabel}</strong><p class="gambler-quote">${escapeHtml(quote)}</p><em>${status}</em>${pendingPayment?'<span class="gambler-payment-hint">지불을 마치면 이 주사위로 이동합니다.</span>':''}</section>`,2800,(layer,run)=>{
+      run(layer.querySelector('.gambler-result-card'),[{opacity:0,transform:move(0,15,.9)},{opacity:1,transform:move()}],{duration:300});
+      run(layer.querySelector('.gambler-amount'),tone==='loss'?[{translate:'0 0'},{translate:`${magnitude}px 0`,offset:.25},{translate:`-${magnitude}px 0`,offset:.5},{translate:'0 0'}]:[{scale:.8,opacity:.4},{scale:1.08,opacity:1,offset:.7},{scale:1,opacity:1}],{duration:460,delay:250});
+    },2800);
 }
 
 export async function animateTransportStatus({locked,tiles=[]}){

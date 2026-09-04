@@ -1,7 +1,8 @@
 import {boardPosition,createBoard} from './board.js';
 import {SPECIAL_CARD_INFO,canUseBank,getAuctionBidder,getBuildableOwnedCities,getCurrentPlayer,getEarlyAuctionVoter,getGlobalEffectRounds,getLoanBalance,getNetWorth,getTradeableAssets,getUnownedPurchasableAssets,isGlobalEffectActive,maxBuildingLevel} from './game.js';
 import {PHASES,RULES,formatMoney,regionMeta} from './rules.js';
-import {animateMoneyTransfer} from './animations.js';
+import {animateMoneyTransfer,showGamblerResult} from './animations.js';
+import {EVENT_CARDS} from './data/events.js';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const phaseLabel={
@@ -40,8 +41,8 @@ function boardMarkup(state){
     </article>`;
   }).join('')}
     <div class="board-center">
-      <span class="center-card-deck" role="img" aria-label="가운데에 쌓아 둔 황금열쇠 카드 ${state?Math.max(0,state.eventDeck.length-state.eventCursor):30}장">
-        <i class="deck-card deck-card-back"></i><i class="deck-card deck-card-middle"></i><span class="deck-card deck-card-top"><b>◆</b><strong>황금열쇠</strong><small>GOLDEN KEY</small></span><em>${state?Math.max(0,state.eventDeck.length-state.eventCursor):30}장</em>
+      <span class="center-card-deck" role="img" aria-label="가운데에 쌓아 둔 황금열쇠 카드 ${state?Math.max(0,state.eventDeck.length-state.eventCursor):EVENT_CARDS.length}장">
+        <i class="deck-card deck-card-back"></i><i class="deck-card deck-card-middle"></i><span class="deck-card deck-card-top"><b>◆</b><strong>황금열쇠</strong><small>GOLDEN KEY</small></span><em>${state?Math.max(0,state.eventDeck.length-state.eventCursor):EVENT_CARDS.length}장</em>
       </span>
       <span class="center-station" aria-hidden="true"><i></i><b>✦</b></span>
       <h1>WORLD<br><em>TYCOON</em></h1>
@@ -138,7 +139,7 @@ function currentAssets(state){
   const canSellCard=[PHASES.WAITING_FOR_ROLL,PHASES.END_TURN,PHASES.ASSET_MANAGEMENT].includes(state.phase);
   const assetsMarkup=assets.map(tile=>`<span style="--asset:${regionMeta(tile.region).color}"><i>${tile.type==='city'&&tile.buildingLevel>0?escapeHtml(tile.landmarkGlyph||tile.icon):tile.icon}</i>${escapeHtml(tile.name)}${tile.type==='city'?` · ${escapeHtml(buildingLabel(tile))}${tile.industrialized?' · 🏭 산업화':''}${tile.worldCupTurns>0?` · ⚽ ×2 (${tile.worldCupTurns}턴)`:''}`:''}</span>`).join('');
   const cardsMarkup=cards.map(cardId=>{const card=SPECIAL_CARD_INFO[cardId];return `<span class="special-card-chip" style="--asset:#ffd95c"><i>${card.icon}</i>${escapeHtml(card.name)}<button type="button" data-action="sell-special-card" data-card="${cardId}" title="${formatMoney(card.sellPrice)}에 매각" ${canSellCard?'':'disabled'}>매각</button></span>`}).join('');
-  return `<section class="asset-summary"><div class="section-label"><span>MY PORTFOLIO</span><b>${assets.length+cards.length}</b></div><div class="asset-chips">${assetsMarkup||cardsMarkup?assetsMarkup+cardsMarkup:'<p>아직 보유한 자산이 없습니다.</p>'}</div></section>`;
+  return `${player.gamblerPending?'<aside class="gambler-pending"><b>🎲 라스베가스의 도박사</b><span>내 다음 주사위에 자동 적용</span><small>2~6 손실 · 7 변동 없음 · 8~12 획득</small></aside>':''}<section class="asset-summary"><div class="section-label"><span>MY PORTFOLIO</span><b>${assets.length+cards.length}</b></div><div class="asset-chips">${assetsMarkup||cardsMarkup?assetsMarkup+cardsMarkup:'<p>아직 보유한 자산이 없습니다.</p>'}</div></section>`;
 }
 
 function activity(state){return `<section class="activity-log"><div class="section-label"><span>TRAVEL LOG</span></div>${state.log.slice(0,4).map(entry=>`<p>${escapeHtml(entry.message)}</p>`).join('')}</section>`}
@@ -181,6 +182,8 @@ export function renderHelp(){
     ['💾','저장 슬롯','서로 다른 게임 2개가 이 기기에 각각 자동 저장됩니다. 시작 화면에서 이어할 게임을 선택합니다.'],['◈','전반전','건설 없이 토지만 매입하며 상대 땅에서는 대지 통행료만 냅니다. 미분양 자산이 5개가 되거나 전원이 조기 경매에 동의하면 전반전이 끝납니다.'],
     ['🔨','하프타임 경매','전반전 종료 시 남은 모든 자산을 차례대로 공개 경매합니다. 최고 입찰자가 낙찰받고 모든 경매가 끝나면 후반전이 시작됩니다.'],['▥','후반전 건설','주사위를 굴리기 전에는 땅을 직접 밟지 않아도 어느 보유 도시든 원하는 만큼 개발할 수 있습니다.'],
     ['₩','통행료','상대 도시나 탈것에 도착하면 표시된 통행료를 냅니다. 우대권은 지불 직전에 직접 선택해 사용합니다.'],['◆','황금열쇠','우대권과 무인도 탈출권은 필요한 순간에 직접 사용하거나 은행에 팔 수 있습니다.'],
+    ['↻','황금 열쇠 리셋',`남은 장수와 관계없이 전체 ${EVENT_CARDS.length}장을 다시 채우고 무작위로 섞습니다. 리셋 카드도 포함하며, 기존 보유 카드와 발동 중인 효과는 유지됩니다.`],
+    ['🎲','라스베가스의 도박사','다음 내 주사위로 한 번 정산합니다. 2~6은 합×10만 원 손실, 7은 변동 없음, 8~12는 (합−6)×10만 원 획득입니다. 12는 60만 원입니다. 더블 보너스와 무인도 탈출 주사위도 포함하며, 돈이 부족하면 정리 후 같은 주사위로 이동합니다.'],
     ['✈','탈것','콩코드·퀸 엘리자베스호 여행과 콜럼비아호를 이용하는 우주여행은 소유자에게 이용료를 냅니다. 목적지는 판의 도시를 직접 눌러 선택합니다.'],['⚽','월드컵','카드를 뽑는 즉시 보유 도시 하나를 골라 다음 자신의 3번 차례 동안 통행료를 2배로 올립니다.'],
     ['🇯🇵','일제의 수탈','즉시 3라운드 동안 제주도·부산·서울 통행료가 도쿄 소유주에게 귀속됩니다. 도쿄가 미소유면 은행이 회수합니다.'],['⛔','911 테러','즉시 서로 다른 도시를 최대 두 곳 지정해 건물을 전부 파괴합니다. 이어지는 2라운드에는 이동수단과 특수 이동이 봉쇄됩니다.'],['🏭','산업화','즉시 내 도시 하나에 완성 건물 1동을 무료로 세웁니다. 해당 도시는 영구적으로 3동까지 개발되며 통행료 수익의 20%를 은행에 반환합니다.'],['⚖','제네바 협정','즉시 2라운드 동안 무인도 출입과 갇힘 효과를 막고, 이미 갇힌 플레이어도 풀어줍니다.'],
     ['⇄','거래','주사위를 굴리기 전에 현금·도시·탈것을 다른 플레이어와 교환할 수 있습니다. 건물 있는 도시는 거래할 수 없습니다.'],
@@ -273,6 +276,7 @@ export async function animateIndustrialRentSplit(feedback){
 }
 
 export async function showMoneyFeedback(feedback){
+  if(feedback?.gambler)return showGamblerResult(feedback.gambler);
   if(!feedback)return;document.querySelector('.money-feedback')?.remove();const element=document.createElement('div');element.className=`money-feedback tone-${feedback.tone||'info'}`;
   const sign=feedback.amount>0?'+':'−';element.innerHTML=`<small>${escapeHtml(feedback.title)}</small><strong>${sign}${formatMoney(Math.abs(feedback.amount))}</strong><span>${escapeHtml(feedback.message)}</span>`;document.body.append(element);
   element.setAttribute('role','status');requestAnimationFrame(()=>element.classList.add('show'));

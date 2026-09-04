@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {animateCityLanding,animateIslandEscape,animateMoneyTransfer,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from '../js/animations.js';
 import {animateDiceThrow,showMoneyFeedback} from '../js/ui.js';
+import {gamblerOutcome} from '../js/data/gambler.js';
 
 // Unit-level animation lifecycle checks; no browser or rendering dependencies.
 function animationEnvironment(t,{reduced=false,throwOnAnimation=0}={}){
@@ -28,6 +29,16 @@ function animationEnvironment(t,{reduced=false,throwOnAnimation=0}={}){
 
 const player={id:'player-1',name:'구매자 <테스트>',color:'#57dcb8',token:'✈'};
 const tile={index:1,name:'타이페이',englishName:'Taipei',purchasePrice:50000};
+
+for(const reduced of [false,true])test(`도박사 결과는 손익·무승부·지불 대기를 한 화면에 표시한다 (${reduced?'동작 줄이기':'일반'})`,async t=>{
+  const env=animationEnvironment(t,{reduced});
+  for(const total of [2,6,7,8,12])await showMoneyFeedback({gambler:gamblerOutcome(total)});
+  await showMoneyFeedback({gambler:{...gamblerOutcome(6),pendingPayment:true}});
+  const markup=env.body.appended.map(layer=>layer.innerHTML);
+  assert.match(markup[0],/−20만 원/);assert.match(markup[1],/−60만 원/);assert.match(markup[2],/0원 · 변동 없음/);assert.ok(!markup[2].includes('−0'));
+  assert.match(markup[3],/\+20만 원/);assert.match(markup[4],/\+60만 원/);assert.match(markup[5],/손실 확정 · 자산 정리 후 지불/);assert.ok(!markup[5].includes('은행에 지불했습니다'));
+  assert.equal(env.body.appended.length,6);assert.ok(env.body.appended.every(layer=>layer.removed));assert.ok(env.animations.every(animation=>animation.cancelled));
+});
 
 for(const reduced of [false,true])test(`운항·착륙·차례 연출의 ${reduced?'정적 안내':'애니메이션'}와 정리가 정상 동작한다`,async t=>{
   const env=animationEnvironment(t,{reduced});const tiles=[{index:15,name:'콩코드여객기'},{index:28,name:'퀸 엘리자베스호'},{index:30,name:'우주여행'},{index:32,name:'콜럼비아호'}];
