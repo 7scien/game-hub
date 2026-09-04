@@ -33,6 +33,46 @@ function targetRing(point,label=''){
   return `<span class="motion-target-ring" style="left:${point.x}px;top:${point.y}px"><b>${escapeHtml(label)}</b></span>`;
 }
 
+export async function animateTransportStatus({locked,tiles=[]}){
+  const panels=tiles.map(tile=>({tile,rect:findTile(tile.index)?.getBoundingClientRect()})).filter(item=>item.rect);
+  if(!panels.length)return;
+  const title=locked?'이동수단 운항 중단':'이동수단 운항 재개';
+  await playOverlay('transport',title,
+    `<div class="motion-transport-caption ${locked?'is-closed':'is-open'}"><span aria-hidden="true">${locked?'⛔':'✓'}</span><strong>${title}</strong><small>${locked?'탈것·우주여행·황금열쇠 이동 불가':'탈것·우주여행·황금열쇠 이동 가능'}</small></div>${panels.map(({tile,rect},index)=>`<div class="motion-transport-frame ${locked?'is-closed':'is-open'}" aria-label="${escapeHtml(tile.name)} ${locked?'운항 중단':'운항 재개'}" style="left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px"><span class="motion-transport-shutter" data-shutter="${index}" aria-hidden="true">⛔</span><b class="motion-transport-signal" data-signal="${index}">${locked?'중단':'재개'}</b></div>`).join('')}`,1250,(layer,run)=>{
+      panels.forEach((_,index)=>{
+        run(layer.querySelector(`[data-shutter="${index}"]`),locked?[{transform:'translateY(-105%)'},{transform:'translateY(5%)',offset:.8},{transform:'translateY(0)'}]:[{transform:'translateY(0)'},{transform:'translateY(-105%)'}],{duration:600,delay:index*90});
+        run(layer.querySelector(`[data-signal="${index}"]`),[{opacity:0,scale:.65},{opacity:1,scale:1.12,offset:.65},{opacity:1,scale:1}],{duration:400,delay:400+index*90});
+      });
+    });
+}
+
+export async function animateCityLanding({tile,player}){
+  const element=findTile(tile?.index);if(!element||!player)return;const rect=element.getBoundingClientRect();
+  const lights=[[12,0],[38,0],[64,0],[90,0],[100,28],[100,72],[88,100],[62,100],[36,100],[10,100],[0,72],[0,28]];
+  const token=document.querySelector(`[data-player-token="${player.id}"] b`);
+  const labelX=Math.max(95,Math.min(innerWidth-95,rect.left+rect.width/2));const labelY=Math.max(24,Math.min(innerHeight-30,rect.top-23));
+  await playOverlay('landing',`${player.name}, ${tile.name} 도착`,
+    `<div class="motion-runway" style="left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;--landing-color:${player.color}">${lights.map(([x,y],index)=>`<i data-runway-light="${index}" style="left:${x}%;top:${y}%"></i>`).join('')}<span class="motion-runway-outline"></span></div><span class="motion-landing-caption" style="left:${labelX}px;top:${labelY}px">${escapeHtml(tile.name)} 도착</span>`,780,(layer,run)=>{
+      lights.forEach((_,index)=>run(layer.querySelector(`[data-runway-light="${index}"]`),[{opacity:.12,scale:.7},{opacity:1,scale:1.35,offset:.5},{opacity:.5,scale:1}],{duration:300,delay:index*32}));
+      run(layer.querySelector('.motion-runway-outline'),[{opacity:0},{opacity:1,offset:.65},{opacity:0}],{duration:700});
+      run(token,[{translate:'0 -14px',scale:1.22},{translate:'0 2px',scale:.94,offset:.65},{translate:'0 0',scale:1}],{duration:420,delay:240});
+    });
+}
+
+export async function animateTurnSpotlight({player,bonus=false}){
+  if(!player)return;
+  const token=document.querySelector(`[data-player-token="${player.id}"]`);const tokenRect=token?.getBoundingClientRect();
+  const panels=[findPlayer(player.id),document.querySelector('.current-player')].filter(Boolean).map(element=>element.getBoundingClientRect());
+  const tokenPoint=tokenRect?{x:tokenRect.left+tokenRect.width/2,y:tokenRect.top+tokenRect.height/2}:null;
+  await playOverlay('turn',`${player.name}${bonus?'의 더블 보너스 차례':'의 차례'}`,
+    `<div class="motion-turn-banner" style="--spotlight-color:${player.color}"><i aria-hidden="true">${escapeHtml(player.token||'✈')}</i><div><small>${bonus?'더블 · 한 번 더!':'차례 시작'}</small><strong>${escapeHtml(player.name)}</strong></div></div>${panels.map((rect,index)=>`<span class="motion-player-focus" data-player-focus="${index}" style="left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;--spotlight-color:${player.color}"></span>`).join('')}${tokenPoint?`<span class="motion-token-focus" style="left:${tokenPoint.x}px;top:${tokenPoint.y}px;--spotlight-color:${player.color}"></span>`:''}`,850,(layer,run)=>{
+      run(layer.querySelector('.motion-turn-banner'),[{opacity:0,transform:move(0,-12,.92)},{opacity:1,transform:move(),offset:.25},{opacity:1,transform:move(),offset:.78},{opacity:0,transform:move(0,-7)}],{duration:850});
+      panels.forEach((_,index)=>run(layer.querySelector(`[data-player-focus="${index}"]`),[{opacity:0},{opacity:1,offset:.4},{opacity:0}],{duration:820}));
+      run(layer.querySelector('.motion-token-focus'),[{opacity:0,transform:move(0,0,.4)},{opacity:1,transform:move(0,0,1.15),offset:.45},{opacity:0,transform:move(0,0,1.35)}],{duration:800});
+      run(token?.querySelector('b'),[{filter:'brightness(1)'},{filter:'brightness(1.6)',offset:.5},{filter:'brightness(1)'}],{duration:760});
+    });
+}
+
 export async function animatePurchase({tile,player}){
   if(!tile||!player)return;
   const target=centerOf(findTile(tile.index));const origin={x:innerWidth/2,y:innerHeight*.46};

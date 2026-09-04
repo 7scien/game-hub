@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {animateIslandEscape,animateMoneyTransfer,animatePurchase,animateSpaceFlight,animateTollWaiver} from '../js/animations.js';
+import {animateCityLanding,animateIslandEscape,animateMoneyTransfer,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from '../js/animations.js';
 import {animateDiceThrow,showMoneyFeedback} from '../js/ui.js';
 
 // Unit-level animation lifecycle checks; no browser or rendering dependencies.
@@ -28,6 +28,15 @@ function animationEnvironment(t,{reduced=false,throwOnAnimation=0}={}){
 
 const player={id:'player-1',name:'구매자 <테스트>',color:'#57dcb8',token:'✈'};
 const tile={index:1,name:'타이페이',englishName:'Taipei',purchasePrice:50000};
+
+for(const reduced of [false,true])test(`운항·착륙·차례 연출의 ${reduced?'정적 안내':'애니메이션'}와 정리가 정상 동작한다`,async t=>{
+  const env=animationEnvironment(t,{reduced});const tiles=[{index:15,name:'콩코드여객기'},{index:28,name:'퀸 엘리자베스호'},{index:30,name:'우주여행'},{index:32,name:'콜럼비아호'}];
+  await animateTransportStatus({locked:true,tiles});await animateTransportStatus({locked:false,tiles});
+  await animateCityLanding({tile,player});await animateTurnSpotlight({player});await animateTurnSpotlight({player,bonus:true});
+  assert.ok(env.body.appended.every(layer=>layer.removed));assert.ok(env.nodes.some(node=>node.innerHTML?.includes('타이페이 도착')));
+  assert.ok(env.nodes.some(node=>node.innerHTML?.includes('더블 · 한 번 더!')));
+  if(reduced)assert.equal(env.animations.length,0);else{assert.ok(env.animations.length>30);assert.ok(env.animations.every(animation=>animation.cancelled))}
+});
 
 for(const reduced of [false,true])test(`7종 추가 연출은 완료 시 정리되며 ${reduced?'동작 줄이기':'일반 동작'} 설정을 따른다`,async t=>{
   const env=animationEnvironment(t,{reduced});

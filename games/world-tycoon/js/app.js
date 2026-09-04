@@ -4,12 +4,14 @@ import {
 } from './game.js';
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
-import {animateIslandEscape,animatePurchase,animateSpaceFlight,animateTollWaiver} from './animations.js';
+import {animateCityLanding,animateIslandEscape,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from './animations.js';
+import {capturePresentation,presentationChanges} from './motion-events.js';
 import {
   animateAuctionAward,animateAuctionBid,animateBankruptcy,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateRegionMonopoly,animateSecondHalfStart,animateTokenStep,animateWorldCup,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
 } from './ui.js';
 
 const root=document.querySelector('#app');
+let lastPresentation=null;
 let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;let cinematicQueue=Promise.resolve();let cinematicPending=0;
 
 function refreshSaves(){savedGames=loadGames()}
@@ -27,10 +29,11 @@ async function animateNewMonopolies(before){for(const [key,result] of completedM
 function render(){
   if(state){
     const feedbacks=[...(state.feedbackQueue||[]),...(state.feedback?[state.feedback]:[])];const viewState=state;const noticeAnimation=state.notice?.animation;const noticeId=state.notice?.id;
-    state.feedback=null;state.feedbackQueue=[];renderGame(root,feedbacks.length?{...state,notice:null}:state);
-    if(feedbacks.length){persist();queueCinematic(async()=>{try{for(const feedback of feedbacks)await showMoneyFeedback(feedback)}finally{if(state===viewState)render()}})}
+    const changes=presentationChanges(lastPresentation,state);lastPresentation=capturePresentation(state);const hasPresentation=feedbacks.length||changes.transport||changes.arrival||changes.turn;
+    state.feedback=null;state.feedbackQueue=[];renderGame(root,hasPresentation?{...state,notice:null}:state);
+    if(hasPresentation){persist();queueCinematic(async()=>{try{if(changes.transport)await animateTransportStatus(changes.transport);if(changes.arrival)await animateCityLanding(changes.arrival);for(const feedback of feedbacks)await showMoneyFeedback(feedback);if(changes.turn)await animateTurnSpotlight(changes.turn)}finally{if(state===viewState)render()}})}
     else if(noticeAnimation?.type==='genevaConvention'&&noticeId!==lastAnimatedNoticeId){lastAnimatedNoticeId=noticeId;queueCinematic(async()=>{await new Promise(resolve=>setTimeout(resolve,720));await animateGenevaConvention(noticeAnimation)})}
-  }else renderStart(root,{savedGames,setup,playerCount,selectedSlot});
+  }else{lastPresentation=null;renderStart(root,{savedGames,setup,playerCount,selectedSlot})}
 }
 function commit(action,{rerender=true}={}){
   const bankruptcyBefore=captureBankruptcyCandidates();
@@ -48,13 +51,12 @@ async function handleRoll(){
     const rolled=commit(()=>rollDice(state));if(!rolled)return;
     const player=state.players[state.currentPlayerIndex];const playerId=player.id;const dice=[...state.dice];const total=state.rollTotal;await animateDiceThrow(dice,total);const rollResult=commit(()=>completeRoll(state));if(rollResult?.islandPrevented)toast('제네바 협정으로 무인도 이동이 취소되었습니다.');else if(rollResult?.islandEscaped)await queueCinematic(()=>animateIslandEscape({player,method:rollResult.islandAutoReleased?'automatic':'double'}));
     while(state.phase===PHASES.MOVING){const fromRect=captureTokenRect(playerId);const advanced=commit(()=>advanceMovement(state),{rerender:false});if(!advanced)break;render();await animateTokenStep(playerId,fromRect);await cinematicQueue;await new Promise(resolve=>setTimeout(resolve,55))}
-    if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement)commit(()=>finishMovement(state));
+    if(state.phase===PHASES.RESOLVING_TILE&&state.pendingMovement){const tile=state.board[player.position];if(tile?.type==='city')await queueCinematic(()=>animateCityLanding({tile,player}));commit(()=>finishMovement(state))}
   }finally{actionLocked=false}
 }
 
 function handleEndTurn(){
-  const result=commit(()=>endTurn(state));if(!result)return;
-  if(result.bonusTurn)toast('더블! 한 번 더 굴리세요.');
+  commit(()=>endTurn(state));
 }
 
 async function handleTerrorTarget(tileId){
@@ -91,7 +93,7 @@ async function handleIndustrialization(tileId){
 
 async function handleAuctionResult(action){
   if(actionLocked)return;actionLocked=true;
-  const monopolies=completedMonopolies();try{const result=commit(action);if(result?.type==='auction-bid')await animateAuctionBid(result);if(result?.type==='auction-award'){await animateAuctionAward(result);await animateNewMonopolies(monopolies);if(result.finished)await animateSecondHalfStart()}}finally{actionLocked=false}
+  const monopolies=completedMonopolies();try{const result=commit(action,{rerender:false});if(result?.type==='auction-award'){await queueCinematic(()=>animateAuctionAward(result));await animateNewMonopolies(monopolies);if(result.finished)await queueCinematic(()=>animateSecondHalfStart());render()}else{render();if(result?.type==='auction-bid')await animateAuctionBid(result)}}finally{actionLocked=false}
 }
 
 async function handleWorldCupCity(tileId){
