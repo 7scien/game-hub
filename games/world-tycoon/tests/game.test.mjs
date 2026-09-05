@@ -67,7 +67,7 @@ test('도시와 탈것은 지정한 한국 원화 가격을 사용한다',()=>{
     'buenos-aires':220000,'sao-paulo':240000,sydney:240000,busan:500000,hawaii:260000,lisbon:260000,'queen-elizabeth':400000,madrid:280000,
     tokyo:300000,columbia:450000,paris:320000,rome:320000,london:350000,'new-york':350000,'seoul-olympic':1000000,
   });
-  for(const [id,rent] of [['jeju',300000],['busan',600000],['seoul-olympic',2000000]]){
+  for(const [id,rent] of [['jeju',300000],['busan',600000],['seoul-olympic',1200000]]){
     const tile=board.find(item=>item.id===id);assert.equal(tile.buildable,false);assert.equal(tile.baseRent,rent);assert.deepEqual(tile.buildingCosts,[]);
   }
 });

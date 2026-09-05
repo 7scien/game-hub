@@ -51,7 +51,7 @@ export const PROPERTIES = [
   city('rome','로마','ROME','europe',320000),
   city('london','런던','LONDON','europe',350000),
   city('new-york','뉴욕','NEW YORK','america',350000),
-  city('seoul-olympic','서울','SEOUL','asia',1000000,{buildable:false,fixedRent:2000000}),
+  city('seoul-olympic','서울','SEOUL','asia',1000000,{buildable:false,fixedRent:1200000}),
 ];
 
 export const PROPERTY_BY_ID=Object.fromEntries(PROPERTIES.map(property=>[property.id,property]));

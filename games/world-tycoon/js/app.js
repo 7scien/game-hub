@@ -6,7 +6,7 @@ import {
 import {clearGame,loadGames,saveGame} from './storage.js';
 import {PHASES} from './rules.js';
 import {animateCityLanding,animateGoldenKeyReset,animateIslandEscape,animatePurchase,animateSpaceFlight,animateTollWaiver,animateTransportStatus,animateTurnSpotlight} from './animations.js';
-import {capturePresentation,presentationChanges} from './motion-events.js';
+import {capturePresentation,presentationChanges,shouldShowGoldenKeyBeforePresentation} from './motion-events.js';
 import {
   animateFateDie,
   animateAuctionAward,animateAuctionBid,animateBankruptcy,animateBuildingDestruction,animateDiceThrow,animateEarlyAuctionConsent,animateGenevaConvention,animateHalftimeAuction,animateIndustrialization,animateLandmarkConstruction,animateRegionMonopoly,animateSecondHalfStart,animateTokenStep,animateWorldCup,captureTokenRect,closeFreeModal,renderGame,renderHelp,renderMenu,renderStart,showFreeModal,showMoneyFeedback,toast,updateTimer,
@@ -14,7 +14,7 @@ import {
 
 const root=document.querySelector('#app');
 let lastPresentation=null;
-let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;let cinematicQueue=Promise.resolve();let cinematicPending=0;
+let state=null;let savedGames=loadGames();let setup=false;let selectedSlot=Math.max(1,savedGames.findIndex(game=>!game)+1);let playerCount=2;let actionLocked=false;let clockTicks=0;let lastAnimatedNoticeId=null;let deferredGoldenPresentation=null;let cinematicQueue=Promise.resolve();let cinematicPending=0;
 
 function refreshSaves(){savedGames=loadGames()}
 function persist(){if(state?.status==='playing')saveGame(state);else if(state?.status==='finished')clearGame(globalThis.localStorage,state.saveSlot)}
@@ -32,11 +32,15 @@ function render(){
   if(state){
     const feedbacks=[...(state.feedbackQueue||[]),...(state.feedback?[state.feedback]:[])];const viewState=state;const noticeAnimation=state.notice?.animation;const noticeId=state.notice?.id;
     const resetAnimation=noticeAnimation?.type==='resetEventDeck'&&noticeId!==lastAnimatedNoticeId?noticeAnimation:null;if(resetAnimation)lastAnimatedNoticeId=noticeId;
-    const changes=presentationChanges(lastPresentation,state);lastPresentation=capturePresentation(state);const hasPresentation=feedbacks.length||changes.transport||changes.arrival||changes.turn||resetAnimation;
-    state.feedback=null;state.feedbackQueue=[];renderGame(root,hasPresentation?{...state,notice:null}:state);
-    if(hasPresentation){persist();queueCinematic(async()=>{try{if(changes.transport)await animateTransportStatus(changes.transport);if(changes.arrival)await animateCityLanding(changes.arrival);for(const feedback of feedbacks)await showMoneyFeedback(feedback);if(resetAnimation)await animateGoldenKeyReset(resetAnimation);if(changes.turn)await animateTurnSpotlight(changes.turn)}finally{if(state===viewState)render()}})}
+    const changes=presentationChanges(lastPresentation,state);lastPresentation=capturePresentation(state);const freshPresentation={feedbacks,changes,resetAnimation};
+    state.feedback=null;state.feedbackQueue=[];
+    if(shouldShowGoldenKeyBeforePresentation(state,freshPresentation)){deferredGoldenPresentation=freshPresentation;renderGame(root,state);return}
+    const presentation=!state.notice&&deferredGoldenPresentation?deferredGoldenPresentation:freshPresentation;if(presentation===deferredGoldenPresentation)deferredGoldenPresentation=null;
+    const activeFeedbacks=presentation.feedbacks;const activeChanges=presentation.changes;const activeReset=presentation.resetAnimation;const hasPresentation=activeFeedbacks.length||activeChanges.transport||activeChanges.arrival||activeChanges.turn||activeReset;
+    renderGame(root,hasPresentation?{...state,notice:null}:state);
+    if(hasPresentation){persist();queueCinematic(async()=>{try{if(activeChanges.transport)await animateTransportStatus(activeChanges.transport);if(activeChanges.arrival)await animateCityLanding(activeChanges.arrival);for(const feedback of activeFeedbacks)await showMoneyFeedback(feedback);if(activeReset)await animateGoldenKeyReset(activeReset);if(activeChanges.turn)await animateTurnSpotlight(activeChanges.turn)}finally{if(state===viewState)render()}})}
     else if(noticeAnimation?.type==='genevaConvention'&&noticeId!==lastAnimatedNoticeId){lastAnimatedNoticeId=noticeId;queueCinematic(async()=>{await new Promise(resolve=>setTimeout(resolve,720));await animateGenevaConvention(noticeAnimation)})}
-  }else{lastPresentation=null;renderStart(root,{savedGames,setup,playerCount,selectedSlot})}
+  }else{lastPresentation=null;deferredGoldenPresentation=null;renderStart(root,{savedGames,setup,playerCount,selectedSlot})}
 }
 function commit(action,{rerender=true}={}){
   const bankruptcyBefore=captureBankruptcyCandidates();

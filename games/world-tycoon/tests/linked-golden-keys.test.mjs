@@ -65,7 +65,7 @@ test('벌금·건물 비용 카드·사회복지기금 납부는 각자 절반�
 test('남의 통행료는 둘이 반씩 내고, 결의 상대의 통행료는 방문자만 절반을 낸다',()=>{
   const s=game();linked(s);let tile=own(s,'busan',2);s.players[0].position=tile.index;let before=balances(s);resolveTile(s);assert.deepEqual(changes(s,before),[-300000,-300000,600000]);
   tile=own(s,'jeju',1);s.players[0].position=tile.index;before=balances(s);resolveTile(s);assert.deepEqual(changes(s,before),[-150000,150000,0]);
-  tile=own(s,'seoul-olympic',0);s.currentPlayerIndex=1;s.players[1].position=tile.index;before=balances(s);resolveTile(s);assert.deepEqual(changes(s,before),[1000000,-1000000,0]);
+  tile=own(s,'seoul-olympic',0);s.currentPlayerIndex=1;s.players[1].position=tile.index;before=balances(s);resolveTile(s);assert.deepEqual(changes(s,before),[600000,-600000,0]);
 });
 
 test('통행료 수령도 나누며 서로 다른 결의 두 쌍 간에는 양쪽 끝을 한 번씩 나눈다',()=>{

@@ -1,6 +1,7 @@
 :root{font-family:Inter,"Pretendard Variable",Pretendard,"Noto Sans KR",system-ui,sans-serif;color:#f7fbff;background:#061225;font-synthesis:none;--panel:#0d2038;--line:#28435e;--mint:#49e6c0;--yellow:#ffd95c;--text-muted:#9db0c5}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:radial-gradient(circle at 18% 18%,#10395a 0,transparent 32%),radial-gradient(circle at 84% 88%,#172e55 0,transparent 34%),#061225}
+html,body,#app{overflow-anchor:none}
 body{min-height:100dvh;overflow-x:hidden}
 button{font:inherit;color:inherit}
 button:focus-visible{outline:3px solid var(--yellow);outline-offset:3px}

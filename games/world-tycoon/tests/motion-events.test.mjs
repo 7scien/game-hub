@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {capturePresentation,presentationChanges} from '../js/motion-events.js';
+import {capturePresentation,presentationChanges,shouldShowGoldenKeyBeforePresentation} from '../js/motion-events.js';
 import {createGame,endTurn} from '../js/game.js';
 import {PHASES} from '../js/rules.js';
 import {renderGame} from '../js/ui.js';
@@ -48,4 +48,19 @@ test('경매의 입찰자 전환은 강조하지 않고 후반전 첫 차례는 
   const state=game();state.gameStage='AUCTION';state.phase=PHASES.AUCTION;const before=capturePresentation(state);
   assert.equal(presentationChanges(before,state).turn,null);state.gameStage='SECOND_HALF';state.phase=PHASES.WAITING_FOR_ROLL;
   assert.ok(presentationChanges(before,state).turn);state.status='finished';assert.deepEqual(presentationChanges(before,state),{transport:null,arrival:null,turn:null});
+});
+
+test('황금열쇠 알림은 현금·이동 연출보다 먼저 표시한다',()=>{
+  const state=game();state.notice={source:'golden-key'};
+  assert.equal(shouldShowGoldenKeyBeforePresentation(state,{feedbacks:[{amount:200000}]}),true);
+  assert.equal(shouldShowGoldenKeyBeforePresentation(state,{changes:{arrival:{tile:{name:'서울'}}}}),true);
+  assert.equal(shouldShowGoldenKeyBeforePresentation({...state,notice:{source:null}},{feedbacks:[{amount:200000}]}),false);
+  assert.equal(shouldShowGoldenKeyBeforePresentation(state),false);
+});
+
+test('게임판을 다시 그려도 사용자가 보고 있던 세로 위치를 유지한다',()=>{
+  const state=game();const calls=[];const previousWindow=globalThis.window;const previousRaf=globalThis.requestAnimationFrame;
+  const fakeWindow={scrollX:14,scrollY:360,scrollTo:(left,top)=>{calls.push([left,top]);fakeWindow.scrollX=left;fakeWindow.scrollY=top}};globalThis.window=fakeWindow;globalThis.requestAnimationFrame=callback=>{callback();return 1};
+  const root={value:'',querySelector:selector=>selector==='.in-game'?{}:null,get innerHTML(){return this.value},set innerHTML(value){this.value=value;fakeWindow.scrollY=820}};
+  try{renderGame(root,state);assert.deepEqual(calls,[[14,360],[14,360]])}finally{globalThis.window=previousWindow;globalThis.requestAnimationFrame=previousRaf}
 });

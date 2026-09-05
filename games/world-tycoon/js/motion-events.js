@@ -23,3 +23,8 @@ export function presentationChanges(before,state){
   }
   return changes;
 }
+
+export function shouldShowGoldenKeyBeforePresentation(state,{feedbacks=[],changes={},resetAnimation=null}={}){
+  const hasPresentation=Boolean(feedbacks.length||changes.transport||changes.arrival||changes.turn||resetAnimation);
+  return Boolean(hasPresentation&&state?.notice?.source==='golden-key');
+}
