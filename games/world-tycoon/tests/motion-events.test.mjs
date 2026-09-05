@@ -64,3 +64,9 @@ test('게임판을 다시 그려도 사용자가 보고 있던 세로 위치를 
   const root={value:'',querySelector:selector=>selector==='.in-game'?{}:null,get innerHTML(){return this.value},set innerHTML(value){this.value=value;fakeWindow.scrollY=820}};
   try{renderGame(root,state);assert.deepEqual(calls,[[14,360],[14,360]])}finally{globalThis.window=previousWindow;globalThis.requestAnimationFrame=previousRaf}
 });
+
+test('우주여행 중에는 우주여행 자체를 제외한 39칸을 모두 선택 대상으로 표시한다',()=>{
+  const state=game();state.players[0].position=30;state.phase=PHASES.TRAVEL_DECISION;state.pendingAction={type:'space-travel',tileIndex:30};const root={querySelector:()=>null};
+  renderGame(root,state);assert.equal((root.innerHTML.match(/data-action="choose-space-destination"/g)||[]).length,39);
+  assert.ok(!root.innerHTML.match(/data-tile-index="30"[^>]*data-action="choose-space-destination"/));assert.match(root.innerHTML,/39개 칸 중 목적지 선택 대기/);
+});

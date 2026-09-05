@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,castEarlyAuctionVote,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishBuildMode,finishMovement,getBuildableOwnedCities,getGlobalEffectRounds,getLoanBalance,getNetWorth,getUnownedPurchasableAssets,isGlobalEffectActive,openBuildMode,openTrade,passAuction,
+  advanceMovement,buildCurrentTile,buildOwnedCity,buyCurrentTile,castEarlyAuctionVote,chooseIndustrializationCity,chooseSpaceTravelDestination,chooseTerrorTarget,chooseWorldCupCity,completeRoll,createGame,declareBankruptcy,endTurn,finishBuildMode,finishMovement,getBuildableOwnedCities,getGlobalEffectRounds,getLoanBalance,getNetWorth,getSpaceTravelTargets,getUnownedPurchasableAssets,isGlobalEffectActive,openBuildMode,openTrade,passAuction,
   proposeEarlyAuction,proposeTrade,repayBankLoan,resolveTile,resolveTrade,rollDice,sellAsset,sellBuilding,sellSpecialCard,settleDebt,takeBankLoan,updateClock,useSpecialCard,
 } from '../js/game.js';
 import {EVENT_CARDS} from '../js/data/events.js';
@@ -166,11 +166,24 @@ test('주사위 합만큼 말을 한 칸씩 순서대로 이동한다',()=>{
   assert.equal(state.phase,PHASES.RESOLVING_TILE);finishMovement(state);assert.equal(state.phase,PHASES.BUY_DECISION);
 });
 
-test('우주여행에서는 원하는 칸을 선택해 이동하고 도착 효과를 적용한다',()=>{
+test('우주여행에서는 자기 칸을 제외한 판의 모든 칸을 목적지로 선택한다',()=>{
   const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];player.position=30;resolveTile(state);
   assert.equal(state.phase,PHASES.TRAVEL_DECISION);assert.equal(state.pendingAction.type,'space-travel');
+  assert.equal(getSpaceTravelTargets(state).length,39);assert.ok(getSpaceTravelTargets(state).every(tile=>tile.id!=='space-travel'));
+  assert.deepEqual(new Set(getSpaceTravelTargets(state).map(tile=>tile.type)),new Set(['start','city','event','wait','facility','bonus','tax']));
   chooseSpaceTravelDestination(state,37);assert.equal(player.position,37);assert.equal(state.board[37].id,'new-york');assert.equal(state.phase,PHASES.BUY_DECISION);
-  state.phase=PHASES.TRAVEL_DECISION;state.pendingAction={type:'space-travel',tileIndex:30};player.position=30;assert.throws(()=>chooseSpaceTravelDestination(state,28),/도시/);
+  state.phase=PHASES.TRAVEL_DECISION;state.pendingAction={type:'space-travel',tileIndex:30};player.position=30;assert.throws(()=>chooseSpaceTravelDestination(state,30),/우주여행 칸/);
+});
+
+test('우주여행으로 출발·황금열쇠·무인도에 가면 각각의 도착 효과를 적용한다',()=>{
+  let state=createGame(2,{mode:'full',rng:()=>.2});let player=state.players[0];let before=player.money;player.position=30;resolveTile(state);chooseSpaceTravelDestination(state,0);
+  assert.equal(player.position,0);assert.equal(player.money,before+RULES.PASS_START_BONUS);assert.equal(player.lapsCompleted,1);assert.equal(state.phase,PHASES.END_TURN);
+
+  state=createGame(2,{mode:'full',rng:()=>.2});player=state.players[0];before=player.money;state.eventDeck=['pension'];state.eventCursor=0;player.position=30;resolveTile(state);chooseSpaceTravelDestination(state,2);
+  assert.equal(player.position,2);assert.equal(state.eventCursor,1);assert.equal(state.notice.source,'golden-key');assert.equal(state.notice.title,'연금 혜택');assert.equal(player.money,before+RULES.PASS_START_BONUS+50000);
+
+  state=createGame(2,{mode:'full',rng:()=>.2});player=state.players[0];player.position=30;resolveTile(state);chooseSpaceTravelDestination(state,10);
+  assert.equal(player.position,10);assert.equal(player.skipTurns,1);assert.equal(state.notice.title,'무인도');assert.equal(state.phase,PHASES.END_TURN);
 });
 
 test('우주여행은 콜럼비아호 소유자에게 이용료를 낸 뒤 판에서 도시를 선택한다',()=>{

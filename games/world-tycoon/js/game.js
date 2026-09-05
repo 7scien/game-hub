@@ -54,6 +54,7 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
 export function getCurrentPlayer(state){return currentPlayer(state)}
 export function getPaymentPlayer(state){return state.players.find(player=>player.id===state.pendingDebt?.payerId)??currentPlayer(state)}
 export function getBermudaTargets(state){return state.players.filter(player=>player.id!==currentPlayer(state).id&&!player.bankrupt&&state.board[player.position]?.id!=='deserted-island')}
+export function getSpaceTravelTargets(state){return state.board.filter(tile=>tile.id!=='space-travel')}
 export function getTrojanTargets(state){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId&&tile.ownerId!==currentPlayer(state).id&&state.players.some(p=>p.id===tile.ownerId&&!p.bankrupt)&&!activeTrojan(state,tile))}
 export function getGhostCityTargets(state){return state.board.filter(tile=>tile.type==='city'&&tile.ownerId===currentPlayer(state).id&&tile.buildable!==false&&tile.buildingLevel<4&&!hasGhostCity(tile))}
 export function getAuctionBidder(state){return state.players.find(player=>player.id===state.auction?.turnPlayerId)??currentPlayer(state)}
@@ -405,7 +406,7 @@ export function chooseSpaceTravelDestination(state,targetIndex){
   requirePhase(state,PHASES.TRAVEL_DECISION);const player=currentPlayer(state);const index=Number(targetIndex);const origin=state.board[player.position];const destination=state.board[index];
   if(isGlobalEffectActive(state,'americanRage'))throw new Error('미국의 분노가 지속되는 동안 우주여행을 이용할 수 없습니다.');
   if(state.pendingAction?.type!=='space-travel'||origin?.id!=='space-travel')throw new Error('지금은 우주여행 목적지를 정할 수 없습니다.');
-  if(!Number.isInteger(index)||!destination||destination.type!=='city')throw new Error('게임판에서 이동할 도시를 선택하세요.');
+  if(!Number.isInteger(index)||!destination||destination.id==='space-travel')throw new Error('우주여행 칸을 제외한 목적지를 선택하세요.');
   moveTo(state,index);if(player.bankrupt||state.status==='finished')return destination;state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
   return destination;
 }
