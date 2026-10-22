@@ -63,7 +63,7 @@ export function getUnownedPurchasableAssets(state){return state.board.filter(til
 export function maxBuildingLevel(tile){return tile?.industrialized?RULES.INDUSTRIALIZED_MAX_BUILDING_LEVEL:RULES.MAX_BUILDING_LEVEL}
 export function getLoanBalance(player){return (player?.bankLoan?.principal||0)+(player?.bankLoan?.interest||0)}
 function bankingPlayer(state){return state.phase===PHASES.AUCTION?getAuctionBidder(state):getPaymentPlayer(state)}
-export function canUseBank(state){return state.status==='playing'&&BANK_PHASES.has(state.phase)&&!bankingPlayer(state).bankrupt}
+export function canUseBank(state){return state.status==='playing'&&BANK_PHASES.has(state.phase)&&!state.pendingDebt?.bankLoanMaturity&&!bankingPlayer(state).bankrupt}
 function requirePhase(state,...phases){if(!phases.includes(state.phase))throw new Error('지금은 이 행동을 할 수 없습니다.')}
 
 export function rollDice(state,rng=Math.random){
@@ -98,10 +98,11 @@ export function repayBankLoan(state){
   player.money-=amount;player.bankLoan=null;addLog(state,`${player.name}이 은행 대출 ${formatMoney(amount)}을 모두 상환했습니다.`);cashFeedback(state,'대출 상환',-amount,'원금과 이자를 모두 갚았습니다.','danger');return amount;
 }
 
-function settleMatureLoan(state,player){
+function settleMatureLoan(state,player,afterPayment=null){
   const amount=getLoanBalance(player);if(!amount||player.lapsCompleted<player.bankLoan.dueLap)return false;
   if(player.money>=amount){player.money-=amount;player.bankLoan=null;addLog(state,`${player.name}의 3바퀴 대출이 만기되어 ${formatMoney(amount)}을 자동 상환했습니다.`);cashFeedback(state,'대출 만기 상환',-amount,'3바퀴 만기 원금과 이자를 갚았습니다.','danger');return false}
-  bankruptPlayer(state,player,'은행 대출 만기 불이행');return true;
+  state.pendingDebt={payerId:player.id,amount,recipientId:null,recipientAmount:null,recipientIds:null,shareAmount:null,reason:'은행 대출 만기 상환',fundDeposit:false,silent:false,bankLoanMaturity:true,afterPayment};state.phase=PHASES.ASSET_MANAGEMENT;
+  notice(state,'대출 만기 · 자산 정리',`${player.name}: 현금이 부족합니다. 보유 건물과 땅을 매각해 ${formatMoney(amount)}을 상환하세요.`,'warning');addLog(state,`${player.name}의 은행 대출이 만기되었습니다. 파산 판정 전에 자산 정리를 시작합니다.`);return true;
 }
 
 function receiveCash(state,player,amount,title,{feedback=true}={}){
@@ -113,21 +114,23 @@ function receiveCash(state,player,amount,title,{feedback=true}={}){
   return receipts;
 }
 
-function passStart(state,player,count=1){
+function passStart(state,player,count=1,afterPayment=null){
   const reward=RULES.PASS_START_BONUS*count;receiveCash(state,player,reward,'월급 지급');player.lapsCompleted=(player.lapsCompleted||0)+count;addLog(state,`${player.name}이 출발 지점을 통과했습니다. (${player.lapsCompleted}바퀴)`);
-  return settleMatureLoan(state,player);
+  return settleMatureLoan(state,player,afterPayment);
 }
 
-function moveBy(state,steps,{collectPassBonus=true}={}){
+function moveBy(state,steps,{collectPassBonus=true,afterPassPayment=null}={}){
   const player=currentPlayer(state);const length=state.board.length;const raw=player.position+steps;
-  if(steps>0&&collectPassBonus){const laps=Math.floor(raw/length);if(laps>0&&passStart(state,player,laps))return}
+  let paymentPending=false;if(steps>0&&collectPassBonus){const laps=Math.floor(raw/length);if(laps>0)paymentPending=passStart(state,player,laps,afterPassPayment)}
   player.position=((raw%length)+length)%length;
+  return paymentPending;
 }
 
-function moveTo(state,targetIndex,{collectPassBonus=true}={}){
+function moveTo(state,targetIndex,{collectPassBonus=true,afterPassPayment=null}={}){
   const player=currentPlayer(state);
-  if(collectPassBonus&&targetIndex<=player.position&&targetIndex!==player.position&&passStart(state,player))return;
+  if(collectPassBonus&&targetIndex<=player.position&&targetIndex!==player.position&&passStart(state,player,1,afterPassPayment))return true;
   player.position=targetIndex;
+  return false;
 }
 
 export function completeRoll(state){
@@ -163,8 +166,8 @@ export function completeRoll(state){
 export function advanceMovement(state){
   requirePhase(state,PHASES.MOVING);const movement=state.pendingMovement;
   if(!movement||movement.playerId!==currentPlayer(state).id||movement.remaining<1)throw new Error('진행 중인 이동이 없습니다.');
-  moveBy(state,1);if(currentPlayer(state).bankrupt||state.phase===PHASES.GAME_OVER){state.pendingMovement=null;return {remaining:0,position:currentPlayer(state).position,bankrupt:true}}movement.remaining-=1;if(movement.remaining===0)state.phase=PHASES.RESOLVING_TILE;
-  return {remaining:movement.remaining,position:currentPlayer(state).position};
+  const paymentPending=moveBy(state,1,{afterPassPayment:{type:'resumeMovement'}});if(currentPlayer(state).bankrupt||state.phase===PHASES.GAME_OVER){state.pendingMovement=null;return {remaining:0,position:currentPlayer(state).position,bankrupt:true}}movement.remaining-=1;if(paymentPending||state.phase===PHASES.ASSET_MANAGEMENT)return {remaining:movement.remaining,position:currentPlayer(state).position,paymentPending:true};if(movement.remaining===0)state.phase=PHASES.RESOLVING_TILE;
+  return {remaining:movement.remaining,position:currentPlayer(state).position,paymentPending:false};
 }
 
 export function finishMovement(state){
@@ -206,6 +209,16 @@ function continueAfterPayment(state,action){
   if(!action){finishSimpleTile(state);return}
   if(action.type==='nextPayment')return startPaymentPlan(state,action.payments,action.afterPayment);
   if(action.type==='resumeRoll'){state.notice=null;state.phase=PHASES.ROLLING;return completeRoll(state)}
+  if(action.type==='resumeMovement'){state.notice=null;if(!state.pendingMovement){finishSimpleTile(state);return}state.phase=state.pendingMovement.remaining>0?PHASES.MOVING:PHASES.RESOLVING_TILE;return}
+  if(action.type==='resolveCurrentTile'){state.notice=null;state.phase=PHASES.RESOLVING_TILE;resolveTile(state,action.depth??1);return}
+  if(action.type==='completeWorldTour'){const player=currentPlayer(state);const fund=collectWelfareFund(state,player);addLog(state,`${player.name}이 세계일주를 마치고 사회복지기금 ${formatMoney(fund)}을 받았습니다.`);finishSimpleTile(state);return}
+  if(action.type==='completeSpaceTravel'){
+    const player=currentPlayer(state);const index=findTileIndex(state.board,action.tileId);const destination=state.board[index];moveTo(state,index,{collectPassBonus:false});state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return;
+  }
+  if(action.type==='travelRouteAtVehicle'){
+    const player=currentPlayer(state);const effect=action.effect;const vehicleIndex=findTileIndex(state.board,effect.vehicleTileId);moveTo(state,vehicleIndex,{collectPassBonus:false});const vehicle=state.board[vehicleIndex];const afterPayment={type:'moveTo',tileId:effect.destinationTileId};
+    if(vehicle.ownerId&&vehicle.ownerId!==player.id){prepareDebt(state,{amount:vehicle.baseRent,recipientId:vehicle.ownerId,reason:`${vehicle.name} 이용료`,afterPayment});return}continueAfterPayment(state,afterPayment);return;
+  }
   if(isGlobalEffectActive(state,'americanRage')&&(action.type==='spaceTravel'||action.type==='moveTo')){
     notice(state,'미국의 분노','이동 봉쇄 기간이라 이동수단과 특수 이동을 사용할 수 없습니다.','warning');finishSimpleTile(state);return;
   }
@@ -213,9 +226,10 @@ function continueAfterPayment(state,action){
     const player=currentPlayer(state);state.pendingAction={type:'space-travel',tileIndex:player.position};state.phase=PHASES.TRAVEL_DECISION;addLog(state,`${player.name}이 우주여행 목적지를 선택합니다.`);return;
   }
   if(action.type==='moveTo'){
-    moveTo(state,findTileIndex(state.board,action.tileId),{collectPassBonus:action.collectPassBonus!==false});
+    const resumeAction={...action,collectPassBonus:false};const paymentPending=moveTo(state,findTileIndex(state.board,action.tileId),{collectPassBonus:action.collectPassBonus!==false,afterPassPayment:resumeAction});
+    if(paymentPending)return;
     if(currentPlayer(state).bankrupt||state.status==='finished')return;
-    state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return;
+    if(action.resolveTile===false){finishSimpleTile(state);return}state.phase=PHASES.RESOLVING_TILE;resolveTile(state,action.depth??1);return;
   }
   finishSimpleTile(state);
 }
@@ -228,8 +242,9 @@ function completeDebtPayment(state,debt){
   if(debt.recipientIds)debt.recipientIds.forEach(id=>{const target=state.players.find(player=>player.id===id);if(target&&!target.bankrupt)target.money+=debt.shareAmount});
   if(debt.fundDeposit)state.welfareFund=(state.welfareFund||0)+debt.amount;
   consumeTrojan(state,debt);
-  addLog(state,`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
-  const title=debt.recipientId?'통행료 지불':debt.fundDeposit?'사회복지기금 납부':'현금 지불';
+  if(debt.bankLoanMaturity)payer.bankLoan=null;
+  addLog(state,debt.bankLoanMaturity?`${payer.name}이 자산 정리 후 만기 대출 ${formatMoney(debt.amount)}을 모두 상환했습니다.`:`${payer.name}이 ${formatMoney(debt.amount)}을 지불했습니다.`);
+  const title=debt.bankLoanMaturity?'대출 만기 상환':debt.recipientId?'통행료 지불':debt.fundDeposit?'사회복지기금 납부':'현금 지불';
   const bankAmount=Math.max(0,debt.amount-ownerAmount);const industrialSplit=debt.recipientId&&bankAmount>0&&!debt.oathShared?{payerId:payer.id,recipientId:debt.recipientId,ownerAmount,bankAmount}:null;
   const recipient=state.players.find(target=>target.id===debt.recipientId);
   const transfer=debt.recipientId&&!debt.oathShared?{type:'toll',payerId:payer.id,payerName:payer.name,recipientId:debt.recipientId,recipientName:recipient?.name||'소유주',amount:debt.amount}:null;
@@ -282,7 +297,7 @@ function sellMostExpensive(state,player,rate,saleName){
 
 function travelRoute(state,effect){
   if(isGlobalEffectActive(state,'americanRage')){notice(state,'미국의 분노','이동 봉쇄로 이번 항공·선박 여행은 취소됩니다. 이용료도 내지 않습니다.','warning','golden-key');finishSimpleTile(state);return}
-  const player=currentPlayer(state);const vehicleIndex=findTileIndex(state.board,effect.vehicleTileId);moveTo(state,vehicleIndex);
+  const player=currentPlayer(state);const vehicleIndex=findTileIndex(state.board,effect.vehicleTileId);if(moveTo(state,vehicleIndex,{afterPassPayment:{type:'travelRouteAtVehicle',effect}}))return;
   if(player.bankrupt||state.status==='finished')return;
   const vehicle=state.board[vehicleIndex];const afterPayment={type:'moveTo',tileId:effect.destinationTileId};
   if(vehicle.ownerId&&vehicle.ownerId!==player.id){prepareDebt(state,{amount:vehicle.baseRent,recipientId:vehicle.ownerId,reason:`${vehicle.name} 이용료`,afterPayment});return}
@@ -324,16 +339,16 @@ function applyEvent(state,card){
     if(effect.amount>=0){receiveCash(state,player,effect.amount,card.title);finishSimpleTile(state)}else prepareDebt(state,{amount:-effect.amount,reason:card.title});
     return;
   }
-  if(effect.type==='moveBy'){moveBy(state,effect.steps);if(player.bankrupt||state.status==='finished')return;state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return}
+  if(effect.type==='moveBy'){if(moveBy(state,effect.steps,{afterPassPayment:{type:'resolveCurrentTile',depth:1}}))return;if(player.bankrupt||state.status==='finished')return;state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return}
   if(effect.type==='moveTo'){
     if(effect.tileId==='deserted-island'&&isGlobalEffectActive(state,'genevaConvention')){notice(state,card.title,'제네바 협정으로 무인도 출입이 금지되어 현재 위치에 머뭅니다.','success','golden-key');addLog(state,`${card.title}의 무인도 이동이 제네바 협정으로 취소되었습니다.`);finishSimpleTile(state);return}
-    const index=findTileIndex(state.board,effect.tileId);moveTo(state,index,{collectPassBonus:effect.collectPassBonus!==false});
+    const index=findTileIndex(state.board,effect.tileId);const afterPassPayment={type:'moveTo',tileId:effect.tileId,collectPassBonus:false,resolveTile:effect.resolveTile!==false,depth:1};if(moveTo(state,index,{collectPassBonus:effect.collectPassBonus!==false,afterPassPayment}))return;
     if(player.bankrupt||state.status==='finished')return;
     if(effect.resolveTile===false){finishSimpleTile(state);return}state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);return;
   }
   if(effect.type==='travelRoute'){travelRoute(state,effect);return}
   if(effect.type==='worldTour'){
-    if(passStart(state,player))return;const fund=collectWelfareFund(state,player);addLog(state,`${player.name}이 세계일주를 마치고 사회복지기금 ${formatMoney(fund)}을 받았습니다.`);finishSimpleTile(state);return;
+    if(passStart(state,player,1,{type:'completeWorldTour'}))return;const fund=collectWelfareFund(state,player);addLog(state,`${player.name}이 세계일주를 마치고 사회복지기금 ${formatMoney(fund)}을 받았습니다.`);finishSimpleTile(state);return;
   }
   if(effect.type==='collectEach'){
     let total=0;const liabilities=new Map();
@@ -397,7 +412,7 @@ export function resolveTile(state,depth=0){
   if(tile.type==='bonus'){const amount=collectWelfareFund(state,player);notice(state,tile.name,amount?`${formatMoney(amount)}을 받았습니다.`:'아직 모인 기금이 없습니다.','success');finishSimpleTile(state);return}
   if(tile.type==='wait'){if(isGlobalEffectActive(state,'genevaConvention')){player.skipTurns=0;player.islandFailedRolls=0;notice(state,'제네바 협정','무인도 출입 금지 기간이라 머무르지 않고 지나갑니다.','success');addLog(state,`${player.name}이 제네바 협정으로 무인도에 갇히지 않았습니다.`);finishSimpleTile(state);return}player.skipTurns=1;player.islandFailedRolls=0;notice(state,tile.name,'무인도에 들어왔습니다. 더블이나 탈출권으로 먼저 나갈 수 있고, 세 번째 차례에는 자동으로 탈출합니다.','warning');finishSimpleTile(state);return}
   if(tile.id==='space-travel'){beginSpaceTravel(state);return}
-  if(tile.type==='move'){const destination=state.board[tile.target];moveTo(state,tile.target);if(player.bankrupt||state.status==='finished')return;notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
+  if(tile.type==='move'){const destination=state.board[tile.target];const afterPassPayment={type:'moveTo',tileId:destination.id,collectPassBonus:false,depth:depth+1};if(moveTo(state,tile.target,{afterPassPayment}))return;if(player.bankrupt||state.status==='finished')return;notice(state,tile.name,`${destination.name}(으)로 이동합니다.`,'event');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,depth+1);return}
   if(tile.type==='rest'){notice(state,tile.name,'잠시 쉬며 다음 여행을 준비합니다.','success');finishSimpleTile(state);return}
   finishSimpleTile(state);
 }
@@ -407,7 +422,7 @@ export function chooseSpaceTravelDestination(state,targetIndex){
   if(isGlobalEffectActive(state,'americanRage'))throw new Error('미국의 분노가 지속되는 동안 우주여행을 이용할 수 없습니다.');
   if(state.pendingAction?.type!=='space-travel'||origin?.id!=='space-travel')throw new Error('지금은 우주여행 목적지를 정할 수 없습니다.');
   if(!Number.isInteger(index)||!destination||destination.id==='space-travel')throw new Error('우주여행 칸을 제외한 목적지를 선택하세요.');
-  moveTo(state,index);if(player.bankrupt||state.status==='finished')return destination;state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
+  if(moveTo(state,index,{afterPassPayment:{type:'completeSpaceTravel',tileId:destination.id}}))return destination;if(player.bankrupt||state.status==='finished')return destination;state.pendingAction=null;addLog(state,`${player.name}이 우주여행으로 ${destination.name}(으)로 이동했습니다.`);notice(state,'우주여행',`${destination.name}(으)로 이동했습니다.`,'success');state.phase=PHASES.RESOLVING_TILE;resolveTile(state,1);
   return destination;
 }
 

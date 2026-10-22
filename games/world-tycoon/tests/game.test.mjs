@@ -138,11 +138,18 @@ test('후반전에는 자기 땅을 밟지 않아도 주사위 전에 자유 건
   assert.equal(getBuildableOwnedCities(state).some(tile=>tile.id==='paris'),true);openBuildMode(state);buildOwnedCity(state,'paris');assert.equal(paris.buildingLevel,1);assert.equal(player.position,0);assert.equal(player.money,before-paris.buildingCosts[0]);finishBuildMode(state);assert.equal(state.phase,PHASES.WAITING_FOR_ROLL);
 });
 
-test('은행은 최대 100만 원을 10% 이자로 빌려주고 최초 대출 3바퀴째 만기 처리한다',()=>{
+test('은행은 최대 100만 원을 10% 이자로 빌려주고 최초 대출 3바퀴째 자산 정리 후 상환한다',()=>{
   const state=createGame(3,{mode:'full',rng:()=>.2});const player=state.players[0];takeBankLoan(state,600000);assert.equal(getLoanBalance(player),660000);assert.equal(player.bankLoan.dueLap,3);player.lapsCompleted=1;takeBankLoan(state,400000);assert.equal(getLoanBalance(player),1100000);assert.equal(player.bankLoan.dueLap,3);assert.throws(()=>takeBankLoan(state,10000),/10만 원/);assert.equal(getNetWorth(state,player.id),RULES.STARTING_MONEY-100000);
   repayBankLoan(state);assert.equal(player.bankLoan,null);assert.equal(player.money,RULES.STARTING_MONEY-100000);
-  player.lapsCompleted=0;takeBankLoan(state,1000000);player.lapsCompleted=2;player.position=39;player.money=0;state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,0));completeRoll(state);advanceMovement(state);
-  assert.equal(player.bankrupt,true);assert.equal(state.phase,PHASES.END_TURN);assert.match(state.notice.message,/은행 대출 만기 불이행/);
+  player.lapsCompleted=0;takeBankLoan(state,1000000);const busan=state.board.find(tile=>tile.id==='busan');busan.ownerId=player.id;player.ownedProperties.push(busan.id);player.lapsCompleted=2;player.position=39;player.money=700000;state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,0));completeRoll(state);const maturity=advanceMovement(state);
+  assert.equal(maturity.paymentPending,true);assert.equal(player.position,0);assert.equal(state.pendingMovement.remaining,1);assert.equal(player.bankrupt,false);assert.equal(state.phase,PHASES.ASSET_MANAGEMENT);assert.equal(state.pendingDebt.bankLoanMaturity,true);assert.match(state.notice.message,/건물과 땅을 매각/);assert.throws(()=>repayBankLoan(state),/행동 가능한 시간/);
+  sellAsset(state,'busan');settleDebt(state);assert.equal(player.bankLoan,null);assert.equal(player.bankrupt,false);assert.equal(state.phase,PHASES.MOVING);assert.equal(player.money,300000);
+  advanceMovement(state);finishMovement(state);assert.equal(player.position,1);assert.equal(state.phase,PHASES.BUY_DECISION);
+});
+
+test('대출 만기 자산 정리로도 갚을 수 없을 때만 파산을 선언한다',()=>{
+  const state=createGame(2,{mode:'full',rng:()=>.2});const player=state.players[0];takeBankLoan(state,1000000);player.lapsCompleted=2;player.position=39;player.money=0;state.phase=PHASES.WAITING_FOR_ROLL;rollDice(state,rngFor(0,0));completeRoll(state);advanceMovement(state);
+  assert.equal(player.bankrupt,false);assert.equal(state.phase,PHASES.ASSET_MANAGEMENT);assert.equal(state.pendingDebt.amount,1100000);declareBankruptcy(state);assert.equal(player.bankrupt,true);assert.equal(state.phase,PHASES.GAME_OVER);assert.match(state.notice.message,/지불 불능/);
 });
 
 test('지역 완성 보너스와 탈것의 고정 이용료를 계산한다',()=>{
