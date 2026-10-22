@@ -38,7 +38,7 @@ export function createGame(playerCount,{mode='30',names=[],rng=Math.random,saveS
   const players=Array.from({length:playerCount},(_,index)=>({
     id:`player-${index+1}`,name:(names[index]||`플레이어 ${index+1}`).trim().slice(0,12)||`플레이어 ${index+1}`,
     color:PLAYER_COLORS[index],token:PLAYER_TOKENS[index],money:RULES.STARTING_MONEY,position:0,ownedProperties:[],specialAssets:[],specialCards:[],
-    bankrupt:false,skipTurns:0,islandFailedRolls:0,lapsCompleted:0,bankLoan:null,gamblerPending:false,
+    bankrupt:false,skipTurns:0,islandFailedRolls:0,lapsCompleted:0,bankLoan:null,bankLoanUses:0,gamblerPending:false,
   }));
   const minutes=mode==='full'?null:Number(mode);
   const state={
@@ -88,9 +88,10 @@ function bankruptPlayer(state,player,reason){
 export function takeBankLoan(state,amount){
   if(!canUseBank(state))throw new Error('자기 차례의 행동 가능한 시간에만 대출할 수 있습니다.');const player=bankingPlayer(state);const requested=Math.round(Number(amount)/10000)*10000;
   if(!Number.isFinite(requested)||requested<100000)throw new Error('대출은 10만 원 이상, 1만 원 단위로 신청하세요.');const currentPrincipal=player.bankLoan?.principal||0;
+  if((Number(player.bankLoanUses)||0)>=RULES.BANK_LOAN_MAX_USES)throw new Error(`은행 대출은 게임당 최대 ${RULES.BANK_LOAN_MAX_USES}회만 받을 수 있습니다.`);
   if(currentPrincipal+requested>RULES.BANK_LOAN_MAX)throw new Error(`대출 원금은 최대 ${formatMoney(RULES.BANK_LOAN_MAX)}입니다.`);
   const interest=Math.round(requested*RULES.BANK_LOAN_INTEREST_RATE);const dueLap=player.bankLoan?.dueLap??player.lapsCompleted+RULES.BANK_LOAN_TERM_LAPS;
-  player.bankLoan={principal:currentPrincipal+requested,interest:(player.bankLoan?.interest||0)+interest,dueLap};player.money+=requested;addLog(state,`${player.name}이 은행에서 ${formatMoney(requested)}을 빌렸습니다. 만기는 ${dueLap}번째 바퀴입니다.`);cashFeedback(state,'은행 대출',requested,`상환액 ${formatMoney(getLoanBalance(player))} · ${Math.max(0,dueLap-player.lapsCompleted)}바퀴 남음`,'success');return player.bankLoan;
+  player.bankLoanUses=(Number(player.bankLoanUses)||0)+1;player.bankLoan={principal:currentPrincipal+requested,interest:(player.bankLoan?.interest||0)+interest,dueLap};player.money+=requested;addLog(state,`${player.name}이 은행에서 ${formatMoney(requested)}을 빌렸습니다. 대출 기회 ${player.bankLoanUses}/${RULES.BANK_LOAN_MAX_USES}회 · 만기는 ${dueLap}번째 바퀴입니다.`);cashFeedback(state,'은행 대출',requested,`대출 ${player.bankLoanUses}/${RULES.BANK_LOAN_MAX_USES}회 · 상환액 ${formatMoney(getLoanBalance(player))} · ${Math.max(0,dueLap-player.lapsCompleted)}바퀴 남음`,'success');return player.bankLoan;
 }
 
 export function repayBankLoan(state){
