@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#173e2d">
+  <title>Forest Party</title>
+  <style>
+    :root{color-scheme:dark;--forest:#173e2d;--deep:#0b261b;--leaf:#3b7c48;--cream:#fff1bd;--gold:#ffd45a;--ink:#17231b;--panel:#102d22ee;--line:#f8e8ad35;--accent:#8ee66b;font-family:"Pretendard","Noto Sans KR",system-ui,sans-serif}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{width:100%;min-height:100%;margin:0;background:var(--deep);overscroll-behavior:none}body{color:#fff;background:radial-gradient(circle at 20% 0,#366b47 0,transparent 36%),linear-gradient(155deg,#102d22,#081b14 78%)}button,input,select{font:inherit}button{min-height:46px;border:0;border-radius:14px;padding:10px 16px;color:#18301f;background:var(--cream);font-weight:900;cursor:pointer;box-shadow:0 5px 0 #b8a268;touch-action:manipulation}button:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 #8a784a}button:disabled{opacity:.42;cursor:not-allowed}.primary{background:linear-gradient(#caff86,#78d957);box-shadow:0 5px 0 #3b843b}.danger{color:#fff;background:#a83e4d;box-shadow:0 5px 0 #64222d}.ghost{color:#fff;background:#ffffff12;border:1px solid #ffffff24;box-shadow:none}.gold{background:linear-gradient(#ffe984,#ffc43e);box-shadow:0 5px 0 #a86d1c}.small{min-height:38px;padding:7px 11px;border-radius:11px;font-size:.78rem}.hidden{display:none!important}
+    #app{min-height:100vh}.screen{min-height:100vh}.menu-screen{display:grid;place-items:center;padding:30px 18px;background:radial-gradient(circle at 50% 18%,#77b85d3d,transparent 31%)}.menu-card{width:min(850px,100%);padding:clamp(26px,5vw,54px);border:1px solid #ffe9943d;border-radius:34px;background:linear-gradient(150deg,#204b36ed,#0d281de8);box-shadow:0 32px 90px #0009;position:relative;overflow:hidden}.menu-card::before,.menu-card::after{content:"";position:absolute;border-radius:50%;filter:blur(1px);pointer-events:none}.menu-card::before{width:230px;height:230px;right:-80px;top:-80px;background:#8654bc55}.menu-card::after{width:210px;height:210px;left:-100px;bottom:-110px;background:#77d25945}.logo-kicker{margin:0;color:#bff695;font-size:.72rem;font-weight:1000;letter-spacing:.2em}.menu-card h1{margin:5px 0 7px;color:#fff4be;font-size:clamp(3.2rem,9vw,7.2rem);line-height:.86;letter-spacing:-.075em;text-shadow:0 8px 0 #13331f}.menu-card h1 span{color:#d9a9ff}.menu-card>p{max-width:600px;margin:21px 0;color:#d7e9db;line-height:1.65}.menu-actions{display:flex;flex-wrap:wrap;gap:11px}.menu-note{margin-top:22px!important;color:#9fc2a9!important;font-size:.77rem}.setup-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:18px 0}.setup-player{padding:14px;border:1px solid #ffffff20;border-radius:17px;background:#ffffff0b}.setup-player label{display:block;margin-bottom:7px;color:#cce1d1;font-size:.75rem;font-weight:800}.setup-player input,.setup-player select{width:100%;min-height:44px;border:1px solid #ffffff25;border-radius:11px;padding:8px 10px;color:#fff;background:#081d16}.setup-player option{color:#111;background:#fff}.setup-player .color-row{display:grid;grid-template-columns:1fr 112px;gap:8px}
+    .game-screen{height:100dvh;min-height:0;display:grid;grid-template-rows:auto 1fr;overflow:hidden}.topbar{min-height:62px;padding:8px 14px 8px 72px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:#081d16e8}.brand{margin-right:auto;color:#fff1b3;font-weight:1000;letter-spacing:-.03em}.turn-pill{padding:8px 12px;border-radius:99px;background:#ffffff10;color:#e6f4e9;font-size:.8rem;font-weight:800}.turn-pill strong{color:#ffe26a}.game-layout{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:10px;padding:10px}.board-wrap{min-height:0;position:relative;overflow:hidden;border:1px solid #f8e8ad26;border-radius:24px;background-color:#21583b;background-image:linear-gradient(#183e2ccc,#183e2ccc),url('./assets/map-reference.png');background-position:center;background-size:cover;box-shadow:inset 0 0 80px #051c12}.board-wrap::after{content:"가로 화면 권장";position:absolute;right:12px;bottom:9px;padding:5px 8px;border-radius:99px;background:#061b14a6;color:#bfd6c5;font-size:.62rem;pointer-events:none}#board{width:100%;height:100%;display:block;touch-action:none}.side-panel{min-height:0;display:flex;flex-direction:column;gap:8px}.player-list{display:grid;grid-template-columns:1fr 1fr;gap:7px}.player-card{min-width:0;padding:9px;border:1px solid #ffffff1d;border-radius:15px;background:#ffffff0b}.player-card.active{border-color:var(--pc);box-shadow:0 0 0 2px color-mix(in srgb,var(--pc) 40%,transparent),0 0 22px color-mix(in srgb,var(--pc) 22%,transparent)}.player-name{display:flex;align-items:center;gap:6px;font-size:.75rem;font-weight:1000}.player-dot{width:10px;height:10px;flex:0 0 auto;border-radius:50%;background:var(--pc)}.player-stats{margin-top:5px;display:flex;gap:8px;color:#d3e2d6;font-size:.68rem}.player-buff{margin-top:4px;color:#e7bcff;font-size:.62rem}.action-panel{min-height:0;padding:11px;border:1px solid #ffffff1d;border-radius:18px;background:var(--panel);display:flex;flex:1;flex-direction:column;gap:8px;overflow:auto}.current-banner{padding:10px;border-radius:13px;color:#14221a;background:var(--pc,#bff695);font-size:.82rem;font-weight:1000}.dice-display{min-height:50px;display:flex;align-items:center;justify-content:center;gap:8px}.die{width:43px;height:43px;display:grid;place-items:center;border-radius:11px;color:#15271b;background:#fff8dc;font-size:1.3rem;font-weight:1000;box-shadow:inset 0 -4px #dacb99}.action-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}.inventory-title{display:flex;align-items:center;justify-content:space-between;color:#d9eadc;font-size:.7rem;font-weight:900}.inventory{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.item-slot{min-height:54px;padding:5px;border:1px dashed #ffffff28;border-radius:11px;color:#dce9df;background:#ffffff08;box-shadow:none;font-size:.62rem;line-height:1.15}.item-slot strong{display:block;font-size:1rem}.item-slot.auto{border-color:#8fd4ff66}.message-log{min-height:64px;max-height:110px;overflow:auto;padding:8px;border-radius:10px;color:#d7e8da;background:#061b1499;font-size:.66rem;line-height:1.45}.message-log p{margin:0 0 4px}.message-log p:last-child{color:#fff}.side-tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.side-tools button{padding:6px;font-size:.64rem}
+    dialog{width:min(580px,calc(100% - 28px));max-height:90vh;padding:0;overflow:hidden;border:1px solid #ffe89544;border-radius:25px;color:#fff;background:#123325;box-shadow:0 28px 90px #000c}dialog::backdrop{background:#020b08c7;backdrop-filter:blur(7px)}.dialog-inner{padding:24px}.dialog-inner h2{margin:0 0 12px;color:#fff1ad;font-size:1.55rem}.dialog-body{max-height:58vh;overflow:auto;color:#d9e9dc;font-size:.86rem;line-height:1.65}.dialog-body p:first-child{margin-top:0}.dialog-actions{margin-top:19px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.rules-list{padding-left:20px}.rules-list li{margin:7px 0}.target-list,.shop-list{display:grid;gap:8px}.target-btn,.shop-btn{width:100%;display:flex;align-items:center;justify-content:space-between;text-align:left}.target-btn span,.shop-btn span{opacity:.72;font-size:.74rem}
+    .mini-screen{position:fixed;inset:0;z-index:80;display:grid;grid-template-rows:64px 1fr;background:#071610;touch-action:none;user-select:none}.mini-head{padding:9px 16px;display:flex;align-items:center;gap:14px;border-bottom:1px solid #ffffff21;background:#102d22}.mini-title{margin-right:auto}.mini-title strong{display:block;color:#fff1a4}.mini-title span{color:#a8c8af;font-size:.7rem}.mini-timer{min-width:78px;text-align:center;color:#ffd85b;font-size:1.35rem;font-weight:1000}.mini-arena{min-height:0;position:relative;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}.mini-zone{position:relative;overflow:hidden;border:1px solid #ffffff20;padding:10px;background:color-mix(in srgb,var(--pc) 18%,#102a20);touch-action:none}.mini-zone:nth-child(1),.mini-zone:nth-child(2){transform:rotate(180deg)}.mini-zone-label{position:absolute;left:10px;top:8px;display:flex;align-items:center;gap:6px;font-size:.72rem;font-weight:1000}.mini-zone-score{position:absolute;right:10px;top:8px;color:#fff1a8;font-size:1.05rem;font-weight:1000}.zone-game{height:100%;display:grid;place-items:center;text-align:center;font-size:clamp(.8rem,2vw,1.4rem);font-weight:900}.zone-game .huge{display:block;font-size:clamp(2.2rem,8vw,5rem);line-height:1}.mini-brief{position:absolute;inset:0;z-index:3;display:grid;place-items:center;padding:20px;background:#06140ee8}.brief-card{width:min(720px,100%);padding:22px;border:1px solid #ffe57a48;border-radius:25px;background:#173d2d;box-shadow:0 25px 80px #000b}.brief-card h2{margin:0 0 8px;color:#ffe878}.brief-card p{margin:7px 0;color:#d7e8db;line-height:1.5}.ready-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:17px}.ready-btn.ready{background:#72db68}.countdown{font-size:clamp(5rem,20vw,13rem);color:#ffe15a;text-shadow:0 10px 0 #6b4a12}.mini-result-table{width:100%;border-collapse:collapse}.mini-result-table td{padding:7px;border-bottom:1px solid #ffffff18}.mini-result-table td:last-child{text-align:right;font-weight:900}
+    .debug-panel{position:fixed;z-index:70;right:12px;bottom:12px;width:min(390px,calc(100% - 24px));max-height:68vh;overflow:auto;padding:13px;border:1px solid #ffdd6a55;border-radius:16px;background:#071b14f2;box-shadow:0 18px 55px #000b}.debug-panel h3{margin:0 0 8px;color:#ffe174}.debug-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.debug-panel pre{white-space:pre-wrap;color:#bcd3c2;font-size:.62rem}.toast{position:fixed;z-index:120;left:50%;bottom:24px;transform:translateX(-50%);max-width:min(620px,90vw);padding:11px 17px;border-radius:99px;color:#14251a;background:#fff0a8;font-size:.8rem;font-weight:900;box-shadow:0 10px 35px #0009;pointer-events:none}
+    @media(max-width:900px){.game-screen{height:auto;min-height:100vh;overflow:auto}.game-layout{grid-template-columns:1fr}.board-wrap{height:58vw;min-height:390px}.side-panel{display:grid;grid-template-columns:270px 1fr}.player-list{align-self:start}.action-panel{max-height:none}.topbar{position:sticky;top:0;z-index:20}.ready-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:620px){.menu-card{border-radius:23px}.setup-grid{grid-template-columns:1fr}.game-layout{display:block}.board-wrap{height:66vh;min-height:360px}.side-panel{display:flex;margin-top:8px}.topbar{flex-wrap:wrap}.turn-pill{font-size:.66rem}.player-list{grid-template-columns:1fr 1fr}.mini-head{height:58px}.mini-zone{padding:6px}.mini-zone-label{font-size:.6rem}.ready-grid{grid-template-columns:1fr 1fr}}
+    @media(orientation:landscape) and (min-width:700px) and (max-width:1000px){.game-screen{height:100dvh;min-height:0;overflow:hidden}.game-layout{grid-template-columns:minmax(0,1fr) 270px;gap:7px;padding:7px}.board-wrap{height:auto;min-height:0}.side-panel{display:flex;min-height:0}.player-list{gap:4px}.player-card{padding:6px}.action-panel{padding:7px;gap:4px;overflow:hidden}.current-banner{padding:7px}.dice-display{min-height:42px}.die{width:37px;height:37px}.item-slot{min-height:43px}.message-log{min-height:48px;max-height:66px}.topbar{position:relative;min-height:54px;padding-top:5px;padding-bottom:5px}.topbar button{min-height:38px}.ready-grid{grid-template-columns:repeat(4,1fr)}}
+    @media(orientation:portrait) and (min-width:621px){.game-screen::before{content:"태블릿을 가로로 돌리면 보드와 4인 미니게임을 더 편하게 즐길 수 있어요.";position:fixed;z-index:200;left:50%;top:12px;transform:translateX(-50%);width:min(560px,90vw);padding:10px 14px;border-radius:99px;text-align:center;color:#18301f;background:#ffe98f;font-size:.75rem;font-weight:900}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <main id="app">
+    <section id="menuScreen" class="screen menu-screen">
+      <div class="menu-card">
+        <p class="logo-kicker">OFFLINE · 4 PLAYER · BOARD GAME</p>
+        <h1>Forest <span>Party</span></h1>
+        <p>한 대의 태블릿에서 네 명이 함께 즐기는 숲속 파티 보드게임. 갈림길을 고르고 별과 코인을 모아 60번째 턴의 왕관을 차지하세요.</p>
+        <div id="mainMenu" class="menu-actions">
+          <button id="newGameBtn" class="primary">새 게임</button>
+          <button id="continueBtn" class="gold">이어하기</button>
+          <button id="howToBtn" class="ghost">게임 설명</button>
+          <button id="importBtn" class="ghost">백업 가져오기</button>
+        </div>
+        <div id="setupPanel" class="hidden">
+          <h2>플레이어 준비</h2>
+          <div id="setupGrid" class="setup-grid"></div>
+          <div class="menu-actions"><button id="startGameBtn" class="primary">순서를 섞고 시작</button><button id="cancelSetupBtn" class="ghost">취소</button></div>
+        </div>
+        <p class="menu-note">별도 서버 없이 실행되며 턴 종료 때 자동 저장됩니다. 미니게임은 가로 화면 멀티터치에 맞춰져 있습니다.</p>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="screen game-screen hidden">
+      <header class="topbar">
+        <div class="brand">🌳 FOREST PARTY</div>
+        <div class="turn-pill">글로벌 턴 <strong id="globalTurn">0</strong> / 60</div>
+        <div class="turn-pill">차례 <strong id="turnOrderText">-</strong></div>
+        <button id="saveBtn" class="small ghost">저장</button>
+        <button id="settingsBtn" class="small ghost">설정</button>
+        <button id="menuBtn" class="small ghost">메인</button>
+      </header>
+      <div class="game-layout">
+        <div class="board-wrap"><canvas id="board" width="1000" height="650" aria-label="Forest Party 게임 보드"></canvas></div>
+        <aside class="side-panel">
+          <div id="playerList" class="player-list"></div>
+          <section class="action-panel">
+            <div id="currentBanner" class="current-banner">게임 준비 중</div>
+            <div id="diceDisplay" class="dice-display"><span class="die">?</span><span class="die">?</span></div>
+            <div class="action-row"><button id="rollBtn" class="primary">🎲 주사위 굴리기</button><button id="endTurnBtn" class="gold" disabled>턴 종료</button></div>
+            <div class="inventory-title"><span>인벤토리 · 먼저 아이템을 선택하세요</span><span id="inventoryCount">0 / 6</span></div>
+            <div id="inventory" class="inventory"></div>
+            <div id="messageLog" class="message-log" aria-live="polite"></div>
+            <div class="side-tools"><button id="exportBtn" class="ghost">백업</button><button id="rulesBtn" class="ghost">규칙</button><button id="debugBtn" class="ghost">디버그</button></div>
+          </section>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="modal"><div class="dialog-inner"><h2 id="modalTitle"></h2><div id="modalBody" class="dialog-body"></div><div id="modalActions" class="dialog-actions"></div></div></dialog>
+  <section id="miniScreen" class="mini-screen hidden" aria-label="4인 동시 미니게임">
+    <header class="mini-head"><div class="mini-title"><strong id="miniTitle">미니게임</strong><span id="miniSubtitle"></span></div><div id="miniTimer" class="mini-timer">0.0</div></header>
+    <div id="miniArena" class="mini-arena"></div>
+  </section>
+  <section id="debugPanel" class="debug-panel hidden"><h3>개발자 디버그</h3><div class="debug-grid"><button id="debugValidate" class="small">맵 검증</button><button id="debugCoins" class="small">현재 +100 코인</button><button id="debugItem" class="small">아이템 지급</button><button id="debugSkip" class="small">다음 주기 직전</button></div><pre id="debugText"></pre></section>
+  <input id="importFile" class="hidden" type="file" accept="application/json">
+  <script type="module" src="../../shared/game-shell.js"></script>
+  <script>
+  (()=>{'use strict';
+    const CONFIG={version:1,maxTurns:60,startCoins:20,inventorySize:6,starPrice:40,minigameFee:10,moveDelay:145,saveKey:'forest-party-save-v1'};
+    const COLORS=['#ff646f','#55a8ff','#ffd34e','#b782ff','#ff8c42','#43d8a2'];
+    const ITEM_DATA={
+      missile:{name:'미사일',icon:'🚀',grade:'common'},cannon:{name:'대포알',icon:'💣',grade:'common'},swap:{name:'위치이동변환기',icon:'🔄',grade:'common'},
+      trapKit:{name:'함정칸 설치권',icon:'🌿',grade:'common'},starTrap:{name:'별 강탈칸 설치권',icon:'🕳️',grade:'rare'},shield:{name:'보호권',icon:'🛡️',grade:'rare',auto:true},
+      double:{name:'더블 주사위',icon:'✖️2',grade:'common'},plusOne:{name:'주사위 +1',icon:'➕🎲',grade:'common'},triple:{name:'트리플 주사위',icon:'✖️3',grade:'common'},stone:{name:'돌',icon:'🪨',grade:'common'}
+    };
+    const SHOP=[['double',8],['plusOne',10],['lucky',12],['triple',15]];
+    const GENERAL_MINIS=['timing','rapid','dodge','teamTap','teamTiming','energy','chase','boss','bomb'];
+    const COMPANION_MINIS=['treasure','spirit'];
+    const MINI={
+      timing:{name:'타이밍 챌린지',type:'4인 개인전',seconds:15,control:'움직이는 잎이 중앙에 올 때 자신의 영역을 터치',win:'누적 정확도가 가장 높은 플레이어'},
+      rapid:{name:'초고속 연타',type:'4인 개인전',seconds:10,control:'자신의 영역을 최대한 빠르게 연타',win:'터치 횟수가 가장 많은 플레이어'},
+      dodge:{name:'장애물 피하기',type:'4인 개인전',seconds:20,control:'영역의 왼쪽/오른쪽을 눌러 두 레인 사이 이동',win:'장애물을 가장 잘 피한 플레이어'},
+      teamTap:{name:'협동 연타',type:'2 대 2 팀전',seconds:15,control:'자신의 영역을 빠르게 연타',win:'두 팀원의 합산 점수가 높은 팀'},
+      teamTiming:{name:'협동 타이밍',type:'2 대 2 팀전',seconds:20,control:'잎이 중앙에 올 때 자신의 영역 터치',win:'두 팀원의 정확도 합이 높은 팀'},
+      energy:{name:'에너지 충전 레이스',type:'2 대 2 팀전',seconds:15,control:'영역 안의 왼쪽 → 중앙 → 오른쪽 → 중앙 순서 터치',win:'정확한 순서를 많이 완성한 팀'},
+      chase:{name:'술래잡기',type:'1 대 3 비대칭전',seconds:20,control:'술래는 유령을, 도망자는 반짝이는 잎을 정확히 터치',win:'술래가 10회 잡으면 술래, 아니면 도망자 팀'},
+      boss:{name:'보스 버튼 방어전',type:'1 대 3 비대칭전',seconds:20,control:'보스는 공격, 세 플레이어는 방어 버튼을 연타',win:'최종 숲 게이지가 50 미만이면 보스 승리'},
+      bomb:{name:'폭탄 타이머',type:'1 대 3 비대칭전',seconds:20,control:'보스는 충전 연타, 나머지는 왼쪽→중앙→오른쪽 해제 패턴',win:'폭탄 게이지 100이면 보스, 아니면 해제 팀'},
+      treasure:{name:'숲의 보물 찾기',type:'동료 전용 개인전',seconds:15,control:'자신의 영역에 움직이는 보물을 정확히 터치',win:'가장 많은 보물을 찾은 플레이어'},
+      spirit:{name:'정령의 시험',type:'동료 전용 개인전',seconds:20,control:'표시된 숫자 순서대로 네 구역을 터치',win:'완성한 문양 순서가 가장 많은 플레이어'}
+    };
+
+    // Reference image traced into a fixed, directed graph: outer loop plus upper, middle and lower joins.
+    const COORDS=[
+      [500,570],[445,570],[390,568],[335,560],[280,552],[225,542],[170,528],[128,500],[110,455],[100,405],[98,355],[102,305],[108,255],[118,205],[135,158],[170,125],[220,105],[275,94],[330,88],[390,84],[450,82],[510,82],[570,84],[630,90],[690,100],[745,116],[790,142],[818,180],[835,225],[842,275],[845,325],[848,375],[850,425],[842,470],[820,510],[775,538],[720,554],[665,563],[610,568],[555,570],
+      [158,300],[212,304],[265,305],[320,305],[375,300],[430,288],[485,270],[528,245],[560,210],[578,168],
+      [155,392],[210,397],[265,400],[320,402],[370,407],[420,414],[455,438],[470,473],[465,510],[440,540],
+      [475,380],[505,352],[542,335],[580,330],[620,340],[655,365],[700,385],[750,398],[800,410],
+      [520,460],[570,472],[620,480],[670,486],[720,497],[760,517],
+      [350,340],[400,350],[447,356]
+    ];
+    const ITEM_IDS=new Set([5,12,18,24,28,36,42,48,53,60,67,73]);
+    const EVENT_IDS=new Set([3,9,15,26,33,40,46,55,63,71]);
+    const TRAP_IDS=new Set([7,14,31,38,50,58,65,76]);
+    const SHOP_IDS=new Set([21,30,44]);
+    const EXTRA_NEXT={10:[11,50],11:[12,40],43:[44,75],46:[47,62],55:[56,60],57:[58,69],64:[65,72],49:[25],59:[2],68:[32],74:[35],77:[60]};
+    const nodes=COORDS.map(([x,y],id)=>({id,x,y,type:SHOP_IDS.has(id)?'shop':ITEM_IDS.has(id)?'item':EVENT_IDS.has(id)?'event':TRAP_IDS.has(id)?'trap':id%4===0||id%7===0?'red':'blue',next:[]}));
+    for(let id=0;id<40;id++)nodes[id].next=[(id+1)%40];
+    for(let id=40;id<49;id++)nodes[id].next=[id+1]; nodes[49].next=[25];
+    for(let id=50;id<59;id++)nodes[id].next=[id+1]; nodes[59].next=[2];
+    for(let id=60;id<68;id++)nodes[id].next=[id+1]; nodes[68].next=[32];
+    for(let id=69;id<74;id++)nodes[id].next=[id+1]; nodes[74].next=[35];
+    nodes[75].next=[76];nodes[76].next=[77];nodes[77].next=[60];
+    Object.entries(EXTRA_NEXT).forEach(([id,next])=>nodes[Number(id)].next=next);
+
+    const $=selector=>document.querySelector(selector);
+    const els={menu:$('#menuScreen'),game:$('#gameScreen'),mainMenu:$('#mainMenu'),setup:$('#setupPanel'),setupGrid:$('#setupGrid'),continueBtn:$('#continueBtn'),board:$('#board'),playerList:$('#playerList'),globalTurn:$('#globalTurn'),turnOrder:$('#turnOrderText'),banner:$('#currentBanner'),dice:$('#diceDisplay'),roll:$('#rollBtn'),end:$('#endTurnBtn'),inventory:$('#inventory'),inventoryCount:$('#inventoryCount'),log:$('#messageLog'),modal:$('#modal'),modalTitle:$('#modalTitle'),modalBody:$('#modalBody'),modalActions:$('#modalActions'),mini:$('#miniScreen'),miniArena:$('#miniArena'),miniTitle:$('#miniTitle'),miniSubtitle:$('#miniSubtitle'),miniTimer:$('#miniTimer'),debug:$('#debugPanel'),debugText:$('#debugText'),importFile:$('#importFile')};
+    const ctx=els.board.getContext('2d');
+    let gameState=null,modalResolver=null,miniSession=null,miniFrame=0,toastTimer=0,renderFrame=0;
+
+    function makeState(playerInputs){
+      const seed=(Date.now()^Math.floor(performance.now()*1000))>>>0;
+      const players=playerInputs.map((p,i)=>({id:i+1,name:p.name||`P${i+1}`,color:p.color||COLORS[i],position:0,coins:20,stars:0,inventory:[],completedLaps:0,personalTurns:0,companionTurnsRemaining:0,companionJustAcquired:false,totalDistance:0,minigameWins:0,itemsUsed:0}));
+      const state={version:CONFIG.version,phase:'turn',globalTurn:0,currentPlayerIndex:0,turnOrder:[0,1,2,3],players,board:{nodeOverrides:{}},starSpace:null,companionSpaces:[],usedMinigames:[],usedCompanionMinigames:[],pendingEvents:[],activeMinigame:null,randomState:seed||1,settings:{reducedMotion:matchMedia('(prefers-reduced-motion: reduce)').matches,debug:false,sound:true},gameOver:false,turnContext:{itemUsed:false,diceMultiplier:1,extraDice:0},log:['숲의 출발점에 모두 모였습니다.'],achievementAwards:[]};
+      shuffleWithState(state,state.turnOrder);return state;
+    }
+    function rand(){let x=gameState.randomState>>>0;x^=x<<13;x^=x>>>17;x^=x<<5;gameState.randomState=x>>>0;return(gameState.randomState%1000000)/1000000}
+    function randInt(max){return Math.floor(rand()*max)}
+    function shuffle(array){for(let i=array.length-1;i>0;i--){const j=randInt(i+1);[array[i],array[j]]=[array[j],array[i]]}return array}
+    function shuffleWithState(state,array){let x=state.randomState>>>0;for(let i=array.length-1;i>0;i--){x^=x<<13;x^=x>>>17;x^=x<<5;x>>>=0;const j=x%(i+1);[array[i],array[j]]=[array[j],array[i]]}state.randomState=x||1;return array}
+    function activeIndex(){return gameState.turnOrder[gameState.currentPlayerIndex]}
+    function activePlayer(){return gameState.players[activeIndex()]}
+    function esc(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+    function delay(ms){return new Promise(resolve=>setTimeout(resolve,gameState?.settings?.reducedMotion?Math.min(ms,20):ms))}
+    function log(message){gameState.log.push(message);gameState.log=gameState.log.slice(-9);renderUI()}
+    function toast(message){clearTimeout(toastTimer);document.querySelector('.toast')?.remove();const el=document.createElement('div');el.className='toast';el.textContent=message;document.body.append(el);toastTimer=setTimeout(()=>el.remove(),2400)}
+    function saveExists(){try{return!!localStorage.getItem(CONFIG.saveKey)}catch{return false}}
+
+    function showChoice(title,html,choices){
+      if(els.modal.open)els.modal.close();els.modalTitle.textContent=title;els.modalBody.innerHTML=html;els.modalActions.innerHTML='';
+      return new Promise(resolve=>{modalResolver=resolve;choices.forEach(choice=>{const b=document.createElement('button');b.textContent=choice.label;b.className=choice.className||'';b.disabled=!!choice.disabled;b.addEventListener('click',()=>{els.modal.close();modalResolver=null;resolve(choice.value)});els.modalActions.append(b)});els.modal.showModal()});
+    }
+    async function confirmChoice(title,message,yes='확인',no='취소'){return(await showChoice(title,`<p>${message}</p>`,[{label:no,value:false,className:'ghost'},{label:yes,value:true,className:'primary'}]))}
+    function closeModal(){if(els.modal.open)els.modal.close();if(modalResolver){modalResolver(null);modalResolver=null}}
+
+    function initSetup(){
+      els.setupGrid.innerHTML=COLORS.slice(0,4).map((color,i)=>`<div class="setup-player"><label>플레이어 ${i+1}</label><div class="color-row"><input data-name="${i}" maxlength="12" value="P${i+1}" aria-label="플레이어 ${i+1} 이름"><select data-color="${i}" aria-label="플레이어 ${i+1} 색상">${COLORS.map((c,j)=>`<option value="${c}" ${j===i?'selected':''}>${['산딸기','시냇물','햇살','제비꽃','도토리','민트'][j]}</option>`).join('')}</select></div></div>`).join('');
+    }
+    function showMenu(){els.game.classList.add('hidden');els.menu.classList.remove('hidden');els.setup.classList.add('hidden');els.mainMenu.classList.remove('hidden');els.continueBtn.disabled=!saveExists();els.debug.classList.add('hidden');cancelAnimationFrame(renderFrame)}
+    function showGame(){els.menu.classList.add('hidden');els.game.classList.remove('hidden');requestAnimationFrame(resizeCanvas);renderUI();renderBoardLoop()}
+    function startNew(){const inputs=[0,1,2,3].map(i=>({name:$(`[data-name="${i}"]`).value.trim()||`P${i+1}`,color:$(`[data-color="${i}"]`).value}));gameState=makeState(inputs);showGame();log(`턴 순서: ${gameState.turnOrder.map(i=>gameState.players[i].name).join(' → ')}`);safeSave(true)}
+
+    function saveGame(silent=false){
+      if(!gameState||!['turn','turnEnd','gameOver'].includes(gameState.phase)){if(!silent)toast('이동 또는 미니게임 중에는 저장할 수 없어요.');return false}
+      try{const snapshot=structuredClone(gameState);snapshot.activeMinigame=null;localStorage.setItem(CONFIG.saveKey,JSON.stringify(snapshot));if(!silent)toast('게임을 안전하게 저장했습니다.');return true}catch(error){console.error(error);if(!silent)toast('저장하지 못했습니다. 브라우저 저장 공간을 확인해 주세요.');return false}
+    }
+    function normalizeLoadedState(parsed){
+      if(parsed.version!==CONFIG.version||!Array.isArray(parsed.players)||parsed.players.length!==4)throw new Error('호환되지 않는 저장 데이터입니다.');
+      parsed.phase=parsed.gameOver?'gameOver':(['turn','turnEnd'].includes(parsed.phase)?parsed.phase:'turn');parsed.activeMinigame=null;
+      parsed.turnContext={itemUsed:false,diceMultiplier:1,extraDice:0,...parsed.turnContext};parsed.settings={reducedMotion:false,debug:false,sound:true,...parsed.settings};return parsed
+    }
+    function loadGame(){
+      try{const raw=localStorage.getItem(CONFIG.saveKey);if(!raw)throw new Error('저장 데이터가 없습니다.');gameState=normalizeLoadedState(JSON.parse(raw));showGame();log('저장한 숲 여행을 이어갑니다.');if(gameState.gameOver)showFinalResults();return true}catch(error){showChoice('이어오기 실패',`<p>${esc(error.message)}</p><p>새 게임을 시작하거나 JSON 백업을 가져올 수 있습니다.</p>`,[{label:'닫기',value:true,className:'primary'}]);return false}
+    }
+    function exportSave(){if(!gameState){toast('내보낼 게임이 없습니다.');return}if(!['turn','turnEnd','gameOver'].includes(gameState.phase)){toast('이동 또는 미니게임이 끝난 뒤 백업해 주세요.');return}const blob=new Blob([JSON.stringify(gameState,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`forest-party-turn-${gameState.globalTurn}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('JSON 백업을 만들었습니다.')}
+    function importSave(file){const reader=new FileReader();reader.onload=async()=>{try{const parsed=JSON.parse(reader.result);if(parsed.version!==CONFIG.version||parsed.players?.length!==4)throw new Error('호환되지 않는 Forest Party 백업입니다.');localStorage.setItem(CONFIG.saveKey,JSON.stringify(parsed));toast('백업을 가져왔습니다. 이어하기를 눌러 주세요.');els.continueBtn.disabled=false}catch(error){await showChoice('가져오기 실패',`<p>${esc(error.message)}</p>`,[{label:'확인',value:true}])}};reader.readAsText(file)}
+
+    function effectiveType(id){if(gameState.starSpace===id)return'star';if(gameState.companionSpaces.some(s=>s.nodeId===id))return'companion';return gameState.board.nodeOverrides[id]?.type||nodes[id].type}
+    function resourceMultiplier(player){return player.companionTurnsRemaining>0?2:1}
+    function consumeShield(player,reason){const index=player.inventory.indexOf('shield');if(index<0)return false;player.inventory.splice(index,1);player.itemsUsed++;log(`🛡️ ${player.name}의 보호권이 ${reason}을 막았습니다.`);return true}
+    function changeResource(player,kind,amount,{cost=false,protect=true,bypassCompanion=false,absoluteLoss=false,label='불이익'}={}){
+      let final=amount;if(!bypassCompanion&&!absoluteLoss)final*=resourceMultiplier(player);if(final<0&&!cost&&protect&&player[kind]>0&&consumeShield(player,label))return 0;
+      if(absoluteLoss&&final<0)final=-player[kind];const before=player[kind];player[kind]=Math.max(0,before+final);return player[kind]-before
+    }
+    function directionLabel(fromId,toId){const a=nodes[fromId],b=nodes[toId],dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)>Math.abs(dy))return dx>0?'오른쪽 길':'왼쪽 길';return dy>0?'아래쪽 길':'위쪽 길'}
+    function normalCandidates(){return nodes.filter(n=>(n.type==='blue'||n.type==='red')&&!gameState.board.nodeOverrides[n.id]&&gameState.starSpace!==n.id&&!gameState.companionSpaces.some(s=>s.nodeId===n.id)).map(n=>n.id)}
+
+    async function rollDice(){
+      if(gameState.phase!=='turn')return;const p=activePlayer();gameState.phase='moving';const count=2+gameState.turnContext.extraDice;const rolls=Array.from({length:count},()=>1+randInt(6));const distance=rolls.reduce((a,b)=>a+b,0)*gameState.turnContext.diceMultiplier;els.dice.innerHTML=rolls.map(v=>`<span class="die">${v}</span>`).join('')+(gameState.turnContext.diceMultiplier>1?`<strong>×${gameState.turnContext.diceMultiplier}</strong>`:'');log(`${p.name}: ${rolls.join(' + ')} → ${distance}칸`);renderUI();await movePlayer(activeIndex(),distance,{cannon:false});await resolveLanding(activeIndex());gameState.phase='turnEnd';renderUI()
+    }
+    async function movePlayer(playerIndex,distance,{cannon=false}={}){
+      const player=gameState.players[playerIndex],hit=new Set();for(let step=0;step<distance;step++){
+        const from=player.position,nexts=nodes[from].next;let to=nexts[0];if(nexts.length>1){const options=nexts.map(id=>({label:`${directionLabel(from,id)} · ${id}번 칸`,value:id,className:'primary'}));to=await showChoice('갈림길 선택',`<p><strong>${esc(player.name)}</strong>, ${distance-step}칸이 남았습니다. 진행할 길을 고르세요.</p>`,options)}
+        player.position=to;player.totalDistance++;if(to===0&&from!==0){player.completedLaps++;const salary=player.completedLaps*10;changeResource(player,'coins',salary,{protect:false});log(`💰 ${player.name} ${player.completedLaps}회 완주! 월급 ${salary*resourceMultiplier(player)}코인`)}
+        if(cannon){gameState.players.forEach((other,i)=>{if(i!==playerIndex&&other.position===to&&!hit.has(i)){hit.add(i);changeResource(other,'coins',-5,{label:'대포알 공격'});log(`💥 ${other.name}이 대포알에 스쳐 코인을 잃었습니다.`)}})}
+        renderUI();await delay(CONFIG.moveDelay)
+      }
+    }
+
+    async function resolveLanding(playerIndex){
+      const p=gameState.players[playerIndex],id=p.position,type=effectiveType(id);log(`${p.name}이 ${id}번 ${typeLabel(type)}에 도착했습니다.`);
+      if(type==='companion'){await companionEncounter(playerIndex,id);return}
+      if(type==='star'){await starVisit(p);return}
+      if(type==='placedTrap'){changeResource(p,'coins',-10,{label:'설치된 함정'});log(`🌿 설치 함정이 ${p.name}의 코인을 덮쳤습니다.`);return}
+      if(type==='starTrap'){const owner=gameState.board.nodeOverrides[id]?.owner;if(owner!==playerIndex&&p.stars>0){const lost=changeResource(p,'stars',-1,{label:'별 강탈'});if(lost<0){changeResource(gameState.players[owner],'stars',1,{protect:false});log(`🕳️ ${gameState.players[owner].name}이 ${p.name}의 별을 빼앗았습니다!`)}}return}
+      if(type==='blue'){changeResource(p,'coins',3,{protect:false});log(`🔵 ${p.name} +${3*resourceMultiplier(p)}코인`)}
+      else if(type==='red'){changeResource(p,'coins',-3,{label:'빨간칸'});log(`🔴 ${p.name} 코인이 감소했습니다.`)}
+      else if(type==='item'){for(let i=0;i<resourceMultiplier(p);i++)await awardRandomItem(p)}
+      else if(type==='event')await runEvent(p);
+      else if(type==='trap'){changeResource(p,'coins',-10,{label:'덩굴 함정'});log(`🌿 ${p.name}이 덩굴 함정에 걸렸습니다.`)}
+      else if(type==='shop')await openShop(p)
+    }
+    function typeLabel(type){return({blue:'파란칸',red:'빨간칸',item:'아이템칸',event:'이벤트칸',trap:'함정칸',shop:'상점',star:'별칸',companion:'동료칸',placedTrap:'설치 함정칸',starTrap:'별 강탈칸'})[type]||type}
+
+    async function runEvent(player){
+      const roll=randInt(8);if(roll===0){changeResource(player,'stars',1,{protect:false});log(`✨ 숲의 축복! ${player.name}이 별을 얻었습니다.`)}
+      else if(roll===1){changeResource(player,'stars',-1,{label:'별 상실'});log(`🌑 ${player.name}이 별을 잃었습니다.`)}
+      else if(roll===2){changeResource(player,'coins',-player.coins,{absoluteLoss:true,label:'모든 코인 상실'});log(`💨 ${player.name}의 코인이 모두 날아갔습니다.`)}
+      else if(roll===3){changeResource(player,'coins',-Math.floor(player.coins/2),{label:'코인 절반 상실'});log(`🌀 ${player.name}의 코인이 절반 줄었습니다.`)}
+      else if(roll===4){await loseItems(player,2,'아이템 상실');log(`🎒 ${player.name}이 아이템을 잃었습니다.`)}
+      else if(roll===5){for(let i=0;i<2*resourceMultiplier(player);i++)await awardRandomItem(player);log(`🎁 ${player.name}이 아이템 ${2*resourceMultiplier(player)}개를 발견했습니다.`)}
+      else if(roll===6){changeResource(player,'coins',player.coins,{protect:false});log(`🪙 ${player.name}의 코인이 2배가 되었습니다.`)}
+      else await bossEvent(player)
+    }
+    async function bossEvent(player){const effect=randInt(4);log(`👹 숲의 보스가 ${player.name} 앞에 나타났습니다!`);if(effect===0)changeResource(player,'stars',-1,{label:'보스의 별 공격'});else if(effect===1)changeResource(player,'coins',-player.coins,{absoluteLoss:true,label:'보스의 코인 공격'});else if(effect===2)changeResource(player,'coins',-Math.floor(player.coins/2),{label:'보스의 코인 공격'});else await loseItems(player,2,'보스의 아이템 공격')}
+    async function loseItems(player,count,reason){if(!player.inventory.length)return;if(consumeShield(player,reason))return;player.inventory.splice(0,Math.min(count*resourceMultiplier(player),player.inventory.length))}
+
+    function rollItem(){const r=rand();if(r<.02)return'__star';if(r<.12)return rand()<.5?'starTrap':'shield';return['missile','cannon','swap','trapKit','double','plusOne','triple','stone'][randInt(8)]}
+    async function awardRandomItem(player){const item=rollItem();if(item==='__star'){changeResource(player,'stars',1,{protect:false});log(`🌟 최고 등급! ${player.name}이 별을 즉시 획득했습니다.`);return}await addItem(player,item)}
+    async function addItem(player,item){
+      if(player.inventory.length<CONFIG.inventorySize){player.inventory.push(item);log(`${ITEM_DATA[item].icon} ${player.name}이 ${ITEM_DATA[item].name}을 얻었습니다.`);return true}
+      if(item==='stone'){log(`가방이 가득 차 돌은 굴러갔습니다.`);return false}
+      const choices=[{label:`새 ${ITEM_DATA[item].name} 포기`,value:-1,className:'ghost'},...player.inventory.map((old,i)=>({label:`${ITEM_DATA[old].icon} ${ITEM_DATA[old].name} 버리기`,value:i}))];const index=await showChoice('인벤토리가 가득 찼어요',`<p><strong>${ITEM_DATA[item].icon} ${ITEM_DATA[item].name}</strong>을 얻었습니다. 기존 아이템과 바꿀까요?</p>`,choices);if(index>=0){player.inventory.splice(index,1,item);log(`${player.name}이 아이템을 교체했습니다.`);return true}return false
+    }
+
+    async function useItem(index){
+      if(gameState.phase!=='turn')return toast('주사위를 굴리기 전에만 사용할 수 있어요.');if(gameState.turnContext.itemUsed)return toast('한 턴에는 아이템을 하나만 사용할 수 있어요.');const p=activePlayer(),item=p.inventory[index];if(!item)return;if(item==='shield')return toast('보호권은 불이익을 받을 때 자동으로 사용됩니다.');
+      if((item==='trapKit'||item==='starTrap')&&(!['blue','red'].includes(nodes[p.position].type)||effectiveType(p.position)!==nodes[p.position].type))return toast('비어 있는 일반칸에서만 설치할 수 있어요.');
+      let consumed=true;
+      if(item==='missile'){const target=await chooseTarget('미사일을 맞힐 플레이어');if(target===null)return;changeResource(gameState.players[target],'coins',-10,{label:'미사일 공격'});log(`🚀 ${p.name}이 ${gameState.players[target].name}에게 미사일을 발사했습니다.`)}
+      else if(item==='cannon'){p.inventory.splice(index,1);p.itemsUsed++;gameState.turnContext.itemUsed=true;gameState.phase='moving';log(`💣 ${p.name}이 대포알로 15칸 돌진합니다!`);await movePlayer(activeIndex(),15,{cannon:true});await resolveLanding(activeIndex());gameState.phase='turnEnd';renderUI();return}
+      else if(item==='swap'){const target=await chooseTarget('위치를 바꿀 플레이어');if(target===null)return;const other=gameState.players[target];if(consumeShield(other,'위치 교환')){log('위치 교환이 보호권에 막혔습니다.')}else{[p.position,other.position]=[other.position,p.position];log(`🔄 ${p.name}과 ${other.name}의 위치가 바뀌었습니다.`)}}
+      else if(item==='trapKit'){gameState.board.nodeOverrides[p.position]={type:'placedTrap',owner:activeIndex()};log(`🌿 ${p.name}이 ${p.position}번 칸에 함정을 설치했습니다.`)}
+      else if(item==='starTrap'){gameState.board.nodeOverrides[p.position]={type:'starTrap',owner:activeIndex()};log(`🕳️ ${p.name}이 ${p.position}번 칸에 별 강탈 함정을 설치했습니다.`)}
+      else if(item==='double'){gameState.turnContext.diceMultiplier=2;log('다음 주사위 합이 2배가 됩니다.')}
+      else if(item==='plusOne'){gameState.turnContext.extraDice=1;log('이번 턴에 주사위 3개를 굴립니다.')}
+      else if(item==='triple'){gameState.turnContext.diceMultiplier=3;log('다음 주사위 합이 3배가 됩니다.')}
+      else if(item==='stone'){log(`💥 ${p.name}의 돌이 깨졌습니다. 아무 일도 일어나지 않았습니다.`)}
+      else consumed=false;
+      if(consumed){p.inventory.splice(index,1);p.itemsUsed++;gameState.turnContext.itemUsed=true;renderUI()}
+    }
+    async function chooseTarget(title){const choices=gameState.players.map((p,i)=>({p,i})).filter(x=>x.i!==activeIndex()).map(({p,i})=>({label:`${p.name} · 🪙${p.coins} ⭐${p.stars}`,value:i}));choices.push({label:'취소',value:null,className:'ghost'});return showChoice(title,'<p>대상 플레이어를 선택하세요.</p>',choices)}
+
+    async function openShop(player){
+      let open=true;while(open){const mult=resourceMultiplier(player);const choices=SHOP.map(([item,price])=>{const name=item==='lucky'?'럭키 티켓':ITEM_DATA[item].name;return{label:`${name} · ${price*mult}코인`,value:item,disabled:player.coins<price*mult}});choices.push({label:'구매 종료',value:null,className:'ghost'});const item=await showChoice('황금 도토리 상점',`<p>${esc(player.name)}의 코인: <strong>${player.coins}</strong>${mult>1?' · 동료 효과로 가격과 획득량이 2배입니다.':''}</p>`,choices);if(!item){open=false;continue}const base=SHOP.find(x=>x[0]===item)[1],cost=base*mult;if(player.coins<cost)continue;player.coins-=cost;if(item==='lucky'){for(let i=0;i<mult;i++)await awardRandomItem(player)}else{let accepted=0;for(let i=0;i<mult;i++)if(await addItem(player,item))accepted++;const refund=(mult-accepted)*base;if(refund){player.coins+=refund;log(`가방 교체를 포기한 상품 ${mult-accepted}개의 ${refund}코인을 돌려받았습니다.`)}}log(`🏪 ${player.name}이 상점에서 구매했습니다.`)}
+    }
+    async function starVisit(player){const mult=resourceMultiplier(player),cost=CONFIG.starPrice*mult,gain=mult;if(player.coins<cost){await showChoice('별 상점',`<p>별 ${gain}개는 ${cost}코인입니다. 코인이 부족해 별칸은 이곳에 남습니다.</p>`,[{label:'확인',value:true}]);return}const buy=await confirmChoice('별을 만났어요!',`별 ${gain}개를 <strong>${cost}코인</strong>에 구매할까요?`,'별 구매','다음에');if(!buy)return;player.coins-=cost;player.stars+=gain;log(`⭐ ${player.name}이 별 ${gain}개를 구매했습니다!`);spawnStar(true)}
+    function spawnStar(move=false){const choices=normalCandidates().filter(id=>id!==gameState.starSpace);if(!choices.length)return;gameState.starSpace=choices[randInt(choices.length)];log(`⭐ 별칸이 ${gameState.starSpace}번 칸${move?'으로 이동':'에 등장'}했습니다.`)}
+    function spawnCompanion(){const choices=normalCandidates();if(!choices.length)return;const nodeId=choices[randInt(choices.length)];gameState.companionSpaces.push({nodeId});log(`🧚 동료가 ${nodeId}번 칸에서 기다립니다.`)}
+    async function companionEncounter(finderIndex,nodeId){const idx=gameState.companionSpaces.findIndex(s=>s.nodeId===nodeId);if(idx<0)return;const available=COMPANION_MINIS.filter(id=>!gameState.usedCompanionMinigames.includes(id));const id=available[randInt(available.length)]||COMPANION_MINIS[randInt(2)];gameState.companionSpaces.splice(idx,1);gameState.usedCompanionMinigames.push(id);const winners=await runMinigame(id,{companion:true,finderIndex});const winner=winners[0];gameState.players[winner].companionTurnsRemaining=3;gameState.players[winner].companionJustAcquired=winner===finderIndex;log(`🧚 ${gameState.players[winner].name}이 동료를 얻어 개인 턴 3회 동안 자원 변화가 2배입니다.`)}
+
+    function advanceCompanionTurn(player){if(player.companionTurnsRemaining<=0)return;if(player.companionJustAcquired){player.companionJustAcquired=false;return}player.companionTurnsRemaining=Math.max(0,player.companionTurnsRemaining-1)}
+    function turnMilestones(turn){return{gameOver:turn>=CONFIG.maxTurns,minigame:turn>0&&turn<CONFIG.maxTurns&&turn%6===0,spawnStar:turn===9,spawnCompanion:turn===21||turn===42}}
+
+    async function finishTurn(){
+      if(gameState.phase!=='turnEnd')return;gameState.phase='resolving';const p=activePlayer();p.personalTurns++;advanceCompanionTurn(p);
+      gameState.globalTurn++;const milestones=turnMilestones(gameState.globalTurn);renderUI();if(milestones.gameOver){finishGame();return}
+      if(milestones.minigame){const available=GENERAL_MINIS.filter(id=>!gameState.usedMinigames.includes(id));if(available.length){const id=available[randInt(available.length)];gameState.usedMinigames.push(id);await runMinigame(id,{companion:false})}}
+      if(milestones.spawnStar)spawnStar();if(milestones.spawnCompanion)spawnCompanion();
+      gameState.currentPlayerIndex=(gameState.currentPlayerIndex+1)%4;gameState.phase='turn';gameState.turnContext={itemUsed:false,diceMultiplier:1,extraDice:0};els.dice.innerHTML='<span class="die">?</span><span class="die">?</span>';safeSave(true);renderUI()
+    }
+
+    function safeSave(silent){try{return saveGame(silent)}catch(error){console.error(error);return false}}
+    function achievementRecipients(players,key){const max=Math.max(...players.map(p=>p[key]));let candidates=players.map((p,i)=>({p,i})).filter(x=>x.p[key]===max);const coinMax=Math.max(...candidates.map(x=>x.p.coins));return{max,indices:candidates.filter(x=>x.p.coins===coinMax).map(x=>x.i)}}
+    function finishGame(){
+      gameState.gameOver=true;gameState.phase='gameOver';gameState.achievementAwards=[];
+      const awards=[['최다 이동','totalDistance'],['미니게임 최다 승리','minigameWins'],['아이템 최다 사용','itemsUsed']];
+      awards.forEach(([label,key])=>{const result=achievementRecipients(gameState.players,key);result.indices.forEach(i=>{gameState.players[i].stars++;gameState.achievementAwards.push({label,playerIndex:i,value:result.max})})});safeSave(true);renderUI();showFinalResults()
+    }
+    async function showFinalResults(){
+      const ranked=gameState.players.map((p,i)=>({p,i})).sort((a,b)=>b.p.stars-a.p.stars||b.p.coins-a.p.coins);const top=ranked[0].p;const winners=ranked.filter(x=>x.p.stars===top.stars&&x.p.coins===top.coins);let previous=null,rank=0;const rows=ranked.map((x,i)=>{if(!previous||x.p.stars!==previous.stars||x.p.coins!==previous.coins)rank=i+1;previous=x.p;return`<tr><td>${rank}위 · ${esc(x.p.name)}</td><td>⭐ ${x.p.stars} · 🪙 ${x.p.coins}</td></tr>`}).join('');const html=`<p style="font-size:1.2rem">👑 <strong>${winners.map(x=>esc(x.p.name)).join(' · ')}</strong> ${winners.length>1?'공동 우승!':'우승!'}</p><table class="mini-result-table">${rows}</table><h3>업적 보너스</h3><ul>${gameState.achievementAwards.map(a=>`<li>${esc(a.label)} — ${esc(gameState.players[a.playerIndex].name)} (+⭐, 기록 ${a.value})</li>`).join('')}</ul>`;const choice=await showChoice('60턴 최종 결과',html,[{label:'메인 화면',value:'menu',className:'ghost'},{label:'새 게임',value:'restart',className:'primary'}]);if(choice==='restart'){showMenu();els.mainMenu.classList.add('hidden');els.setup.classList.remove('hidden')}else showMenu()
+    }
+
+    function renderUI(){
+      if(!gameState)return;const ai=activeIndex(),p=activePlayer();els.globalTurn.textContent=gameState.globalTurn;els.turnOrder.textContent=gameState.turnOrder.map((i,slot)=>`${slot===gameState.currentPlayerIndex?'▶ ':''}${gameState.players[i].name}`).join(' · ');
+      els.playerList.innerHTML=gameState.players.map((player,i)=>`<article class="player-card ${i===ai?'active':''}" style="--pc:${player.color}"><div class="player-name"><span class="player-dot"></span>${esc(player.name)}</div><div class="player-stats"><span>🪙 ${player.coins}</span><span>⭐ ${player.stars}</span><span>🎒 ${player.inventory.length}</span></div>${player.companionTurnsRemaining?`<div class="player-buff">🧚 동료 ${player.companionTurnsRemaining}턴</div>`:''}</article>`).join('');
+      els.banner.style.setProperty('--pc',p.color);els.banner.textContent=gameState.phase==='turn'?`${p.name}의 차례 · 아이템 또는 주사위`:gameState.phase==='moving'?`${p.name} 이동 중`:gameState.phase==='turnEnd'?`${p.name}의 행동 완료`:'이벤트 처리 중';
+      els.roll.disabled=gameState.phase!=='turn';els.end.disabled=gameState.phase!=='turnEnd';els.inventoryCount.textContent=`${p.inventory.length} / ${CONFIG.inventorySize}`;els.inventory.innerHTML=Array.from({length:CONFIG.inventorySize},(_,i)=>{const item=p.inventory[i];return item?`<button class="item-slot ${ITEM_DATA[item].auto?'auto':''}" data-item="${i}" ${gameState.phase!=='turn'?'disabled':''}><strong>${ITEM_DATA[item].icon}</strong>${ITEM_DATA[item].name}</button>`:'<button class="item-slot" disabled>빈 칸</button>'}).join('');
+      els.inventory.querySelectorAll('[data-item]').forEach(b=>b.addEventListener('click',()=>useItem(Number(b.dataset.item))));els.log.innerHTML=gameState.log.slice().reverse().map(m=>`<p>${esc(m)}</p>`).join('');
+      els.debug.classList.toggle('hidden',!gameState.settings.debug);if(gameState.settings.debug)updateDebug();
+    }
+
+    function resizeCanvas(){const rect=els.board.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);els.board.width=Math.max(1,Math.floor(rect.width*dpr));els.board.height=Math.max(1,Math.floor(rect.height*dpr));ctx.setTransform(els.board.width/1000,0,0,els.board.height/650,0,0)}
+    function renderBoardLoop(){cancelAnimationFrame(renderFrame);const loop=()=>{drawBoard();renderFrame=requestAnimationFrame(loop)};loop()}
+    function drawBoard(){
+      ctx.clearRect(0,0,1000,650);drawForest();ctx.lineCap='round';ctx.lineJoin='round';
+      const edges=[];nodes.forEach(n=>n.next.forEach(to=>edges.push([n,nodes[to]])));ctx.strokeStyle='#5f4b2d99';ctx.lineWidth=30;edges.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()});ctx.strokeStyle='#f6dca0';ctx.lineWidth=22;edges.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()});
+      edges.forEach(([a,b],i)=>{if(i%2)return;const x=a.x+(b.x-a.x)*.55,y=a.y+(b.y-a.y)*.55,ang=Math.atan2(b.y-a.y,b.x-a.x);ctx.save();ctx.translate(x,y);ctx.rotate(ang);ctx.fillStyle='#765929';ctx.beginPath();ctx.moveTo(7,0);ctx.lineTo(-5,-4);ctx.lineTo(-5,4);ctx.closePath();ctx.fill();ctx.restore()});
+      nodes.forEach(n=>drawNode(n));drawPlayers();if(gameState?.settings.debug)drawDebugGraph()
+    }
+    function drawForest(){
+      ctx.fillStyle='#1f613d';ctx.fillRect(0,0,1000,650);for(let i=0;i<90;i++){const x=(i*83)%1000,y=(i*137)%650,r=8+(i%5)*3;ctx.fillStyle=i%3?'#2f754799':'#174c3299';ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+      drawTree(76,74,'#9f5bd1','#243a55',1.25);drawTree(245,485,'#57ad50','#77431f',1.15);ctx.fillStyle='#acd99155';ctx.beginPath();ctx.ellipse(900,190,70,42,-.4,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.ellipse(890,260,48,28,-.4,0,Math.PI*2);ctx.fill()
+    }
+    function drawTree(x,y,crown,trunk,scale){ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.fillStyle=trunk;ctx.fillRect(-10,5,20,60);ctx.fillStyle=crown;[[-22,0],[0,-16],[22,0],[-9,17],[13,18]].forEach(([dx,dy])=>{ctx.beginPath();ctx.arc(dx,dy,25,0,Math.PI*2);ctx.fill()});ctx.restore()}
+    function nodeStyle(type){return({blue:['#55aaf5','•'],red:['#f05a5b','−'],item:['#d477e9','🎁'],event:['#55cf78','!'],trap:['#315d3b','🌿'],shop:['#efbe36','🏪'],star:['#ffe04f','★'],companion:['#f3a8ff','🧚'],placedTrap:['#214f31','🌿'],starTrap:['#8c3a76','★']})[type]||['#ddd','?']}
+    function drawShopBuilding(n){ctx.save();ctx.translate(n.x,n.y-29);ctx.shadowColor='#0009';ctx.shadowBlur=8;ctx.fillStyle='#8a5b20';ctx.fillRect(-17,-2,34,23);ctx.fillStyle='#ffd34f';ctx.fillRect(-14,1,28,18);ctx.fillStyle='#f2a93b';ctx.beginPath();ctx.moveTo(-22,0);ctx.lineTo(0,-18);ctx.lineTo(22,0);ctx.closePath();ctx.fill();ctx.fillStyle='#fff1a0';ctx.fillRect(-9,4,8,7);ctx.fillStyle='#6d421d';ctx.fillRect(4,7,7,12);ctx.shadowBlur=0;ctx.fillStyle='#fff6bd';ctx.font='900 7px system-ui';ctx.textAlign='center';ctx.fillText('SHOP',0,-5);ctx.restore()}
+    function drawNode(n){const type=gameState?effectiveType(n.id):n.type,[color,mark]=nodeStyle(type),pulse=type==='star'?2+Math.sin(performance.now()/240)*2:0;if(type==='shop')drawShopBuilding(n);ctx.save();ctx.translate(n.x,n.y);ctx.shadowColor='#0007';ctx.shadowBlur=8;ctx.fillStyle='#fff2c9';ctx.beginPath();ctx.arc(0,0,15+pulse,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.fillStyle=color;ctx.beginPath();ctx.arc(0,0,11+pulse,0,Math.PI*2);ctx.fill();ctx.fillStyle=type==='blue'||type==='red'?'#fff':'#102318';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`900 ${type==='shop'?'13':'11'}px system-ui`;ctx.fillText(mark,0,1);if(n.id===0){ctx.fillStyle='#fff2a6';ctx.font='900 10px system-ui';ctx.fillText('START',0,27)}ctx.restore()}
+    function drawPlayers(){if(!gameState)return;const groups=new Map();gameState.players.forEach((p,i)=>{if(!groups.has(p.position))groups.set(p.position,[]);groups.get(p.position).push(i)});groups.forEach((indices,nodeId)=>indices.forEach((pi,slot)=>{const p=gameState.players[pi],n=nodes[nodeId],angle=indices.length===1?-Math.PI/2:(slot/indices.length)*Math.PI*2,dist=indices.length===1?20:24,x=n.x+Math.cos(angle)*dist,y=n.y+Math.sin(angle)*dist;ctx.save();ctx.translate(x,y);ctx.shadowColor='#000a';ctx.shadowBlur=7;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(0,0,10,0,Math.PI*2);ctx.fill();ctx.lineWidth=pi===activeIndex()?4:2;ctx.strokeStyle=pi===activeIndex()?'#fff6a4':'#fff';ctx.stroke();ctx.fillStyle='#13261a';ctx.font='900 9px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(pi+1),0,1);ctx.restore()}))}
+    function drawDebugGraph(){ctx.save();ctx.font='700 8px monospace';ctx.textAlign='center';nodes.forEach(n=>{ctx.fillStyle='#07170f';ctx.fillText(`${n.id}:${effectiveType(n.id).slice(0,2)}`,n.x,n.y-18);if(n.next.length>1){ctx.strokeStyle='#ffe45c';ctx.lineWidth=2;ctx.beginPath();ctx.arc(n.x,n.y,22,0,Math.PI*2);ctx.stroke()}});ctx.restore()}
+
+    function miniTeams(){const ids=shuffle([0,1,2,3]);return[[ids[0],ids[1]],[ids[2],ids[3]]]}
+    async function runMinigame(id,context){
+      const def=MINI[id];gameState.phase='minigame';gameState.activeMinigame=id;els.mini.classList.remove('hidden');els.miniTitle.textContent=def.name;els.miniSubtitle.textContent=`${def.type} · ${def.seconds}초`;buildMiniZones();
+      const teams=['teamTap','teamTiming','energy'].includes(id)?miniTeams():null;const role=['chase','boss','bomb'].includes(id)?randInt(4):null;
+      const ready=await miniBrief(def,teams,role);if(!ready){throw new Error('미니게임 준비가 중단되었습니다.')}
+      let pot=0;if(!context.companion){gameState.players.forEach(p=>{const paid=Math.min(CONFIG.minigameFee,p.coins);p.coins-=paid;pot+=paid})}
+      await miniCountdown();const result=await playMini(id,def,context,teams,role);let winners=result.winners;
+      if(result.tieCandidates?.length>1)winners=await runTiebreaker(result.tieCandidates,result.tieGroups||null);
+      if(context.companion){winners=[winners[0]]}else distributePot(winners,pot,result.scores);
+      winners.forEach(i=>gameState.players[i].minigameWins++);await showMiniResults(def,result.scores,winners,pot,context);cleanupMini();return winners
+    }
+    function buildMiniZones(){els.miniArena.innerHTML=gameState.players.map((p,i)=>`<div class="mini-zone" data-player="${i}" style="--pc:${p.color}"><div class="mini-zone-label"><span class="player-dot"></span>${esc(p.name)}</div><div class="mini-zone-score" data-score="${i}">0</div><div class="zone-game" data-zone-game="${i}">준비!</div></div>`).join('')}
+    function miniBrief(def,teams,role){return new Promise(resolve=>{const panel=document.createElement('div');panel.className='mini-brief';const teamText=teams?`<p>팀 A: ${teams[0].map(i=>esc(gameState.players[i].name)).join(' + ')} · 팀 B: ${teams[1].map(i=>esc(gameState.players[i].name)).join(' + ')}</p>`:'';const roleText=role!==null?`<p>특수 역할: <strong>${esc(gameState.players[role].name)}</strong></p>`:'';panel.innerHTML=`<div class="brief-card"><h2>${def.name}</h2><p>${def.type} · 제한 ${def.seconds}초</p><p><strong>조작:</strong> ${def.control}</p><p><strong>승리:</strong> ${def.win}</p><p><strong>보상:</strong> ${def.type.includes('동료')?'우승자가 동료 획득':'실제로 모인 참가비를 승리 진영이 획득'}</p>${teamText}${roleText}<div class="ready-grid">${gameState.players.map((p,i)=>`<button class="ready-btn" data-ready="${i}">${esc(p.name)} 준비</button>`).join('')}</div></div>`;els.miniArena.append(panel);const set=new Set();panel.querySelectorAll('[data-ready]').forEach(b=>b.addEventListener('click',()=>{set.add(Number(b.dataset.ready));b.classList.add('ready');b.textContent='준비 완료';if(set.size===4){panel.remove();resolve(true)}}))})}
+    async function miniCountdown(){const panel=document.createElement('div');panel.className='mini-brief';els.miniArena.append(panel);for(const value of ['3','2','1','GO!']){panel.innerHTML=`<div class="countdown">${value}</div>`;await delay(value==='GO!'?500:700)}panel.remove()}
+
+    function initialMiniScores(id,context){const scores=[0,0,0,0];if(id==='treasure'&&Number.isInteger(context.finderIndex))scores[context.finderIndex]=5;return scores}
+    function playMini(id,def,context,teams,role){
+      return new Promise(resolve=>{const now=performance.now(),scores=initialMiniScores(id,context);miniSession={id,def,context,teams,role,scores,taps:[0,0,0,0],start:now,end:now+def.seconds*1000,resolve,targets:Array.from({length:4},()=>({x:.25+rand()*.5,y:.25+rand()*.5})),sequences:Array.from({length:4},()=>id==='spirit'?shuffle([0,1,2,3]):[0,1,2,1]),seqIndex:[0,0,0,0],lock:[0,0,0,0],lanes:[0,0,0,0],obstacles:Array.from({length:4},()=>[]),lastSpawn:[now,now,now,now],gauge:50,finderShield:context.finderIndex,collisions:[0,0,0,0],pointers:new Map()};
+        els.miniArena.addEventListener('pointerdown',miniPointer,{passive:false});els.miniArena.addEventListener('pointermove',miniPointerMove,{passive:false});els.miniArena.addEventListener('pointerup',miniPointerEnd);els.miniArena.addEventListener('pointercancel',miniPointerEnd);miniTick(now)
+      })
+    }
+    function pointerCoordinates(event,zone,p){const r=zone.getBoundingClientRect();let x=(event.clientX-r.left)/r.width,y=(event.clientY-r.top)/r.height;if(p<2){x=1-x;y=1-y}return{p,x,y,zone}}
+    function pointerData(event){const zone=event.target.closest('.mini-zone');if(!zone)return null;return pointerCoordinates(event,zone,Number(zone.dataset.player))}
+    function miniPointer(event){event.preventDefault();const d=pointerData(event);if(!d||!miniSession)return;miniSession.pointers.set(event.pointerId,{p:d.p,zone:d.zone});try{d.zone.setPointerCapture(event.pointerId)}catch{};handleMiniInput(d.p,d.x,d.y)}
+    function miniPointerMove(event){if(!(event.buttons&1)||!miniSession)return;const tracked=miniSession.pointers.get(event.pointerId);if(!tracked)return;const d=pointerCoordinates(event,tracked.zone,tracked.p);event.preventDefault();if(miniSession.id==='dodge')handleMiniInput(d.p,d.x,d.y)}
+    function miniPointerEnd(event){miniSession?.pointers?.delete(event.pointerId)}
+    function hitTarget(p,x,y,r=.19){const t=miniSession.targets[p];return Math.hypot(x-t.x,y-t.y)<r}
+    function newTarget(p){miniSession.targets[p]={x:.18+rand()*.64,y:.22+rand()*.6}}
+    function handleMiniInput(p,x,y){
+      const s=miniSession;if(!s||performance.now()>s.end||performance.now()<s.lock[p]||(s.id==='tiebreak'&&!s.eligible.includes(p)))return;s.taps[p]++;
+      if(s.id==='rapid'||s.id==='teamTap'||s.id==='tiebreak')s.scores[p]++;
+      else if(s.id==='timing'||s.id==='teamTiming'){const marker=(Math.sin((performance.now()-s.start)/520+p*.8)+1)/2;s.scores[p]+=Math.max(0,Math.round(100-Math.abs(marker-.5)*200))}
+      else if(s.id==='dodge')s.lanes[p]=x<.5?0:1;
+      else if(s.id==='energy'){const zone=Math.min(2,Math.floor(x*3)),expected=s.sequences[p][s.seqIndex[p]];if(zone===expected){s.seqIndex[p]++;s.scores[p]++;if(s.seqIndex[p]>=4)s.seqIndex[p]=0}else{s.seqIndex[p]=0;s.lock[p]=performance.now()+450}}
+      else if(s.id==='chase'){if(hitTarget(p,x,y)){s.scores[p]++;newTarget(p)}}
+      else if(s.id==='boss'){if(p===s.role){s.gauge=Math.max(0,s.gauge-2.2);s.scores[p]++}else{s.gauge=Math.min(100,s.gauge+.65);s.scores[p]++}}
+      else if(s.id==='bomb'){if(p===s.role){s.gauge=Math.min(120,s.gauge+1.7);s.scores[p]++}else{const zone=Math.min(2,Math.floor(x*3)),expected=[0,1,2][s.seqIndex[p]%3];if(zone===expected){s.seqIndex[p]++;s.scores[p]++;s.gauge=Math.max(0,s.gauge-1.1)}else{s.seqIndex[p]=0}}}
+      else if(s.id==='treasure'){if(hitTarget(p,x,y)){s.scores[p]++;newTarget(p)}}
+      else if(s.id==='spirit'){const zone=Math.min(3,Math.floor(x*4)),expected=s.sequences[p][s.seqIndex[p]%4];if(zone===expected){s.seqIndex[p]++;if(s.seqIndex[p]%4===0){s.scores[p]++;s.sequences[p]=shuffle([0,1,2,3])}}else if(s.finderShield===p){s.finderShield=-1}else{s.seqIndex[p]=0}}
+    }
+    function miniTick(now){
+      const s=miniSession;if(!s)return;const remaining=Math.max(0,(s.end-now)/1000);els.miniTimer.textContent=remaining.toFixed(1);
+      if(s.id==='dodge')updateDodge(s,now);renderMiniState(s,now);if(remaining<=0){cancelAnimationFrame(miniFrame);const result=determineMiniResult(s);s.resolve(result);return}miniFrame=requestAnimationFrame(miniTick)
+    }
+    function updateDodge(s,now){for(let p=0;p<4;p++){if(now-s.lastSpawn[p]>720){s.lastSpawn[p]=now;s.obstacles[p].push({lane:randInt(2),y:0,hit:false})}s.obstacles[p].forEach(o=>{o.y+=.009;if(!o.hit&&o.y>.78&&o.y<.93&&o.lane===s.lanes[p]){o.hit=true;s.collisions[p]++;s.scores[p]=Math.max(0,s.scores[p]-8)}});s.obstacles[p]=s.obstacles[p].filter(o=>o.y<1.1);s.scores[p]+=.018}}
+    function renderMiniState(s,now){
+      for(let p=0;p<4;p++){const score=document.querySelector(`[data-score="${p}"]`),zone=document.querySelector(`[data-zone-game="${p}"]`);if(score)score.textContent=Math.floor(s.scores[p]);if(!zone)continue;let html='';
+        if(s.id==='timing'||s.id==='teamTiming'){const marker=(Math.sin((now-s.start)/520+p*.8)+1)/2;html=`<div style="width:80%"><div style="height:22px;border-radius:99px;background:linear-gradient(90deg,#e55,#ffe26b 45%,#82ef6e 50%,#ffe26b 55%,#e55);position:relative"><i style="position:absolute;left:${marker*100}%;top:-7px;width:8px;height:36px;background:#fff;border-radius:5px"></i></div><small>중앙에서 터치!</small></div>`}
+        else if(s.id==='rapid'||s.id==='teamTap'||s.id==='tiebreak')html='<span class="huge">👆</span>빠르게 연타!';
+        else if(s.id==='dodge'){const obs=s.obstacles[p].map(o=>`<b style="position:absolute;left:${o.lane?70:30}%;top:${o.y*100}%;font-size:1.6rem">🪵</b>`).join('');html=`<div style="position:relative;width:80%;height:82%;border-left:2px dashed #fff4;border-right:2px dashed #fff4">${obs}<b style="position:absolute;left:${s.lanes[p]?70:30}%;bottom:5%;font-size:2rem">🐿️</b></div>`}
+        else if(s.id==='energy')html=`<div><span class="huge">${['⬅️','⏺️','➡️','⏺️'][s.seqIndex[p]%4]}</span>왼쪽 · 중앙 · 오른쪽</div>`;
+        else if(s.id==='chase'){const t=s.targets[p];html=`<div><span style="position:absolute;left:${t.x*100}%;top:${t.y*100}%;font-size:2.5rem">${p===s.role?'👻':'🍃'}</span>${p===s.role?'술래: 유령을 잡아라!':'도망자: 잎을 찾아라!'}</div>`}
+        else if(s.id==='boss')html=`<div><span class="huge">${p===s.role?'👹':'🛡️'}</span>${p===s.role?'공격 연타':'방어 연타'}<br>숲 게이지 ${Math.round(s.gauge)}</div>`;
+        else if(s.id==='bomb')html=`<div><span class="huge">${p===s.role?'💣':'✂️'}</span>${p===s.role?'폭탄 충전 연타':'왼쪽 → 중앙 → 오른쪽'}<br>폭탄 ${Math.round(s.gauge)}%</div>`;
+        else if(s.id==='treasure'){const t=s.targets[p];html=`<div><span style="position:absolute;left:${t.x*100}%;top:${t.y*100}%;font-size:2.7rem">💎</span>보물을 터치!</div>`}
+        else if(s.id==='spirit')html=`<div><span class="huge">${s.sequences[p][s.seqIndex[p]%4]+1}</span>영역을 4등분해 숫자 위치 터치</div>`;zone.innerHTML=html
+      }
+    }
+    function determineMiniResult(s){
+      const scores=s.scores.map(v=>Math.floor(v));if(['teamTap','teamTiming','energy'].includes(s.id)){const totals=s.teams.map(team=>team.reduce((sum,i)=>sum+scores[i],0));if(totals[0]===totals[1]){const taps=s.teams.map(team=>team.reduce((sum,i)=>sum+s.taps[i],0));if(taps[0]===taps[1])return{scores,winners:[],tieCandidates:[0,1,2,3],tieGroups:s.teams};return{scores,winners:s.teams[taps[0]>taps[1]?0:1]}}return{scores,winners:s.teams[totals[0]>totals[1]?0:1]}}
+      if(s.id==='chase'){const winners=s.scores[s.role]>=10?[s.role]:[0,1,2,3].filter(i=>i!==s.role);return{scores,winners}}
+      if(s.id==='boss'){return{scores,winners:s.gauge<50?[s.role]:[0,1,2,3].filter(i=>i!==s.role)}}
+      if(s.id==='bomb'){return{scores,winners:s.gauge>=100?[s.role]:[0,1,2,3].filter(i=>i!==s.role)}}
+      const max=Math.max(...scores),ties=scores.map((v,i)=>v===max?i:-1).filter(i=>i>=0);return ties.length>1?{scores,winners:[],tieCandidates:ties}:{scores,winners:ties}
+    }
+    async function runTiebreaker(candidates,groups){
+      await showChoice('동점!',`<p>${candidates.map(i=>esc(gameState.players[i].name)).join(' · ')}의 5초 연타 결승을 진행합니다.</p>`,[{label:'결승 시작',value:true,className:'primary'}]);await miniCountdown();const result=await new Promise(resolve=>{const now=performance.now();miniSession={id:'tiebreak',def:{seconds:5},scores:[0,0,0,0],taps:[0,0,0,0],start:now,end:now+5000,resolve,eligible:candidates,lock:[0,0,0,0],pointers:new Map()};miniTick(now)});let scores=miniSession?.scores||result.scores;if(groups){const totals=groups.map(g=>g.reduce((sum,i)=>sum+scores[i],0));if(totals[0]===totals[1])return runTiebreaker(candidates,groups);return groups[totals[0]>totals[1]?0:1]}
+      const max=Math.max(...candidates.map(i=>scores[i])),ties=candidates.filter(i=>scores[i]===max);return ties.length>1?runTiebreaker(ties,null):ties
+    }
+    function distributePot(winners,pot,scores){if(!winners.length)return;const share=Math.floor(pot/winners.length),remainder=pot-share*winners.length;winners.forEach(i=>gameState.players[i].coins+=share);if(remainder){const best=winners.slice().sort((a,b)=>scores[b]-scores[a])[0];gameState.players[best].coins+=remainder}}
+    async function showMiniResults(def,scores,winners,pot,context){const html=`<div class="brief-card"><h2>${def.name} 결과</h2><p>🏆 ${winners.map(i=>esc(gameState.players[i].name)).join(' · ')}</p><table class="mini-result-table">${gameState.players.map((p,i)=>`<tr><td>${esc(p.name)}</td><td>${scores[i]}점 · 🪙 ${p.coins}</td></tr>`).join('')}</table><p>${context.companion?'우승자가 숲의 동료를 얻습니다.':`실제 판돈 ${pot}코인을 승리 진영이 나눴습니다.`}</p><button id="miniContinue" class="primary">보드로 돌아가기</button></div>`;await new Promise(resolve=>{const panel=document.createElement('div');panel.className='mini-brief';panel.innerHTML=html;els.miniArena.append(panel);panel.querySelector('#miniContinue').addEventListener('click',resolve,{once:true})})}
+    function cleanupMini(){cancelAnimationFrame(miniFrame);els.miniArena.removeEventListener('pointerdown',miniPointer);els.miniArena.removeEventListener('pointermove',miniPointerMove);els.miniArena.removeEventListener('pointerup',miniPointerEnd);els.miniArena.removeEventListener('pointercancel',miniPointerEnd);miniSession=null;gameState.activeMinigame=null;els.mini.classList.add('hidden');renderUI()}
+
+    function validateBoard(){
+      const errors=[];if(nodes.length!==78)errors.push(`노드 수 ${nodes.length}`);const counts={normal:0,item:0,event:0,trap:0,shop:0};nodes.forEach(n=>{if(n.type==='blue'||n.type==='red')counts.normal++;else counts[n.type]++;if(!n.next.length)errors.push(`${n.id} 막다른 길`);n.next.forEach(id=>{if(!nodes[id])errors.push(`${n.id} → ${id} 잘못된 연결`)})});const expected={normal:45,item:12,event:10,trap:8,shop:3};Object.keys(expected).forEach(k=>{if(counts[k]!==expected[k])errors.push(`${k} ${counts[k]}/${expected[k]}`)});
+      const reachable=new Set([0]),queue=[0];while(queue.length){nodes[queue.shift()].next.forEach(id=>{if(!reachable.has(id)){reachable.add(id);queue.push(id)}})}if(reachable.size!==78)errors.push(`시작점에서 도달 ${reachable.size}/78`);
+      nodes.forEach(start=>{const seen=new Set([start.id]),q=[start.id];let returns=start.id===0;while(q.length&&!returns){nodes[q.shift()].next.forEach(id=>{if(id===0)returns=true;if(!seen.has(id)){seen.add(id);q.push(id)}})}if(!returns)errors.push(`${start.id}에서 Start 복귀 불가`)});return{ok:!errors.length,errors,counts,junctions:nodes.filter(n=>n.next.length>1).map(n=>n.id),reachable:reachable.size}
+    }
+    function runSelfTests(){
+      const map=validateBoard(),assertions=[],oldState=gameState,oldMini=miniSession;const assert=(ok,name)=>assertions.push({ok:!!ok,name});
+      try{
+        assert(map.ok,'78개 방향 그래프 무결성');assert(map.junctions.length===7&&map.junctions.every(id=>nodes[id].next.length===2),'7개 갈림길의 두 선택지 연결');
+        const milestoneTurns=Array.from({length:60},(_,i)=>i+1).filter(turn=>turnMilestones(turn).minigame);assert(JSON.stringify(milestoneTurns)===JSON.stringify([6,12,18,24,30,36,42,48,54]),'일반 미니게임 6~54턴 일정');
+        assert(turnMilestones(9).spawnStar&&!turnMilestones(9).spawnCompanion,'9턴 별칸 생성');assert(turnMilestones(21).spawnCompanion&&!turnMilestones(21).minigame,'21턴 동료 생성');assert(turnMilestones(42).spawnCompanion&&turnMilestones(42).minigame,'42턴 미니게임 후 동료 생성');assert(turnMilestones(60).gameOver&&!turnMilestones(60).minigame&&!turnMilestones(60).spawnCompanion,'60턴 즉시 종료');
+        const activeWinner={companionTurnsRemaining:3,companionJustAcquired:true};advanceCompanionTurn(activeWinner);const acquisitionTurnSkipped=activeWinner.companionTurnsRemaining===3;advanceCompanionTurn(activeWinner);advanceCompanionTurn(activeWinner);advanceCompanionTurn(activeWinner);assert(acquisitionTurnSkipped&&activeWinner.companionTurnsRemaining===0,'발견자 승리 동료 효과 3개 개인 턴');
+        const otherWinner={companionTurnsRemaining:3,companionJustAcquired:false};advanceCompanionTurn(otherWinner);advanceCompanionTurn(otherWinner);advanceCompanionTurn(otherWinner);assert(otherWinner.companionTurnsRemaining===0,'비발견자 승리 동료 효과 3개 개인 턴');
+        gameState=makeState([0,1,2,3].map(i=>({name:`T${i+1}`,color:COLORS[i]})));const protectedPlayer=gameState.players[0];protectedPlayer.coins=12;protectedPlayer.inventory=['shield'];changeResource(protectedPlayer,'coins',-5,{label:'코인 손실 테스트'});assert(protectedPlayer.coins===12&&!protectedPlayer.inventory.length&&protectedPlayer.itemsUsed===1,'보호권 코인 손실 무효화');protectedPlayer.stars=2;protectedPlayer.inventory=['shield'];changeResource(protectedPlayer,'stars',-1,{label:'별 손실 테스트'});assert(protectedPlayer.stars===2&&!protectedPlayer.inventory.length&&protectedPlayer.itemsUsed===2,'보호권 별 손실 무효화');protectedPlayer.inventory=['shield','missile'];void loseItems(protectedPlayer,2,'아이템 손실 테스트');assert(protectedPlayer.inventory.length===1&&protectedPlayer.inventory[0]==='missile'&&protectedPlayer.itemsUsed===3,'보호권 아이템 손실 무효화');
+        const saved=makeState([0,1,2,3].map(i=>({name:`S${i+1}`,color:COLORS[i]})));saved.turnContext={itemUsed:true,diceMultiplier:3,extraDice:1};saved.board.nodeOverrides[4]={type:'starTrap',owner:2};saved.starSpace=8;saved.companionSpaces=[{nodeId:16}];saved.usedMinigames=['timing','rapid'];saved.players[1].inventory=['shield','stone'];const restored=normalizeLoadedState(JSON.parse(JSON.stringify(saved)));assert(restored.turnContext.itemUsed&&restored.turnContext.diceMultiplier===3&&restored.turnContext.extraDice===1,'저장 후 아이템 사용·주사위 보정 복원');assert(restored.board.nodeOverrides[4].owner===2&&restored.starSpace===8&&restored.companionSpaces[0].nodeId===16&&restored.usedMinigames.length===2&&restored.players[1].inventory[1]==='stone','저장 후 맵·특수칸·미니게임·인벤토리 복원');
+        const achievementPlayers=[{coins:10,totalDistance:20},{coins:30,totalDistance:20},{coins:50,totalDistance:10},{coins:5,totalDistance:5}];assert(JSON.stringify(achievementRecipients(achievementPlayers,'totalDistance').indices)==='[1]','업적 동점 시 코인 우선');achievementPlayers[0].coins=30;assert(JSON.stringify(achievementRecipients(achievementPlayers,'totalDistance').indices)==='[0,1]','업적 기록·코인 동점 공동 수여');
+        assert(Object.keys(ITEM_DATA).length===10&&new Set(Object.keys(ITEM_DATA)).size===10,'아이템 10종 등록');assert(GENERAL_MINIS.length===9&&new Set(GENERAL_MINIS).size===9,'일반 미니게임 9종 중복 없음');assert(COMPANION_MINIS.length===2&&new Set(COMPANION_MINIS).size===2,'동료 미니게임 2종 중복 없음');assert(initialMiniScores('treasure',{finderIndex:2})[2]===5,'보물 찾기 발견자 +5점');
+        const individual=determineMiniResult({id:'timing',scores:[8,2,3,4]});assert(individual.winners[0]===0,'개인전 최고점 판정');const team=determineMiniResult({id:'teamTap',scores:[5,5,3,3],taps:[5,5,3,3],teams:[[0,1],[2,3]]});assert(JSON.stringify(team.winners)==='[0,1]','팀전 합산 판정');assert(JSON.stringify(determineMiniResult({id:'chase',scores:[10,0,0,0],role:0}).winners)==='[0]','술래잡기 역할 판정');assert(JSON.stringify(determineMiniResult({id:'boss',scores:[0,0,0,0],role:1,gauge:49}).winners)==='[1]','보스 방어전 게이지 판정');assert(JSON.stringify(determineMiniResult({id:'bomb',scores:[0,0,0,0],role:1,gauge:99}).winners)==='[0,2,3]','폭탄 타이머 역할 판정');
+        miniSession={id:'rapid',scores:[0,0,0,0],taps:[0,0,0,0],start:performance.now(),end:performance.now()+1000,lock:[0,0,0,0],pointers:new Map()};for(let i=0;i<4;i++)handleMiniInput(i,.5,.5);assert(miniSession.scores.every(score=>score===1),'4인 입력 점수 영역 분리');
+        const used=[];for(let i=0;i<9;i++){const available=GENERAL_MINIS.filter(id=>!used.includes(id));used.push(available[0])}assert(used.length===9&&new Set(used).size===9&&!GENERAL_MINIS.some(id=>!used.includes(id)),'9회 일반 미니게임 무중복 선택');
+      }catch(error){assert(false,`테스트 실행 오류: ${error.message}`)}finally{gameState=oldState;miniSession=oldMini;if(gameState)renderUI()}
+      return{ok:map.ok&&assertions.every(a=>a.ok),map,assertions}
+    }
+    function updateDebug(){const report=validateBoard();els.debugText.textContent=`phase: ${gameState.phase}\nturn: ${gameState.globalTurn}/60\nactive: ${activePlayer().name} @ ${activePlayer().position}\nstar: ${gameState.starSpace}\ncompanions: ${gameState.companionSpaces.map(x=>x.nodeId).join(', ')||'-'}\nused minis: ${gameState.usedMinigames.join(', ')||'-'}\ncounts: ${JSON.stringify(report.counts)}\njunctions: ${report.junctions.join(', ')}\nmap: ${report.ok?'PASS':'FAIL '+report.errors.join('; ')}\nsaved bytes: ${(localStorage.getItem(CONFIG.saveKey)||'').length}`}
+
+    async function showRules(){await showChoice('Forest Party 규칙',`<ul class="rules-list"><li>4명이 무작위 순서로 두 주사위를 굴려 방향 그래프를 이동합니다.</li><li>Start를 다시 통과하면 완주 횟수 × 10코인의 월급을 받습니다.</li><li>9턴 뒤 별칸이 등장하며 별은 40코인입니다. 21·42턴 뒤에는 동료가 등장합니다.</li><li>6턴마다 한 번씩, 54턴까지 9개의 서로 다른 동시 터치 미니게임을 진행합니다.</li><li>동료는 개인 턴 3회 동안 미니게임 외 자원 변화를 2배로 만듭니다.</li><li>60턴 종료 후 최다 이동·미니게임 승리·아이템 사용 업적 별을 더해 최종 순위를 정합니다.</li><li>별이 같으면 코인으로 순위를 정하며 코인도 같으면 공동 우승입니다.</li></ul>`,[{label:'확인',value:true,className:'primary'}])}
+    async function showSettings(){const debug=await showChoice('설정',`<p>현재 빠른 이동: <strong>${gameState.settings.reducedMotion?'켜짐':'꺼짐'}</strong></p><p>디버그 모드는 노드 번호, 연결, 상태와 테스트 도구를 표시합니다.</p>`,[{label:'닫기',value:'close',className:'ghost'},{label:`빠른 이동 ${gameState.settings.reducedMotion?'끄기':'켜기'}`,value:'motion'},{label:`디버그 ${gameState.settings.debug?'끄기':'켜기'}`,value:'debug'}]);if(debug==='motion')gameState.settings.reducedMotion=!gameState.settings.reducedMotion;if(debug==='debug')gameState.settings.debug=!gameState.settings.debug;renderUI()}
+
+    $('#newGameBtn').addEventListener('click',async()=>{if(saveExists()&&!await confirmChoice('새 게임',`기존 자동 저장을 덮어쓰고 새로 시작할까요?`,'새 게임','취소'))return;els.mainMenu.classList.add('hidden');els.setup.classList.remove('hidden')});
+    $('#cancelSetupBtn').addEventListener('click',()=>{els.setup.classList.add('hidden');els.mainMenu.classList.remove('hidden')});$('#startGameBtn').addEventListener('click',startNew);els.continueBtn.addEventListener('click',loadGame);$('#howToBtn').addEventListener('click',showRules);$('#rulesBtn').addEventListener('click',showRules);$('#rollBtn').addEventListener('click',rollDice);$('#endTurnBtn').addEventListener('click',finishTurn);$('#saveBtn').addEventListener('click',()=>saveGame(false));$('#exportBtn').addEventListener('click',exportSave);$('#importBtn').addEventListener('click',()=>els.importFile.click());els.importFile.addEventListener('change',()=>{if(els.importFile.files[0])importSave(els.importFile.files[0]);els.importFile.value=''});$('#settingsBtn').addEventListener('click',showSettings);$('#menuBtn').addEventListener('click',async()=>{if(await confirmChoice('메인 화면',`현재 게임을 저장하고 메인 화면으로 나갈까요?`,'저장 후 나가기','계속 플레이')){saveGame(true);showMenu()}});$('#debugBtn').addEventListener('click',()=>{gameState.settings.debug=!gameState.settings.debug;renderUI()});
+    $('#debugValidate').addEventListener('click',()=>{const result=runSelfTests();toast(result.ok?'자동 검증 PASS':'자동 검증 FAIL');updateDebug()});$('#debugCoins').addEventListener('click',()=>{activePlayer().coins+=100;renderUI()});$('#debugItem').addEventListener('click',async()=>{await addItem(activePlayer(),Object.keys(ITEM_DATA)[randInt(Object.keys(ITEM_DATA).length)]);renderUI()});$('#debugSkip').addEventListener('click',()=>{const next=Math.min(59,Math.ceil((gameState.globalTurn+1)/6)*6-1);gameState.globalTurn=next;renderUI()});window.addEventListener('resize',resizeCanvas);document.addEventListener('contextmenu',e=>{if(e.target.closest('.mini-screen'))e.preventDefault()});
+    window.ForestPartyDebug={nodes,validateBoard,runSelfTests,turnMilestones,achievementRecipients,getState:()=>structuredClone(gameState),CONFIG};initSetup();showMenu();
+    const testParams=new URLSearchParams(location.search);
+    if(testParams.has('selftest')){const result=validateBoard(),suite=runSelfTests();document.documentElement.dataset.forestPartySelfTest=result.ok?'PASS':'FAIL';document.documentElement.dataset.forestPartySuite=suite.ok?'PASS':'FAIL';document.documentElement.dataset.forestPartyAssertions=String(suite.assertions.filter(test=>test.ok).length);document.documentElement.dataset.forestPartyFailures=String(suite.assertions.filter(test=>!test.ok).length);document.documentElement.dataset.forestPartyNodes=String(nodes.length);console.info('Forest Party self-test',{result,suite})}
+    if(testParams.has('smoke')){(async()=>{try{gameState=makeState([0,1,2,3].map(i=>({name:`P${i+1}`,color:COLORS[i]})));gameState.settings.reducedMotion=true;showGame();const first=activeIndex();await movePlayer(first,2);await resolveLanding(first);gameState.phase='turnEnd';await finishTurn();const saved=JSON.parse(localStorage.getItem(CONFIG.saveKey));const ok=gameState.globalTurn===1&&gameState.phase==='turn'&&saved.globalTurn===1&&gameState.players[first].totalDistance===2;document.documentElement.dataset.forestPartySmoke=ok?'PASS':'FAIL'}catch(error){console.error('Forest Party smoke test',error);document.documentElement.dataset.forestPartySmoke='FAIL'}})()}
+  })();
+  </script>
+</body>
+</html>
