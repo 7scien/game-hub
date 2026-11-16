@@ -36,7 +36,9 @@ const uniqueStacks = (player, predicate = () => true) => {
   const seen = new Set();
   return player.pieces.filter((piece) => {
     if (!predicate(piece)) return false;
-    const key = [WAIT, HOME].includes(piece.node) || piece.type === "pawn" ? piece.id : piece.node;
+    const key = [WAIT, HOME].includes(piece.node) || piece.type === "pawn"
+      ? piece.id
+      : `${piece.node}:${piece.stackId || "legacy"}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

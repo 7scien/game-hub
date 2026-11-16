@@ -239,7 +239,7 @@ export class BoardRenderer {
     for (const player of this.game.players) {
       for (const piece of player.pieces) {
         if (piece.hiddenOnline || !piece.node || [WAIT, HOME].includes(piece.node) || hidden.has(piece.id) || !this.isPieceVisible(player, piece)) continue;
-        const key = `${player.id}:${piece.node}`;
+        const key = `${player.id}:${piece.node}:${piece.stackId || "legacy"}`;
         if (!groups.has(key)) groups.set(key, { player, node: piece.node, pieces: [] });
         groups.get(key).pieces.push(piece);
       }

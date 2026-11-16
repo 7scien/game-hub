@@ -186,7 +186,41 @@ export class Game {
 
   getStack(player, piece) {
     if (piece.node === WAIT || piece.node === HOME || piece.type === "pawn") return [piece];
-    return player.pieces.filter((candidate) => candidate.node === piece.node && candidate.type !== "pawn");
+    return player.pieces.filter((candidate) => candidate.node === piece.node
+      && candidate.type !== "pawn"
+      && (piece.stackId ? candidate.stackId === piece.stackId : !candidate.stackId));
+  }
+
+  getFriendlyPiecesAt(player, target, movingPieces = []) {
+    if ([WAIT, HOME].includes(target)) return [];
+    const movingIds = new Set(movingPieces.map((piece) => piece.id));
+    const targetKey = physicalNodeKey(target, this.boardState);
+    return player.pieces.filter((piece) => !movingIds.has(piece.id)
+      && ![WAIT, HOME].includes(piece.node)
+      && physicalNodeKey(piece.node, this.boardState) === targetKey);
+  }
+
+  needsStackChoice(player, movingPieces, target) {
+    return this.getFriendlyPiecesAt(player, target, movingPieces).length > 0;
+  }
+
+  resolveFriendlyLanding(player, movingPieces, target, stackMode = "stack", friendlyPieces = null) {
+    const friendly = friendlyPieces || this.getFriendlyPiecesAt(player, target, movingPieces);
+    if (!friendly.length) return;
+    if (!['stack', 'separate'].includes(stackMode)) throw new Error("말 배치 방식을 다시 선택해 주세요.");
+    if (stackMode === "stack") {
+      [...friendly, ...movingPieces].forEach((piece) => { piece.stackId = null; });
+      return;
+    }
+    const legacyFriendly = friendly.filter((piece) => !piece.stackId);
+    if (legacyFriendly.length) {
+      const friendlyStackId = `stack-${player.id}-${++this.effectSequence}`;
+      legacyFriendly.forEach((piece) => { piece.stackId = friendlyStackId; });
+    }
+    if (movingPieces.some((piece) => !piece.stackId)) {
+      const movingStackId = `stack-${player.id}-${++this.effectSequence}`;
+      movingPieces.forEach((piece) => { piece.stackId = movingStackId; });
+    }
   }
 
   effectiveSteps(player, result) {
@@ -205,7 +239,7 @@ export class Game {
     return owners.flatMap((owner) => owner.pieces.filter((piece) => piece.type !== "pawn" && this.augments.canMovePiece(piece) && this.getMoveOptionsForPiece(piece, result, owner).length > 0));
   }
 
-  move(pieceId, resultId, optionIndex = 0) {
+  move(pieceId, resultId, optionIndex = 0, stackMode = "stack") {
     this.assertPlayable();
     const result = this.getResult(resultId);
     if (!result) throw new Error("사용할 수 없는 이동 결과입니다.");
@@ -226,6 +260,7 @@ export class Game {
       route: modifiedOption.route,
       pathNodes: modifiedOption.pathNodes,
       reason: result.label,
+      stackMode,
     });
     this.turn.results = this.turn.results.filter((candidate) => candidate.id !== resultId);
     this.logMove(owner, piece, stack, event.target, result.label);
@@ -248,8 +283,9 @@ export class Game {
     else this.addLog(`${player.name}의 ${pieceLabel}이(가) ${label}만큼 이동했습니다.`, "move");
   }
 
-  applyRelocation(player, movingPieces, target, { from, route = "outer", pathNodes = [target], reason = "이동" } = {}) {
+  applyRelocation(player, movingPieces, target, { from, route = "outer", pathNodes = [target], reason = "이동", stackMode = "stack" } = {}) {
     const riders = this.players.flatMap((owner) => owner.pieces.filter((piece) => piece.riding?.hostPlayerId === player.id && piece.node === from));
+    const friendlyAtTarget = this.getFriendlyPiecesAt(player, target, movingPieces);
     for (const member of movingPieces) {
       member.node = target;
       member.route = route;
@@ -259,6 +295,7 @@ export class Game {
       rider.node = target;
       rider.route = route;
     }
+    this.resolveFriendlyLanding(player, movingPieces, target, stackMode, friendlyAtTarget);
     const captured = [WAIT, HOME].includes(target) ? [] : this.captureAt(player, movingPieces, target, reason);
     const event = {
       playerId: player.id,
@@ -317,6 +354,7 @@ export class Game {
         for (const victim of victims) {
           victim.node = WAIT;
           victim.route = "outer";
+          victim.stackId = null;
           victim.swallowedBy = attackingPelican.id;
           attackingPelican.special.swallowed.push({ pieceId: victim.id, playerId: opponent.id });
         }
@@ -394,6 +432,7 @@ export class Game {
   resetAfterDeath(piece) {
     piece.node = WAIT;
     piece.route = "outer";
+    piece.stackId = null;
     piece.effects = [];
     piece.riding = null;
   }

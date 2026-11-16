@@ -32,6 +32,9 @@ class GameApp {
     this.detailOwnerId = null;
     this.expandedPlayerIds = new Set();
     this.throwFx = null;
+    this.eventFx = null;
+    this.eventFxTimer = null;
+    this.pendingMove = null;
     this.onlineClient = null;
     this.onlineState = null;
     this.onlineConnection = "offline";
@@ -113,6 +116,11 @@ class GameApp {
             if (this.isOnlineGame()) this.renderGame();
           }
         }, 820 / (this.game.settings.animationSpeed || 1));
+      } else if (state.lastAction.type === "move" && action.event) {
+        if (action.event.capturedIds?.length) this.announceEvent("잡았다!", `상대 말 ${action.event.capturedIds.length}개를 잡았습니다.`, "capture");
+        else if (action.event.target === HOME) this.announceEvent("완주!", "말이 결승점에 도착했습니다.", "finish");
+      } else if (["useAugment", "useSpecial"].includes(state.lastAction.type)) {
+        this.announceEvent("능력 발동!", this.game.logs[0]?.message || "특수 효과가 적용되었습니다.", "augment");
       }
     }
     this.selectedResultId = this.game.getResult(this.selectedResultId)?.id || null;
@@ -471,12 +479,9 @@ class GameApp {
               </div>
             </div>
           </section>
-
-          <aside class="log-panel">
-            <div class="panel-heading"><div><span>GAME FEED</span><h2>경기 기록</h2></div><i class="live-dot"></i></div>
-            <ol>${this.game.logs.map((log) => `<li class="log-${log.type}"><span>R${log.round}</span><p>${escapeHtml(log.message)}</p></li>`).join("")}</ol>
-          </aside>
         </div>
+
+        ${this.eventFx ? `<div class="event-announcement tone-${this.eventFx.tone}" role="status" aria-live="assertive"><strong>${escapeHtml(this.eventFx.title)}</strong><span>${escapeHtml(this.eventFx.message)}</span></div>` : ""}
 
         <section class="action-dock" aria-label="행동 패널" style="--player:${COLORS[current.color]}">
           <div class="yut-tray ${this.throwFx ? "is-throwing" : ""} ${this.throwFx?.extra ? "is-bonus" : ""}">
@@ -506,6 +511,7 @@ class GameApp {
       ${this.detailAugmentId ? this.augmentDetailMarkup() : ""}
       ${this.game.augmentDraft?.active ? this.augmentDraftMarkup() : ""}
       ${this.abilityMode ? this.abilityModalMarkup() : ""}
+      ${this.pendingMove ? this.stackChoiceMarkup() : ""}
       ${this.game.interaction?.active ? this.interactionMarkup() : ""}`;
 
     const canvas = this.root.querySelector("#yut-board");
@@ -528,7 +534,12 @@ class GameApp {
     const disconnected = onlinePlayer && !onlinePlayer.connected;
     const expanded = isCurrent || this.expandedPlayerIds.has(player.id);
     const stacks = new Map();
-    player.pieces.filter((piece) => ![WAIT, HOME].includes(piece.node)).forEach((piece) => stacks.set(piece.node, (stacks.get(piece.node) || 0) + 1));
+    player.pieces.filter((piece) => ![WAIT, HOME].includes(piece.node)).forEach((piece) => {
+      const key = `${piece.node}:${piece.stackId || "legacy"}`;
+      stacks.set(key, (stacks.get(key) || 0) + 1);
+    });
+    const waitingPieces = player.pieces.filter((piece) => piece.node === WAIT);
+    const canUseReserve = isCurrent && this.canControlTurn() && this.game.turn.results.length && !player.eliminated && !this.locked && !this.onlineBusy;
     return `
       <article class="player-card ${isCurrent ? "current" : ""} ${expanded ? "expanded" : ""} ${player.eliminated ? "eliminated" : ""} ${disconnected ? "disconnected" : ""}" style="--player:${COLORS[player.color]}" data-slot="${index}" data-player-card="${player.id}">
         <header><span class="player-token">${index + 1}</span><div><small>${COLOR_LABELS[player.color]} 팀</small><h2>${escapeHtml(player.name)}</h2></div>${player.eliminated ? '<b class="eliminated-pill">탈락</b>' : disconnected ? '<b class="disconnect-pill">연결 끊김</b>' : isCurrent ? '<b class="turn-pill">TURN</b>' : ""}<button class="player-toggle" data-player-toggle="${player.id}" aria-label="${escapeHtml(player.name)} 정보 ${expanded ? "접기" : "펼치기"}" aria-expanded="${expanded}">⌄</button></header>
@@ -538,8 +549,9 @@ class GameApp {
           <span><b>${summary.onBoard}</b><small>판 위</small></span>
           <span><b>${summary.finished}</b><small>완주</small></span>
         </div>
-        <div class="mini-pieces" aria-label="말 현황">
-          ${player.pieces.map((piece) => `<i class="${piece.node === HOME ? "finished" : piece.node === WAIT ? "waiting" : "active"} type-${piece.type}" title="말 ${piece.number} · ${piece.type}: ${this.nodeLabel(piece.node)}"></i>`).join("")}
+        <div class="reserve-row"><span>내 말</span><small>판에 나가면 하나씩 줄어듭니다</small></div>
+        <div class="reserve-pieces" aria-label="대기 중인 말 ${waitingPieces.length}개">
+          ${waitingPieces.length ? waitingPieces.map((piece) => `<button type="button" data-direct-piece="${piece.id}" class="reserve-piece type-${piece.type} ${piece.id === this.selectedPieceId ? "selected" : ""}" title="말 ${piece.number}을 바로 이동" aria-label="대기 말 ${piece.number} 선택" ${canUseReserve ? "" : "disabled"}><span>${piece.type === "normal" ? "" : "✦"}</span></button>`).join("") : '<em>대기 중인 말 없음</em>'}
         </div>
         <div class="augment-owned" aria-label="보유 증강">
           ${player.augments.length ? player.augments.map((augment) => {
@@ -551,6 +563,7 @@ class GameApp {
         ${this.playerStatusMarkup(player)}
         ${stacks.size ? `<p class="stack-note">업힌 묶음 ${[...stacks.values()].filter((count) => count > 1).length}개</p>` : ""}
         </div>
+        ${player.eliminated ? '<span class="elimination-cross" aria-hidden="true">×</span>' : ""}
       </article>`;
   }
 
@@ -708,7 +721,10 @@ class GameApp {
         const seenNodes = new Set();
         const stackTarget = ["ownStack", "twoStacks", "largeStack", "tripleStack"].includes(definition.targetType);
         const selected = new Set(mode.selectedPieceIds || []);
-        body = `<p>${["normalPiece", "waitingNormalPiece"].includes(definition.targetType) ? "변환할 일반말" : definition.targetType === "twoStacks" ? "서로 다른 말뭉치 두 개" : definition.targetType === "ownBoardPiece" ? "희생할 말 하나" : "능력을 적용할 말뭉치"}를 고르세요.</p><div class="piece-targets">${pieces.filter((piece) => !stackTarget || !seenNodes.has(piece.node) && seenNodes.add(piece.node)).map((piece) => `<button data-ability-piece="${piece.id}" class="${selected.has(piece.id) ? "selected" : ""}"><i class="type-${piece.type}"></i><b>말 ${piece.number}${stackTarget ? ` · ${this.game.getStack(player, piece).length}개` : ""}</b><span>${this.nodeLabel(piece.node)}</span></button>`).join("")}</div>${definition.targetType === "twoStacks" && selected.size === 2 ? '<button class="btn btn-primary full" data-two-stack-confirm>바둑 실행</button>' : ""}`;
+        body = `<p>${["normalPiece", "waitingNormalPiece"].includes(definition.targetType) ? "변환할 일반말" : definition.targetType === "twoStacks" ? "서로 다른 말뭉치 두 개" : definition.targetType === "ownBoardPiece" ? "희생할 말 하나" : "능력을 적용할 말뭉치"}를 고르세요.</p><div class="piece-targets">${pieces.filter((piece) => {
+          const stackKey = `${piece.node}:${piece.stackId || "legacy"}`;
+          return !stackTarget || !seenNodes.has(stackKey) && seenNodes.add(stackKey);
+        }).map((piece) => `<button data-ability-piece="${piece.id}" class="${selected.has(piece.id) ? "selected" : ""}"><i class="type-${piece.type}"></i><b>말 ${piece.number}${stackTarget ? ` · ${this.game.getStack(player, piece).length}개` : ""}</b><span>${this.nodeLabel(piece.node)}</span></button>`).join("")}</div>${definition.targetType === "twoStacks" && selected.size === 2 ? '<button class="btn btn-primary full" data-two-stack-confirm>바둑 실행</button>' : ""}`;
       }
     }
     return `<div class="overlay ability-overlay"><section class="ability-modal" style="--player:${COLORS[player.color]}"><button class="modal-close" data-ability-close aria-label="취소">×</button><p class="eyebrow">TARGET MODE</p><h2>${escapeHtml(title)}</h2>${body}</section></div>`;
@@ -771,6 +787,7 @@ class GameApp {
     if (this.game.status === "finished") return "게임 종료";
     if (!this.canControlTurn()) return "상대 차례";
     if (this.game.turn.throwsRemaining > 0 && !this.game.turn.results.length) return "STEP 1 · 던지기";
+    if (!result && this.selectedPieceId) return "STEP 2 · 이동 결과 선택";
     if (!result && this.game.turn.results.length) return "STEP 2 · 결과 선택";
     if (result && !this.selectedPieceId) return "STEP 3 · 말 선택";
     if (result) return "STEP 4 · 경로 선택";
@@ -781,7 +798,8 @@ class GameApp {
     if (this.game.augmentDraft?.active) return this.game.augmentDraft.online ? this.game.augmentDraft.done ? "다른 플레이어의 선택을 기다리는 중" : "내 기기에 공개된 후보 중 하나를 고르세요" : `${this.game.draftPlayer.name}의 선택을 기다리는 중`;
     if (this.game.status === "finished") return "승자가 결정되었습니다";
     if (!this.canControlTurn()) return `${this.game.currentPlayer.name}의 행동을 기다리고 있습니다`;
-    if (!result && this.game.turn.results.length) return "쓸 이동 결과를 고르세요";
+    if (!result && this.selectedPieceId) return "선택한 말에 사용할 이동 결과를 고르세요";
+    if (!result && this.game.turn.results.length) return "결과를 고르거나, 플레이어 패널의 대기 말을 바로 누르세요";
     if (result && !this.selectedPieceId) return `${result.label}로 움직일 말을 고르세요`;
     if (pathOptions.length > 1) return "갈림길에서 경로를 고르세요";
     if (pathOptions.length === 1) return "예상 경로를 확인하고 이동을 확정하세요";
@@ -798,6 +816,24 @@ class GameApp {
         ${visiblePlayers.flatMap((owner) => owner.pieces.map((piece) => `<button data-piece="${piece.id}" class="piece-choice ${piece.id === this.selectedPieceId ? "selected" : ""}" style="--piece-color:${COLORS[owner.color]}" ${!this.canControlTurn() || !movable.has(piece.id) || this.locked || this.onlineBusy ? "disabled" : ""}><i></i><b>${owner.id === this.game.currentPlayer.id ? "" : `${escapeHtml(owner.name)} · `}말 ${piece.number}</b><span>${this.nodeLabel(piece.node)}</span></button>`)).join("")}
         ${pathOptions.length ? `<div class="route-choices">${pathOptions.map((option, index) => `<button data-route="${index}" class="route-choice"><b>${pathOptions.length === 1 ? "이동 확정" : option.label}</b><span>${this.nodeLabel(option.target)} 도착</span></button>`).join("")}</div>` : ""}
       </div>`;
+  }
+
+  stackChoiceMarkup() {
+    const pending = this.pendingMove;
+    const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === pending.pieceId));
+    const piece = owner?.pieces.find((candidate) => candidate.id === pending.pieceId);
+    return `<div class="overlay stack-choice-overlay" role="dialog" aria-modal="true" aria-labelledby="stack-choice-title">
+      <section class="stack-choice-card" style="--player:${COLORS[owner?.color] || "#f2b51d"}">
+        <p class="eyebrow">같은 칸에 내 말이 있습니다</p>
+        <h2 id="stack-choice-title">말을 업을까요?</h2>
+        <p>말 ${piece?.number || ""}을 기존 말과 한 묶음으로 움직이거나, 같은 칸에 따로 둘 수 있습니다. 따로 두어도 상대에게 잡히면 그 칸의 말은 모두 잡힙니다.</p>
+        <div class="stack-choice-actions">
+          <button type="button" data-stack-choice="stack"><span>●●</span><b>업기</b><small>다음부터 함께 이동</small></button>
+          <button type="button" data-stack-choice="separate"><span>● · ●</span><b>따로 두기</b><small>각 말뭉치를 따로 이동</small></button>
+        </div>
+        <button type="button" class="selection-cancel" data-stack-choice-cancel>이동 취소</button>
+      </section>
+    </div>`;
   }
 
   nodeLabel(node) {
@@ -838,7 +874,7 @@ class GameApp {
     const activateHoveredRoute = () => {
       if (!this.selectedPieceId || !this.board.hoveredNode || this.locked) return;
       const index = pathOptions.findIndex((option) => option.target === this.board.hoveredNode);
-      if (index >= 0) this.performMove(this.selectedPieceId, index);
+      if (index >= 0) this.prepareMove(this.selectedPieceId, index);
     };
     canvas.addEventListener("click", activateHoveredRoute);
     canvas.addEventListener("keydown", (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); activateHoveredRoute(); } });
@@ -848,10 +884,18 @@ class GameApp {
     this.root.querySelector('[data-action="throw"]')?.addEventListener("click", () => this.handleThrow());
     this.root.querySelectorAll("[data-throw-label]").forEach((button) => button.addEventListener("click", () => this.handleThrow(button.dataset.throwLabel)));
     this.root.querySelector('[data-action="end-turn"]')?.addEventListener("click", () => this.handleEndTurn());
-    this.root.querySelector('[data-action="cancel-selection"]')?.addEventListener("click", () => { this.selectedResultId = null; this.selectedPieceId = null; this.renderGame(); });
+    this.root.querySelector('[data-action="cancel-selection"]')?.addEventListener("click", () => { this.selectedResultId = null; this.selectedPieceId = null; this.pendingMove = null; this.renderGame(); });
     this.root.querySelectorAll("[data-result]").forEach((button) => button.addEventListener("click", () => this.selectResult(button.dataset.result)));
     this.root.querySelectorAll("[data-piece]").forEach((button) => button.addEventListener("click", () => this.selectPiece(button.dataset.piece)));
-    this.root.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => this.performMove(this.selectedPieceId, Number(button.dataset.route))));
+    this.root.querySelectorAll("[data-direct-piece]").forEach((button) => button.addEventListener("click", () => this.selectDirectPiece(button.dataset.directPiece)));
+    this.root.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => this.prepareMove(this.selectedPieceId, Number(button.dataset.route))));
+    this.root.querySelectorAll("[data-stack-choice]").forEach((button) => button.addEventListener("click", () => {
+      const pending = this.pendingMove;
+      if (!pending) return;
+      this.pendingMove = null;
+      this.performMove(pending.pieceId, pending.optionIndex, button.dataset.stackChoice, pending.resultId);
+    }));
+    this.root.querySelector("[data-stack-choice-cancel]")?.addEventListener("click", () => { this.pendingMove = null; this.renderGame(); });
     this.root.querySelectorAll("[data-augment]").forEach((button) => button.addEventListener("click", () => this.openAugmentAbility(button.dataset.augment)));
     this.root.querySelectorAll("[data-special]").forEach((button) => button.addEventListener("click", () => this.openSpecialAbility(button.dataset.special)));
     this.root.querySelectorAll("[data-draft-augment]").forEach((button) => button.addEventListener("click", () => this.chooseDraftAugment(button.dataset.draftAugment)));
@@ -912,6 +956,7 @@ class GameApp {
       this.lastThrow = this.game.throw(requestedLabel);
       this.selectedResultId = null;
       this.selectedPieceId = null;
+      this.pendingMove = null;
       this.save();
       this.throwFx = { label: this.lastThrow.label, extra: Boolean(this.lastThrow.extra), count: this.lastThrow.sticks?.length || 0 };
       this.renderGame();
@@ -940,9 +985,41 @@ class GameApp {
       this.renderGame();
       return;
     }
+    const directPieceId = this.selectedResultId ? null : this.selectedPieceId;
     this.selectedResultId = this.selectedResultId === resultId ? null : resultId;
-    this.selectedPieceId = null;
+    if (!this.selectedResultId) this.selectedPieceId = null;
+    else if (directPieceId) {
+      const movable = this.game.getMovablePieces(resultId).some((piece) => piece.id === directPieceId);
+      this.selectedPieceId = movable ? directPieceId : null;
+      if (movable) {
+        const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === directPieceId));
+        const piece = owner?.pieces.find((candidate) => candidate.id === directPieceId);
+        const result = this.game.getResult(resultId);
+        const options = this.game.getMoveOptionsForPiece(piece, result, owner);
+        if (options.length === 1) return this.prepareMove(directPieceId, 0);
+      }
+    } else this.selectedPieceId = null;
     this.renderGame();
+  }
+
+  selectDirectPiece(pieceId) {
+    if (this.locked || this.onlineBusy || !this.canControlTurn()) return;
+    const candidates = this.game.turn.results.filter((result) => !result.hidden
+      && this.game.getMovablePieces(result.id).some((piece) => piece.id === pieceId));
+    if (!candidates.length) return this.toast("이 말을 움직일 수 있는 결과가 없습니다.");
+    this.selectedPieceId = pieceId;
+    if (candidates.length > 1) {
+      this.selectedResultId = null;
+      this.announceEvent("말 선택 완료", "이 말에 사용할 이동 결과를 눌러 주세요.", "guide");
+      this.renderGame();
+      return;
+    }
+    this.selectedResultId = candidates[0].id;
+    const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === pieceId));
+    const piece = owner?.pieces.find((candidate) => candidate.id === pieceId);
+    const options = this.game.getMoveOptionsForPiece(piece, candidates[0], owner);
+    if (options.length === 1) this.prepareMove(pieceId, 0);
+    else this.renderGame();
   }
 
   selectPiece(pieceId) {
@@ -956,21 +1033,40 @@ class GameApp {
     this.renderGame();
   }
 
-  async performMove(pieceId, optionIndex) {
+  prepareMove(pieceId, optionIndex) {
     if (this.locked) return;
+    const result = this.game.getResult(this.selectedResultId);
+    const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === pieceId));
+    const piece = owner?.pieces.find((candidate) => candidate.id === pieceId);
+    const option = piece && result ? this.game.getMoveOptionsForPiece(piece, result, owner)[optionIndex] : null;
+    if (!option) return this.toast("선택한 경로로 이동할 수 없습니다.");
+    const moving = this.game.getStack(owner, piece);
+    if (this.game.needsStackChoice(owner, moving, option.target)) {
+      this.pendingMove = { pieceId, resultId: result.id, optionIndex, target: option.target };
+      this.renderGame();
+      return;
+    }
+    this.performMove(pieceId, optionIndex, "stack", result.id);
+  }
+
+  async performMove(pieceId, optionIndex, stackMode = "stack", resultIdOverride = null) {
+    if (this.locked) return;
+    const resultId = resultIdOverride || this.selectedResultId;
     if (this.isOnlineGame()) {
-      const resultId = this.selectedResultId;
       this.selectedResultId = null;
       this.selectedPieceId = null;
-      await this.sendOnlineCommand("move", { pieceId, resultId, optionIndex });
+      await this.sendOnlineCommand("move", { pieceId, resultId, optionIndex, stackMode });
       return;
     }
     this.locked = true;
     try {
-      const event = this.game.move(pieceId, this.selectedResultId, optionIndex);
+      const event = this.game.move(pieceId, resultId, optionIndex, stackMode);
       this.selectedResultId = null;
       this.selectedPieceId = null;
       this.save();
+      if (event.capturedIds.length) this.announceEvent("잡았다!", `상대 말 ${event.capturedIds.length}개를 잡아 한 번 더 던집니다.`, "capture");
+      else if (event.target === HOME) this.announceEvent("완주!", "말이 결승점에 도착했습니다.", "finish");
+      else if (stackMode === "separate") this.announceEvent("따로 두기", "같은 칸에서 서로 다른 말뭉치로 이동합니다.", "guide");
       this.renderGame();
       this.locked = true;
       await this.board.animateMove(event, this.game.settings.animationSpeed);
@@ -1075,9 +1171,11 @@ class GameApp {
     }
     this.locked = true;
     try {
-      const outcome = this.game.useAugment(this.abilityMode.augmentId, payload);
+      const augmentId = this.abilityMode.augmentId;
+      const outcome = this.game.useAugment(augmentId, payload);
       this.abilityMode = null;
       this.save();
+      this.announceEvent(AUGMENTS_BY_ID[augmentId]?.name || "능력 발동!", this.game.logs[0]?.message || "증강 효과가 적용되었습니다.", "augment");
       if (outcome.event) {
         this.renderGame();
         this.locked = true;
@@ -1121,6 +1219,7 @@ class GameApp {
       this.lastThrow = null;
       this.selectedResultId = null;
       this.selectedPieceId = null;
+      this.pendingMove = null;
       this.abilityMode = null;
       this.save();
       this.renderGame();
@@ -1133,6 +1232,15 @@ class GameApp {
     toast.textContent = message;
     toast.classList.add("show");
     setTimeout(() => toast.classList.remove("show"), 2200);
+  }
+
+  announceEvent(title, message, tone = "info") {
+    clearTimeout(this.eventFxTimer);
+    this.eventFx = { title, message, tone };
+    this.eventFxTimer = setTimeout(() => {
+      this.eventFx = null;
+      if (this.game) this.renderGame();
+    }, 1800);
   }
 
   victoryMarkup() {
@@ -1157,7 +1265,7 @@ class GameApp {
       <div class="rule-grid">
         <article><b>1</b><h3>던지기</h3><p>윷을 던져 도 1, 개 2, 걸 3, 윷 4, 모 5칸 결과를 얻습니다. 윷·모와 상대 말 잡기는 추가 던지기를 줍니다.</p></article>
         <article><b>2</b><h3>움직이기</h3><p>저장된 결과를 원하는 순서로 고르고 말을 이동합니다. 갈림길에 정확히 멈췄을 때만 다음 이동에서 지름길을 고를 수 있습니다.</p></article>
-        <article><b>3</b><h3>업기와 잡기</h3><p>내 말과 같은 칸에 닿으면 함께 업혀 움직입니다. 상대 말과 같은 칸에 닿으면 모두 대기로 돌려보냅니다.</p></article>
+        <article><b>3</b><h3>업기와 잡기</h3><p>내 말과 같은 칸에 닿으면 업을지 따로 둘지 선택합니다. 따로 둔 말도 상대에게 잡히면 그 칸의 말이 모두 대기로 돌아갑니다.</p></article>
         <article><b>4</b><h3>승리</h3><p>내 말 네 개를 먼저 모두 완주시킨 플레이어가 승리합니다. 백도와 낙은 시작 설정에 따라 적용됩니다.</p></article>
       </div>` : this.codexMarkup()}</section></div>`;
   }

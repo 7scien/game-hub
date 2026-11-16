@@ -125,6 +125,37 @@ describe("온라인 방 보안과 수명 주기", () => {
     expect(created.room.game.currentPlayer.pieces[0].node).toBe(originalNode);
     expect(manager.auditRooms().ok).toBe(true);
   });
+
+  it("서버가 업기·따로 두기를 판정하고 변조된 배치 방식은 거부한다", () => {
+    const manager = new RoomManager({ rng: () => 0.4 });
+    const created = create(manager, { maxPlayers: 2 });
+    startTwo(manager, created);
+    const game = created.room.game;
+    created.room.onlineDraft = null;
+    game.augmentDraft = { active: false, online: true };
+    const actor = created.room.players.find((player) => player.gamePlayerId === game.currentPlayer.id);
+    const [moving, waitingAtTarget] = game.currentPlayer.pieces;
+    moving.node = "R1";
+    waitingAtTarget.node = "R2";
+    game.turn = { throwsRemaining: 0, results: [{ id: "server-separate", label: "도", steps: 1 }], specialUsed: {}, moveMultiplier: 1, isEchoSecond: false };
+
+    manager.executeCommand(created.room.code, actor.id, {
+      commandId: "separate-ok",
+      expectedSequence: created.room.sequence,
+      type: "move",
+      payload: { pieceId: moving.id, resultId: "server-separate", optionIndex: 0, stackMode: "separate" },
+    });
+    expect(moving.node).toBe("R2");
+    expect(moving.stackId).not.toBe(waitingAtTarget.stackId);
+
+    game.turn.results = [{ id: "server-invalid", label: "도", steps: 1 }];
+    expect(() => manager.executeCommand(created.room.code, actor.id, {
+      commandId: "separate-forged",
+      expectedSequence: created.room.sequence,
+      type: "move",
+      payload: { pieceId: moving.id, resultId: "server-invalid", optionIndex: 0, stackMode: "teleport" },
+    })).toThrow(/배치 방식/u);
+  });
 });
 
 describe("요청 속도 제한", () => {

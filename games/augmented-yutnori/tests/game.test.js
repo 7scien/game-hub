@@ -57,6 +57,27 @@ describe("game rules", () => {
     expect(game.turn.throwsRemaining).toBe(1);
   });
 
+  it("can keep friendly pieces separate while a capture still removes every piece on the space", () => {
+    const game = makeGame();
+    const player = game.currentPlayer;
+    const opponent = game.players.find((candidate) => candidate.id !== player.id);
+    player.pieces[0].node = "R1";
+    player.pieces[1].node = "R2";
+    game.turn = { throwsRemaining: 0, results: [{ id: "r-separate", label: "도", steps: 1 }] };
+
+    game.move(player.pieces[0].id, "r-separate", 0, "separate");
+
+    expect(player.pieces[0].node).toBe("R2");
+    expect(player.pieces[1].node).toBe("R2");
+    expect(player.pieces[0].stackId).not.toBe(player.pieces[1].stackId);
+    expect(game.getStack(player, player.pieces[0])).toEqual([player.pieces[0]]);
+
+    opponent.pieces[0].node = "R1";
+    const capture = game.applyRelocation(opponent, [opponent.pieces[0]], "R2", { from: "R1", reason: "테스트 포획" });
+    expect(capture.capturedIds).toEqual(expect.arrayContaining([player.pieces[0].id, player.pieces[1].id]));
+    expect(player.pieces.slice(0, 2).every((piece) => piece.node === WAIT && piece.stackId == null)).toBe(true);
+  });
+
   it("keeps results until the player chooses their order", () => {
     const game = makeGame();
     game.turn = { throwsRemaining: 0, results: [{ id: "r1", label: "도", steps: 1 }, { id: "r2", label: "걸", steps: 3 }] };

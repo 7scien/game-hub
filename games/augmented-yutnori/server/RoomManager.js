@@ -466,7 +466,11 @@ export class RoomManager {
       if (requestedLabel != null && !["도", "개"].includes(requestedLabel)) throw new OnlineError("FORGED_THROW_RESULT", "클라이언트는 윷 결과를 지정할 수 없습니다.");
       return { type, result: game.throw(requestedLabel) };
     }
-    if (type === "move") return { type, event: game.move(String(payload.pieceId || ""), String(payload.resultId || ""), Number(payload.optionIndex) || 0) };
+    if (type === "move") {
+      const stackMode = payload.stackMode == null ? "stack" : String(payload.stackMode);
+      if (!["stack", "separate"].includes(stackMode)) throw new OnlineError("INVALID_STACK_MODE", "말 배치 방식이 올바르지 않습니다.");
+      return { type, event: game.move(String(payload.pieceId || ""), String(payload.resultId || ""), Number(payload.optionIndex) || 0, stackMode) };
+    }
     if (type === "discardResult") { game.discardResult(String(payload.resultId || "")); return { type }; }
     if (type === "endTurn") {
       game.endTurn();

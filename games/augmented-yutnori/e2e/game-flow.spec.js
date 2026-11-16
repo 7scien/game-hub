@@ -57,14 +57,50 @@ test("starts, selects augments, throws, moves, reloads, and resumes the save", a
   await page.evaluate(() => { window.__YUT_APP__.game.currentPlayer.pendingThrowOverride = "도"; });
   await page.locator('[data-action="throw"]').click();
   await expect(page.locator(".yut-tray")).toHaveClass(/is-throwing/);
-  await page.locator(".result-chip").first().click();
-  await page.locator(".piece-choice:not([disabled])").first().click();
-  await page.locator(".route-choice").click();
-  await expect(page.locator(".log-move").first()).toContainText("이동");
+  await expect(page.locator(".log-panel")).toHaveCount(0);
+  await page.locator(".player-card.current [data-direct-piece]").first().click();
+  await expect.poll(() => page.evaluate(() => window.__YUT_APP__.game.currentPlayer.pieces.filter((piece) => piece.node === "WAIT").length)).toBe(3);
   const savedNode = await page.evaluate(() => window.__YUT_APP__.game.currentPlayer.pieces[0].node);
   await page.reload();
   await page.getByRole("button", { name: "이어하기" }).click();
   await expect.poll(() => page.evaluate(() => window.__YUT_APP__.game.currentPlayer.pieces[0].node)).toBe(savedNode);
+});
+
+test("lays out four offline player fields horizontally on desktop", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "오프라인 플레이" }).click();
+  await page.locator('input[name="playerCount"][value="4"]').check();
+  const fields = page.locator(".player-name-field");
+  await expect(fields).toHaveCount(4);
+  const boxes = await fields.evaluateAll((nodes) => nodes.map((node) => {
+    const box = node.getBoundingClientRect();
+    return { x: box.x, y: box.y };
+  }));
+  expect(new Set(boxes.map((box) => Math.round(box.y))).size).toBe(1);
+  expect(boxes.map((box) => box.x)).toEqual([...boxes.map((box) => box.x)].sort((a, b) => a - b));
+});
+
+test("asks whether to stack or stay separate and captures both separate groups", async ({ page }) => {
+  await startGame(page, 2);
+  await page.evaluate(() => {
+    const app = window.__YUT_APP__;
+    const player = app.game.currentPlayer;
+    player.pieces[0].node = "R1";
+    player.pieces[1].node = "R2";
+    app.game.turn.throwsRemaining = 0;
+    app.game.turn.results = [{ id: `e2e-${++app.game.resultSequence}`, label: "도", steps: 1, extra: false, isNak: false, sticks: [] }];
+    app.renderGame();
+  });
+  await page.locator(".result-chip").click();
+  await page.locator('[data-piece$="-m1"]:not([disabled])').click();
+  await page.locator(".route-choice").click();
+  await expect(page.locator(".stack-choice-card")).toBeVisible();
+  await page.getByRole("button", { name: /따로 두기/ }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const pieces = window.__YUT_APP__.game.currentPlayer.pieces.slice(0, 2);
+    return pieces[0].node === "R2" && pieces[1].node === "R2" && pieces[0].stackId !== pieces[1].stackId;
+  })).toBe(true);
+  await expect(page.locator(".event-announcement")).toContainText("따로 두기");
 });
 
 test("completes a two-player match through the final UI move", async ({ page }) => {
@@ -160,6 +196,7 @@ test("handles player elimination and victory presentation", async ({ page }) => 
   });
   await expect(page.locator(".victory-card")).toBeVisible();
   await expect(page.locator(".ranking-list li")).toHaveCount(3);
+  await expect(page.locator(".elimination-cross")).toHaveCount(2);
 });
 
 test("supports mobile touch layout and collapsible player information", async ({ page }) => {
