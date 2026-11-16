@@ -52,13 +52,31 @@ async function startGame(page, players = 2) {
   await expect(page.locator(".game-screen")).toBeVisible();
 }
 
+const BOARD_POINTS = {
+  R1: [0.91, 0.75], R2: [0.91, 0.59], TR: [0.91, 0.09], T1: [0.75, 0.09],
+  DTR2: [0.77, 0.23], B4: [0.75, 0.91], HOME: [0.91, 0.91],
+};
+
+async function clickBoardNode(page, node) {
+  const [x, y] = BOARD_POINTS[node];
+  const board = page.locator("#yut-board");
+  const box = await board.boundingBox();
+  const map = (value) => 0.075 + value * 0.85;
+  await board.click({ position: { x: box.width * map(x), y: box.height * map(y) } });
+}
+
 test("starts, selects augments, throws, moves, reloads, and resumes the save", async ({ page }) => {
   await startGame(page);
-  await page.evaluate(() => { window.__YUT_APP__.game.currentPlayer.pendingThrowOverride = "도"; });
+  await page.evaluate(() => { window.__YUT_APP__.game.currentPlayer.pendingThrowOverride = "개"; });
   await page.locator('[data-action="throw"]').click();
   await expect(page.locator(".yut-tray")).toHaveClass(/is-throwing/);
   await expect(page.locator(".log-panel")).toHaveCount(0);
+  await expect(page.locator("[data-result]")).toHaveCount(0);
+  await expect(page.locator(".result-chip")).toContainText("개");
   await page.locator(".player-card.current [data-direct-piece]").first().click();
+  await expect(page.locator(".event-announcement")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.__YUT_APP__.selectedPieceId)).not.toBeNull();
+  await clickBoardNode(page, "R2");
   await expect.poll(() => page.evaluate(() => window.__YUT_APP__.game.currentPlayer.pieces.filter((piece) => piece.node === "WAIT").length)).toBe(3);
   const savedNode = await page.evaluate(() => window.__YUT_APP__.game.currentPlayer.pieces[0].node);
   await page.reload();
@@ -91,16 +109,16 @@ test("asks whether to stack or stay separate and captures both separate groups",
     app.game.turn.results = [{ id: `e2e-${++app.game.resultSequence}`, label: "도", steps: 1, extra: false, isNak: false, sticks: [] }];
     app.renderGame();
   });
-  await page.locator(".result-chip").click();
-  await page.locator('[data-piece$="-m1"]:not([disabled])').click();
-  await page.locator(".route-choice").click();
+  await clickBoardNode(page, "R1");
+  await expect.poll(() => page.evaluate(() => window.__YUT_APP__.selectedPieceId)).not.toBeNull();
+  await clickBoardNode(page, "R2");
   await expect(page.locator(".stack-choice-card")).toBeVisible();
   await page.getByRole("button", { name: /따로 두기/ }).click();
   await expect.poll(() => page.evaluate(() => {
     const pieces = window.__YUT_APP__.game.currentPlayer.pieces.slice(0, 2);
     return pieces[0].node === "R2" && pieces[1].node === "R2" && pieces[0].stackId !== pieces[1].stackId;
   })).toBe(true);
-  await expect(page.locator(".event-announcement")).toContainText("따로 두기");
+  await expect(page.locator(".event-announcement")).toHaveCount(0);
 });
 
 test("completes a two-player match through the final UI move", async ({ page }) => {
@@ -115,9 +133,8 @@ test("completes a two-player match through the final UI move", async ({ page }) 
     app.game.turn.results = [{ id: `e2e-${++app.game.resultSequence}`, label: "도", steps: 1, extra: false, isNak: false, sticks: [] }];
     app.renderGame();
   });
-  await page.locator(".result-chip").click();
-  await page.locator(".piece-choice:not([disabled])").click();
-  await page.locator(".route-choice").click();
+  await clickBoardNode(page, "B4");
+  await clickBoardNode(page, "HOME");
   await expect(page.locator(".victory-card")).toBeVisible();
   await expect(page.locator(".victory-card")).toContainText("승리");
 });
@@ -177,10 +194,12 @@ test("previews and chooses a top-right branch path", async ({ page }) => {
     app.game.turn.results = [{ id: `e2e-${++app.game.resultSequence}`, label: "도", steps: 1, extra: false, isNak: false, sticks: [] }];
     app.renderGame();
   });
-  await page.locator(".result-chip").click();
-  await page.locator(".piece-choice:not([disabled])").first().click();
-  await expect(page.locator(".route-choice")).toHaveCount(2);
-  await page.locator(".route-choice").first().click();
+  await clickBoardNode(page, "TR");
+  await expect.poll(() => page.evaluate(() => window.__YUT_APP__.moveCandidatesForPiece(
+    window.__YUT_APP__.game.currentPlayer.pieces[0],
+    window.__YUT_APP__.game.currentPlayer,
+  ).length)).toBe(2);
+  await clickBoardNode(page, "DTR2");
   await expect.poll(() => page.evaluate(() => window.__YUT_APP__.game.currentPlayer.pieces[0].node)).toBe("DTR2");
 });
 

@@ -266,6 +266,7 @@ export class BoardRenderer {
           group.pieces.some((piece) => piece.effects?.some((effect) => effect.type === "shield")),
           group.pieces,
           group.pieces.some((piece) => piece.id === selection.selectedPieceId),
+          group.pieces.some((piece) => selection.selectablePieceIds?.includes(piece.id)),
         );
       });
     }
@@ -331,9 +332,19 @@ export class BoardRenderer {
     this.drawToken(ctx, x, y, size, animation.color, animation.pieceIds.length, true);
   }
 
-  drawToken(ctx, x, y, size, color, count = 1, moving = false, types = [], shielded = false, pieces = [], selected = false) {
+  drawToken(ctx, x, y, size, color, count = 1, moving = false, types = [], shielded = false, pieces = [], selected = false, selectable = false) {
     const radius = size * 0.031;
     ctx.save();
+    if (selectable && !selected) {
+      ctx.beginPath();
+      ctx.arc(x, y, radius * (1.42 + Math.sin(this.fxPhase * .3) * .06), 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(58,143,240,.86)";
+      ctx.lineWidth = size * .005;
+      ctx.setLineDash([size * .009, size * .006]);
+      ctx.lineDashOffset = -this.fxPhase;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     if (selected) {
       ctx.beginPath();
       ctx.arc(x, y, radius * (1.55 + Math.sin(this.fxPhase * .35) * .08), 0, Math.PI * 2);

@@ -449,10 +449,10 @@ class GameApp {
     const current = this.game.currentPlayer;
     const controlPlayer = this.onlineViewer() || current;
     const canControl = this.canControlTurn();
-    const result = this.game.getResult(this.selectedResultId);
     const selectedOwner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === this.selectedPieceId));
     const selectedPiece = selectedOwner?.pieces.find((piece) => piece.id === this.selectedPieceId);
-    const pathOptions = result && selectedPiece ? this.game.getMoveOptionsForPiece(selectedPiece, result, selectedOwner) : [];
+    const moveCandidates = selectedPiece ? this.moveCandidatesForPiece(selectedPiece, selectedOwner) : [];
+    const selectablePieceIds = this.selectablePieceIds();
 
     this.root.innerHTML = `
       <main class="game-screen">
@@ -490,13 +490,12 @@ class GameApp {
           </div>
           <div class="action-content">
             <div class="action-instruction">
-              <div><span>${this.actionStep(result)}</span><strong>${this.actionInstruction(result, pathOptions)}</strong></div>
-              ${result || this.selectedPieceId ? '<button class="selection-cancel" data-action="cancel-selection">선택 취소</button>' : ""}
+              <div><span>${this.actionStep()}</span><strong>${this.actionInstruction(moveCandidates)}</strong></div>
+              ${this.selectedPieceId ? '<button class="selection-cancel" data-action="cancel-selection">선택 취소</button>' : ""}
             </div>
             <div class="result-list">
-              ${this.game.turn.results.length ? this.game.turn.results.map((item) => `<button class="result-chip ${item.id === this.selectedResultId ? "selected" : ""}" data-result="${item.id}" ${item.hidden || this.locked || this.onlineBusy || !canControl ? "disabled" : ""}><b>${item.hidden ? "?" : item.label}</b><span>${item.hidden ? "판정 중" : item.steps > 0 ? `${item.steps}칸` : "뒤로 1칸"}</span></button>`).join("") : '<span class="empty-results">저장된 이동 결과 없음</span>'}
+              ${this.game.turn.results.length ? this.game.turn.results.map((item) => `<div class="result-chip readonly" aria-label="이동 결과 ${item.hidden ? "비공개" : item.label}"><b>${item.hidden ? "?" : item.label}</b><span>${item.hidden ? "판정 중" : item.steps > 0 ? `${item.steps}칸` : "뒤로 1칸"}</span></div>`).join("") : '<span class="empty-results">저장된 이동 결과 없음</span>'}
             </div>
-            ${result ? this.pieceChoices(result, pathOptions) : ""}
             ${this.augmentBar(controlPlayer, canControl)}
           </div>
           <div class="primary-controls">
@@ -516,14 +515,15 @@ class GameApp {
 
     const canvas = this.root.querySelector("#yut-board");
     this.board = new BoardRenderer(canvas, this.game);
-    const previewPaths = pathOptions.map((option) => [selectedPiece?.node, ...option.pathNodes].filter(Boolean));
+    const previewPaths = moveCandidates.map((candidate) => [selectedPiece?.node, ...candidate.displayPathNodes].filter(Boolean));
     this.board.draw({
-      targetNodes: [...pathOptions.map((option) => option.target), ...this.abilityTargetNodes()].filter((node) => node !== HOME),
+      targetNodes: [...moveCandidates.map((candidate) => candidate.displayTarget), ...this.abilityTargetNodes()],
       previewNodes: previewPaths.flat(),
       previewPaths,
       selectedPieceId: this.selectedPieceId,
+      selectablePieceIds: [...selectablePieceIds],
     });
-    this.bindBoard(canvas, pathOptions);
+    this.bindBoard(canvas, moveCandidates);
     this.bindGame();
   }
 
@@ -782,40 +782,63 @@ class GameApp {
     return `<div class="overlay interaction-overlay"><section class="ability-modal interaction-modal"><p class="eyebrow">${this.isOnlineGame() ? "ONLINE INTERACTION" : "LOCAL INTERACTION"}</p><h2>${title}</h2>${body}</section></div>`;
   }
 
-  actionStep(result) {
+  selectablePieceIds() {
+    const ids = new Set();
+    for (const result of this.game.turn.results.filter((item) => !item.hidden)) {
+      this.game.getMovablePieces(result.id).forEach((piece) => ids.add(piece.id));
+    }
+    return ids;
+  }
+
+  moveCandidatesForPiece(piece, owner) {
+    if (!piece || !owner) return [];
+    const selectable = this.selectablePieceIds();
+    if (!selectable.has(piece.id)) return [];
+    return this.game.turn.results.filter((result) => !result.hidden).flatMap((result) => {
+      if (!this.game.getMovablePieces(result.id).some((candidate) => candidate.id === piece.id)) return [];
+      return this.game.getMoveOptionsForPiece(piece, result, owner).map((option, optionIndex) => ({
+        ...option,
+        optionIndex,
+        resultId: result.id,
+        resultLabel: result.label,
+        displayTarget: option.target === WAIT ? HOME : option.target,
+        displayPathNodes: option.pathNodes.map((node) => node === WAIT ? HOME : node),
+      }));
+    });
+  }
+
+  selectablePiecesAtNode(node) {
+    const selectable = this.selectablePieceIds();
+    const seen = new Set();
+    return this.game.players.flatMap((owner) => owner.pieces
+      .filter((piece) => piece.node === node && selectable.has(piece.id))
+      .filter((piece) => {
+        const key = `${owner.id}:${piece.node}:${piece.stackId || "legacy"}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }));
+  }
+
+  actionStep() {
     if (this.game.augmentDraft?.active) return "증강 선택";
     if (this.game.status === "finished") return "게임 종료";
     if (!this.canControlTurn()) return "상대 차례";
     if (this.game.turn.throwsRemaining > 0 && !this.game.turn.results.length) return "STEP 1 · 던지기";
-    if (!result && this.selectedPieceId) return "STEP 2 · 이동 결과 선택";
-    if (!result && this.game.turn.results.length) return "STEP 2 · 결과 선택";
-    if (result && !this.selectedPieceId) return "STEP 3 · 말 선택";
-    if (result) return "STEP 4 · 경로 선택";
+    if (this.game.turn.results.length && !this.selectedPieceId) return "STEP 2 · 말 선택";
+    if (this.selectedPieceId) return "STEP 3 · 도착 칸 선택";
     return "마무리";
   }
 
-  actionInstruction(result, pathOptions) {
+  actionInstruction(moveCandidates) {
     if (this.game.augmentDraft?.active) return this.game.augmentDraft.online ? this.game.augmentDraft.done ? "다른 플레이어의 선택을 기다리는 중" : "내 기기에 공개된 후보 중 하나를 고르세요" : `${this.game.draftPlayer.name}의 선택을 기다리는 중`;
     if (this.game.status === "finished") return "승자가 결정되었습니다";
     if (!this.canControlTurn()) return `${this.game.currentPlayer.name}의 행동을 기다리고 있습니다`;
-    if (!result && this.selectedPieceId) return "선택한 말에 사용할 이동 결과를 고르세요";
-    if (!result && this.game.turn.results.length) return "결과를 고르거나, 플레이어 패널의 대기 말을 바로 누르세요";
-    if (result && !this.selectedPieceId) return `${result.label}로 움직일 말을 고르세요`;
-    if (pathOptions.length > 1) return "갈림길에서 경로를 고르세요";
-    if (pathOptions.length === 1) return "예상 경로를 확인하고 이동을 확정하세요";
+    if (this.game.turn.results.length && !this.selectedPieceId) return "대기 말이나 판 위의 내 말을 누르세요";
+    if (this.selectedPieceId && moveCandidates.length) return "빛나는 도착 칸을 누르면 이동합니다";
     if (this.game.turn.throwsRemaining > 0) return "윷을 힘차게 던져보세요";
     if (this.game.canEndTurn()) return "모든 행동을 마쳤습니다";
     return "이동 결과를 처리해 주세요";
-  }
-
-  pieceChoices(result, pathOptions) {
-    const movable = new Set(this.game.getMovablePieces(result.id).map((piece) => piece.id));
-    const visiblePlayers = this.game.augments.has(this.game.currentPlayer, "hypnosis") ? this.game.players : [this.game.currentPlayer];
-    return `
-      <div class="piece-choices">
-        ${visiblePlayers.flatMap((owner) => owner.pieces.map((piece) => `<button data-piece="${piece.id}" class="piece-choice ${piece.id === this.selectedPieceId ? "selected" : ""}" style="--piece-color:${COLORS[owner.color]}" ${!this.canControlTurn() || !movable.has(piece.id) || this.locked || this.onlineBusy ? "disabled" : ""}><i></i><b>${owner.id === this.game.currentPlayer.id ? "" : `${escapeHtml(owner.name)} · `}말 ${piece.number}</b><span>${this.nodeLabel(piece.node)}</span></button>`)).join("")}
-        ${pathOptions.length ? `<div class="route-choices">${pathOptions.map((option, index) => `<button data-route="${index}" class="route-choice"><b>${pathOptions.length === 1 ? "이동 확정" : option.label}</b><span>${this.nodeLabel(option.target)} 도착</span></button>`).join("")}</div>` : ""}
-      </div>`;
   }
 
   stackChoiceMarkup() {
@@ -848,12 +871,16 @@ class GameApp {
     const pieces = this.game.players.flatMap((player) => player.pieces.filter((piece) => piece.node === node).map((piece) => ({ player, piece })));
     const markers = (this.game.boardState.markers || []).filter((marker) => marker.node === node);
     const details = [];
+    const selectedOwner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === this.selectedPieceId));
+    const selectedPiece = selectedOwner?.pieces.find((piece) => piece.id === this.selectedPieceId);
+    const arrivals = this.moveCandidatesForPiece(selectedPiece, selectedOwner).filter((candidate) => candidate.displayTarget === node);
+    if (arrivals.length) details.push(`도착 가능: ${[...new Set(arrivals.map((candidate) => candidate.resultLabel))].join(" · ")}`);
     if (pieces.length) details.push(...pieces.map(({ player, piece }) => `${player.name} 말 ${piece.number}${piece.type !== "normal" ? ` · ${piece.type}` : ""}`));
     if (markers.length) details.push(...markers.map((marker) => ({ trap: "함정", reward: "보상", garlic: "마늘", campfire: "화톳불", sharpshooter: "명사수 표적", assassin: "암살자의 영혼", poop: "장애물" }[marker.type] || marker.type)));
     return `<b>${escapeHtml(this.nodeLabel(node))}</b><span>${escapeHtml(details.join(" · ") || "비어 있는 칸")}</span>`;
   }
 
-  bindBoard(canvas, pathOptions) {
+  bindBoard(canvas, moveCandidates) {
     const tooltip = this.root.querySelector(".board-tooltip");
     const stage = this.root.querySelector(".board-stage");
     const updateHover = (event) => {
@@ -871,13 +898,23 @@ class GameApp {
     };
     canvas.addEventListener("pointermove", updateHover);
     canvas.addEventListener("pointerleave", () => { this.board.setHoveredNode(null); tooltip?.classList.remove("visible"); });
-    const activateHoveredRoute = () => {
-      if (!this.selectedPieceId || !this.board.hoveredNode || this.locked) return;
-      const index = pathOptions.findIndex((option) => option.target === this.board.hoveredNode);
-      if (index >= 0) this.prepareMove(this.selectedPieceId, index);
+    const activateNode = (node) => {
+      if (!node || this.locked || this.onlineBusy || !this.canControlTurn()) return;
+      if (this.selectedPieceId) {
+        const candidate = moveCandidates.find((option) => option.displayTarget === node);
+        if (candidate) {
+          this.selectedResultId = candidate.resultId;
+          this.prepareMove(this.selectedPieceId, candidate.optionIndex, candidate.resultId);
+          return;
+        }
+      }
+      const pieces = this.selectablePiecesAtNode(node);
+      if (!pieces.length) return;
+      const currentIndex = pieces.findIndex((piece) => piece.id === this.selectedPieceId);
+      this.selectPieceForMove(pieces[(currentIndex + 1) % pieces.length].id);
     };
-    canvas.addEventListener("click", activateHoveredRoute);
-    canvas.addEventListener("keydown", (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); activateHoveredRoute(); } });
+    canvas.addEventListener("click", (event) => activateNode(this.board.hitTest(event.clientX, event.clientY)));
+    canvas.addEventListener("keydown", (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); activateNode(this.board.hoveredNode); } });
   }
 
   bindGame() {
@@ -885,10 +922,7 @@ class GameApp {
     this.root.querySelectorAll("[data-throw-label]").forEach((button) => button.addEventListener("click", () => this.handleThrow(button.dataset.throwLabel)));
     this.root.querySelector('[data-action="end-turn"]')?.addEventListener("click", () => this.handleEndTurn());
     this.root.querySelector('[data-action="cancel-selection"]')?.addEventListener("click", () => { this.selectedResultId = null; this.selectedPieceId = null; this.pendingMove = null; this.renderGame(); });
-    this.root.querySelectorAll("[data-result]").forEach((button) => button.addEventListener("click", () => this.selectResult(button.dataset.result)));
-    this.root.querySelectorAll("[data-piece]").forEach((button) => button.addEventListener("click", () => this.selectPiece(button.dataset.piece)));
-    this.root.querySelectorAll("[data-direct-piece]").forEach((button) => button.addEventListener("click", () => this.selectDirectPiece(button.dataset.directPiece)));
-    this.root.querySelectorAll("[data-route]").forEach((button) => button.addEventListener("click", () => this.prepareMove(this.selectedPieceId, Number(button.dataset.route))));
+    this.root.querySelectorAll("[data-direct-piece]").forEach((button) => button.addEventListener("click", () => this.selectPieceForMove(button.dataset.directPiece)));
     this.root.querySelectorAll("[data-stack-choice]").forEach((button) => button.addEventListener("click", () => {
       const pending = this.pendingMove;
       if (!pending) return;
@@ -973,69 +1007,19 @@ class GameApp {
     this.renderGame();
   }
 
-  selectResult(resultId) {
-    if (this.locked) return;
-    if (!this.game.getMovablePieces(resultId).length) {
-      if (this.isOnlineGame()) {
-        this.sendOnlineCommand("discardResult", { resultId });
-        return;
-      }
-      this.game.discardResult(resultId);
-      this.save();
-      this.renderGame();
-      return;
-    }
-    const directPieceId = this.selectedResultId ? null : this.selectedPieceId;
-    this.selectedResultId = this.selectedResultId === resultId ? null : resultId;
-    if (!this.selectedResultId) this.selectedPieceId = null;
-    else if (directPieceId) {
-      const movable = this.game.getMovablePieces(resultId).some((piece) => piece.id === directPieceId);
-      this.selectedPieceId = movable ? directPieceId : null;
-      if (movable) {
-        const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === directPieceId));
-        const piece = owner?.pieces.find((candidate) => candidate.id === directPieceId);
-        const result = this.game.getResult(resultId);
-        const options = this.game.getMoveOptionsForPiece(piece, result, owner);
-        if (options.length === 1) return this.prepareMove(directPieceId, 0);
-      }
-    } else this.selectedPieceId = null;
-    this.renderGame();
-  }
-
-  selectDirectPiece(pieceId) {
+  selectPieceForMove(pieceId) {
     if (this.locked || this.onlineBusy || !this.canControlTurn()) return;
-    const candidates = this.game.turn.results.filter((result) => !result.hidden
-      && this.game.getMovablePieces(result.id).some((piece) => piece.id === pieceId));
-    if (!candidates.length) return this.toast("이 말을 움직일 수 있는 결과가 없습니다.");
-    this.selectedPieceId = pieceId;
-    if (candidates.length > 1) {
-      this.selectedResultId = null;
-      this.announceEvent("말 선택 완료", "이 말에 사용할 이동 결과를 눌러 주세요.", "guide");
-      this.renderGame();
-      return;
-    }
-    this.selectedResultId = candidates[0].id;
     const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === pieceId));
     const piece = owner?.pieces.find((candidate) => candidate.id === pieceId);
-    const options = this.game.getMoveOptionsForPiece(piece, candidates[0], owner);
-    if (options.length === 1) this.prepareMove(pieceId, 0);
-    else this.renderGame();
-  }
-
-  selectPiece(pieceId) {
-    const result = this.game.getResult(this.selectedResultId);
-    if (!result || this.locked) return;
-    const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === pieceId));
-    const piece = owner?.pieces.find((candidate) => candidate.id === pieceId);
-    const options = this.game.getMoveOptionsForPiece(piece, result, owner);
-    if (!options.length) return;
+    if (!piece || !this.selectablePieceIds().has(piece.id)) return this.toast("이 말을 움직일 수 있는 결과가 없습니다.");
     this.selectedPieceId = this.selectedPieceId === pieceId ? null : pieceId;
+    this.selectedResultId = null;
     this.renderGame();
   }
 
-  prepareMove(pieceId, optionIndex) {
+  prepareMove(pieceId, optionIndex, resultIdOverride = null) {
     if (this.locked) return;
-    const result = this.game.getResult(this.selectedResultId);
+    const result = this.game.getResult(resultIdOverride || this.selectedResultId);
     const owner = this.game.players.find((player) => player.pieces.some((piece) => piece.id === pieceId));
     const piece = owner?.pieces.find((candidate) => candidate.id === pieceId);
     const option = piece && result ? this.game.getMoveOptionsForPiece(piece, result, owner)[optionIndex] : null;
@@ -1066,7 +1050,6 @@ class GameApp {
       this.save();
       if (event.capturedIds.length) this.announceEvent("잡았다!", `상대 말 ${event.capturedIds.length}개를 잡아 한 번 더 던집니다.`, "capture");
       else if (event.target === HOME) this.announceEvent("완주!", "말이 결승점에 도착했습니다.", "finish");
-      else if (stackMode === "separate") this.announceEvent("따로 두기", "같은 칸에서 서로 다른 말뭉치로 이동합니다.", "guide");
       this.renderGame();
       this.locked = true;
       await this.board.animateMove(event, this.game.settings.animationSpeed);
@@ -1196,9 +1179,12 @@ class GameApp {
     }
     this.locked = true;
     try {
-      const event = this.game.useSpecialAction(this.abilityMode.actionId, payload);
+      const actionId = this.abilityMode.actionId;
+      const actionLabel = this.game.getSpecialActions().find((action) => action.id === actionId)?.label || "특수 능력";
+      const event = this.game.useSpecialAction(actionId, payload);
       this.abilityMode = null;
       this.save();
+      this.announceEvent(actionLabel, this.game.logs[0]?.message || "특수 능력이 발동했습니다.", "augment");
       if (event) {
         this.renderGame();
         this.locked = true;

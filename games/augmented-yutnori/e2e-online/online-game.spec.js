@@ -59,6 +59,19 @@ async function resolveOnlineInteractions(pages) {
   }
 }
 
+async function clickBoardNode(page, node) {
+  const board = page.locator("#yut-board");
+  const position = await page.evaluate((targetNode) => {
+    const app = window.__YUT_APP__;
+    const canvas = document.querySelector("#yut-board");
+    const rect = canvas.getBoundingClientRect();
+    const size = Math.min(rect.width, rect.height);
+    const [x, y] = app.board.mapPoint(targetNode, size);
+    return { x: (rect.width - size) / 2 + x, y: (rect.height - size) / 2 + y };
+  }, node);
+  await board.click({ position });
+}
+
 test("두 브라우저 컨텍스트가 방 생성·동기화·재접속을 수행한다", async ({ browser }) => {
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
@@ -235,16 +248,29 @@ test("두 브라우저가 서버 판정만으로 게임 시작부터 승리 화�
       if (await host.locator(".victory-card").count()) break;
       const actor = await host.locator('[data-action="throw"]:not([disabled])').count() ? host : guest;
       await actor.locator('[data-action="throw"]:not([disabled])').click();
-      const result = actor.locator(".result-chip:not([disabled])").first();
-      await expect(result).toBeVisible();
-      await result.click();
-      const piece = actor.locator(".piece-choice:not([disabled])").first();
-      await expect(piece).toBeVisible();
-      await piece.click();
-      const route = actor.locator(".route-choice").first();
-      await expect(route).toBeVisible();
-      await route.click();
-      await expect(actor.locator(".route-choice")).toHaveCount(0);
+      await expect(actor.locator(".result-chip").first()).toBeVisible();
+      await expect.poll(() => actor.evaluate(() => {
+        const app = window.__YUT_APP__;
+        if (app.locked) return null;
+        const selectable = app.selectablePieceIds();
+        const owner = app.game.players.find((player) => player.pieces.some((piece) => selectable.has(piece.id)));
+        const piece = owner?.pieces.find((candidate) => selectable.has(candidate.id));
+        const target = piece ? app.moveCandidatesForPiece(piece, owner)[0] : null;
+        return piece && target ? { pieceId: piece.id, node: piece.node, target: target.displayTarget } : null;
+      })).not.toBeNull();
+      const selectedMove = await actor.evaluate(() => {
+        const app = window.__YUT_APP__;
+        const selectable = app.selectablePieceIds();
+        const owner = app.game.players.find((player) => player.pieces.some((piece) => selectable.has(piece.id)));
+        const piece = owner.pieces.find((candidate) => selectable.has(candidate.id));
+        const target = app.moveCandidatesForPiece(piece, owner)[0];
+        return { pieceId: piece.id, node: piece.node, target: target.displayTarget };
+      });
+      if (selectedMove.node === "WAIT") await actor.locator(`[data-direct-piece="${selectedMove.pieceId}"]`).click();
+      else await clickBoardNode(actor, selectedMove.node);
+      await clickBoardNode(actor, selectedMove.target);
+      if (await actor.locator(".stack-choice-card").count()) await actor.locator('[data-stack-choice="stack"]').click();
+      await expect.poll(() => actor.evaluate(() => window.__YUT_APP__.selectedPieceId)).toBeNull();
     }
     await expect(host.locator(".victory-card")).toBeVisible();
     await expect(guest.locator(".victory-card")).toBeVisible();
