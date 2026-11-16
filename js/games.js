@@ -6,5 +6,6 @@ export const games=[
   {slug:'party-board',title:'별빛 대소동',kicker:'ONLINE PARTY BOARD',description:'친구 넷이 방 코드를 공유해 즐기는 60턴 온라인 파티 보드게임.',players:'온라인 4명',duration:'45–70분',href:'./games/party-board/',theme:'party-board',mark:'★',ready:true},
   {slug:'forest-party',title:'Forest Party',kicker:'4인 로컬 파티게임',description:'숲속 보드에서 별과 코인을 모으고 미니게임으로 경쟁하는 4인용 파티게임',players:'4명',duration:'약 60~120분',href:'./games/forest-party/',theme:'forest-party',mark:'🌳',ready:true},
   {slug:'forest-party-3d',title:'Forest Party 3D',kicker:'3D LOCAL PARTY BOARD',description:'입체적인 숲속 보드와 캐릭터 추적 카메라로 즐기는 4인용 파티게임',players:'4명',duration:'약 60~120분',href:'./games/forest-party-3d/',theme:'forest-party-3d',mark:'🏞️',ready:true},
+  {slug:'augmented-yutnori',title:'증강 윷놀이',kicker:'보드게임 · 전략 · 파티게임',description:'87가지 증강으로 즐기는 특별한 윷놀이',players:'2–4명',duration:'오프라인 · 온라인',href:'./games/augmented-yutnori/',theme:'augmented-yutnori',mark:'윷',ready:true},
   {slug:'hexo',title:'HeXO',kicker:'HEX STRATEGY',description:'육각 격자에서 사람 또는 AI와 겨루는 1-2-2 규칙의 육목 전략 게임.',players:'1–2명',duration:'5–20분',href:'./games/hexo/',theme:'hexo',mark:'⬢',ready:true},
 ];

@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
       - uses: pnpm/action-setup@v4
         with:
           version: 11.19.0
@@ -29,7 +31,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check
       - run: pnpm run test
-      - uses: actions/upload-pages-artifact@v3
+        env:
+          VITE_ONLINE_SERVER_URL: ${{ vars.AUGMENTED_YUTNORI_SERVER_URL }}
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
   deploy:

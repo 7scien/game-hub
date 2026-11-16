@@ -11,6 +11,7 @@
 - `games/party-board/` — 별빛 대소동 (온라인 4인 60턴 파티 보드게임)
 - `games/forest-party/` — Forest Party (태블릿 한 대에서 즐기는 4인 로컬 파티 보드게임)
 - `games/forest-party-3d/` — Forest Party 3D (Three.js 숲속 보드와 3인칭 추적 카메라를 갖춘 4인 로컬 파티게임)
+- `games/augmented-yutnori/` — 증강 윷놀이 (87가지 증강, 2–4인 오프라인·Socket.IO 온라인 플레이)
 - `games/hexo/` — HeXO (1–2인용 육목 전략 게임)
 
 각 게임은 별도의 HTML 진입점을 가지므로 한 게임의 런타임 오류가 허브나 다른 게임에 전파되지 않습니다. `shared/game-shell.js`가 각 게임에 공통 홈 버튼을 제공합니다.
@@ -41,6 +42,23 @@ pnpm test
 4. 완료 후 `https://사용자명.github.io/저장소명/`에서 Game Hub가 열립니다.
 
 Vite의 `base: './'`, 상대경로 매니페스트, 서비스 워커의 동적 scope 계산 덕분에 저장소명이 무엇이든 별도 수정이 필요 없습니다.
+
+증강 윷놀이 온라인 모드를 배포할 때는 GitHub 저장소의 Actions 변수
+`AUGMENTED_YUTNORI_SERVER_URL`에 Render의 HTTPS 서비스 URL을 저장합니다.
+변수를 비워도 허브와 오프라인 윷놀이는 정상 작동하지만 온라인 접속은 사용할 수 없습니다.
+
+## 증강 윷놀이 온라인 서버
+
+서버 소스와 독립 실행 파일은 `games/augmented-yutnori/`에 있습니다. 저장소 루트의
+`render.yaml`은 Render Free용 베타 설정이며 다음 값을 사용합니다.
+
+- Root Directory: `games/augmented-yutnori`
+- Build Command: `corepack enable && pnpm install --frozen-lockfile --prod`
+- Start Command: `node server/index.js`
+- Health Check: `/ready`
+
+Render에서 `ONLINE_ALLOWED_ORIGINS`를 실제 GitHub Pages origin으로 설정해야 합니다.
+무료 인스턴스는 절전·재시작 시 메모리에 있던 진행 중 방을 잃을 수 있습니다.
 
 ## 새 게임 추가
 

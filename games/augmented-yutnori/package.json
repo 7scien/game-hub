@@ -1,0 +1,32 @@
+{
+  "name": "augmented-yutnori",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.20.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:pages": "vite build && node scripts/prepare-pages.mjs && node scripts/verify-static-build.mjs",
+    "verify:static": "node scripts/verify-static-build.mjs",
+    "test:pages": "node scripts/test-pages-runtime.mjs",
+    "portable": "node scripts/build-portable.mjs",
+    "test": "vitest run tests",
+    "test:e2e": "playwright test",
+    "server": "node server/index.js",
+    "dev:server": "node --watch server/index.js",
+    "test:online": "node scripts/test-online-runtime.mjs && node scripts/test-online-restart.mjs",
+    "test:soak": "node scripts/test-online-soak.mjs",
+    "test:e2e:online": "playwright test --config playwright.online.config.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "vite": "^7.2.2",
+    "vitest": "^4.0.10"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4"
+  }
+}

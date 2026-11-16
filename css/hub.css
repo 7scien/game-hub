@@ -16,3 +16,5 @@
 .theme-forest-party .card-mark{filter:drop-shadow(0 0 24px #baff8a70);text-shadow:0 15px 40px #0007}
 .theme-forest-party-3d::before{background:radial-gradient(circle at 22% 18%,#ffe2795c,transparent 24%),radial-gradient(circle at 76% 28%,#a868ff55,transparent 26%),linear-gradient(145deg,#4f9e5b,#1e6040 56%,#16392c)}
 .theme-forest-party-3d .card-mark{filter:drop-shadow(0 12px 22px #0c241caa) drop-shadow(0 0 24px #fff2a06b);transform:perspective(220px) rotateX(9deg) rotateY(-8deg)}
+.theme-augmented-yutnori::before{background:radial-gradient(circle at 18% 22%,#ffcf6045,transparent 24%),radial-gradient(circle at 82% 76%,#55d49c4a,transparent 27%),linear-gradient(145deg,#f06b56,#4a408f 58%,#213d69)}
+.theme-augmented-yutnori .card-mark{color:#fff1b8;font-size:clamp(3.8rem,7vw,6.4rem);font-weight:1000;letter-spacing:-.08em;text-shadow:0 5px 0 #3c315d,0 16px 42px #160f37aa}

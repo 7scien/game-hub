@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f1e7" />
+    <meta name="description" content="한 기기에서 2~4명이 즐기는 증강 윷놀이" />
+    <title>증강 윷놀이</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./src/main.js"></script>
+    <script type="module">
+      if (location.pathname.includes("/games/augmented-yutnori/")) import("../../shared/game-shell.js");
+    </script>
+  </body>
+</html>

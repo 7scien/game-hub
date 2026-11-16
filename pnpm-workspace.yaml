@@ -1,3 +1,6 @@
+packages:
+  - games/augmented-yutnori
+
 allowBuilds:
   esbuild: true
   sharp: true
